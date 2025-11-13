@@ -261,6 +261,7 @@ const SoloArtistAdvance = () => {
                 yKey="value"
                 color={BRAND.purple}
                 bandFill="#F4F4F4"
+                lineType="monotone"
               />
             </div>
             <div className="lg:col-span-1">
@@ -272,6 +273,7 @@ const SoloArtistAdvance = () => {
                 yKey="value"
                 color={BRAND.green}
                 bandFill="#F4F4F4"
+                lineType="monotone"
               />
             </div>
           </div>

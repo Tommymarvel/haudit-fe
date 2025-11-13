@@ -150,6 +150,12 @@ interface ChartCardProps {
   donutInnerText?: string;
   lineType?: LineType;
   showDots?: boolean;
+  /** Optional header filter dropdown label (e.g. "All months") */
+  headerFilterLabel?: string;
+  onHeaderFilterClick?: () => void;
+  /** Optional footer action pill (e.g. "View all report insight") */
+  footerActionLabel?: string;
+  onFooterActionClick?: () => void;
 }
 
 const HOVER_KEY = '__hoverArea__';
@@ -166,26 +172,37 @@ export function ChartCard({
   donutInnerText = 'Total\nInteraction',
   lineType = 'linear',
   showDots = false,
+  headerFilterLabel,
+  onHeaderFilterClick,
+  footerActionLabel,
+  onFooterActionClick,
 }: ChartCardProps) {
   const stroke = color ?? (variant === 'line' ? '#7B00D4' : '#CA98EE');
 
-  // Track the currently hovered point (for tooltip / gradient)
+  // which line types count as “curved” (always-on gradient)
+  const isCurvedLine =
+    lineType === 'monotone' ||
+    lineType === 'monotoneX' ||
+    lineType === 'monotoneY' ||
+    lineType === 'natural';
+
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   const isLineVariant = variant === 'line' && !!yKey && !!xKey;
 
-  // Build the chart data once, including a special key used only by the Area.
   const chartData = useMemo(() => {
     const base = (data as Array<Record<string, unknown>>) ?? [];
-
     if (!isLineVariant || !yKey) return base;
 
+    if (isCurvedLine) return base; // curved uses yKey directly for Area
+
+    // straight line → only hovered point gets value for HOVER_KEY
     return base.map((point, idx) => ({
       ...point,
       [HOVER_KEY]:
         activeIndex != null && idx === activeIndex ? point[yKey] : null,
     }));
-  }, [data, isLineVariant, yKey, activeIndex]);
+  }, [data, isLineVariant, yKey, activeIndex, isCurvedLine]);
 
   const total =
     variant === 'donut'
@@ -195,19 +212,32 @@ export function ChartCard({
   return (
     <Card className="overflow-hidden">
       <div
-        className="px-2 py-3 bg-[color:var(--bandFill)]"
+        className="px-3 py-3 bg-[color:var(--bandFill)]"
         style={{ '--bandFill': bandFill } as React.CSSProperties}
       >
-        <div className="ml-3 pb-2 text-sm font-semibold text-[#3C3C3C]">
-          {title}
+        {/* Header: title + optional filter (works for ALL variants) */}
+        <div className="flex items-center justify-between pb-2">
+          <div className="text-sm font-semibold text-[#3C3C3C]">{title}</div>
+
+          {headerFilterLabel && (
+            <button
+              type="button"
+              onClick={onHeaderFilterClick}
+              className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm hover:bg-neutral-50"
+            >
+              <span>{headerFilterLabel}</span>
+              <span className="text-[10px] leading-none">▾</span>
+            </button>
+          )}
         </div>
 
-        <div className="h-[350px] rounded-xl bg-white pt-6">
+        {/* Chart body (shared container for line / bar / donut) */}
+        <div className="relative h-[350px] rounded-xl bg-white pt-6">
           <ResponsiveContainer width="100%" height="100%">
             {isLineVariant ? (
               <ComposedChart
                 data={chartData}
-                margin={{ left: 4, right: 8, top: 6, bottom: 2 }}
+                margin={{ left: 8, right: 16, top: 6, bottom: 24 }}
                 onMouseMove={(state) => {
                   if (
                     state?.isTooltipActive &&
@@ -242,23 +272,26 @@ export function ChartCard({
                   tickLine={false}
                   axisLine={false}
                   tick={{ fill: '#AAAAAA', fontSize: 14 }}
+                  padding={{ bottom: 8 }} // space between axes & bottom
                 />
                 <Tooltip
                   content={<BlackTooltip />}
                   cursor={{ stroke: '#E5E7EB' }}
                 />
 
-                {/* Hover-only gradient area using special key */}
+                {/* Area:
+                    - curved → always-on using yKey
+                    - straight → hover-only using HOVER_KEY
+                 */}
                 <Area
                   type={lineType}
-                  dataKey={HOVER_KEY}
+                  dataKey={isCurvedLine ? (yKey as string) : HOVER_KEY}
                   fill="url(#lineGradient)"
                   stroke="none"
                   connectNulls
                   isAnimationActive={false}
                 />
 
-                {/* Main line always uses original yKey */}
                 <Line
                   type={lineType}
                   dataKey={yKey}
@@ -275,7 +308,7 @@ export function ChartCard({
             ) : variant === 'bar' && yKey && xKey ? (
               <BarChart
                 data={data as Array<Record<string, unknown>>}
-                margin={{ left: 4, right: 8, top: 6, bottom: 2 }}
+                margin={{ left: 8, right: 16, top: 6, bottom: 24 }}
               >
                 <CartesianGrid vertical={false} stroke="#E5E7EB" />
                 <XAxis
@@ -288,6 +321,7 @@ export function ChartCard({
                   tickLine={false}
                   axisLine={false}
                   tick={{ fill: '#AAAAAA', fontSize: 14 }}
+                  padding={{ bottom: 8 }}
                 />
                 <Tooltip
                   content={<BlackTooltip />}
@@ -336,6 +370,18 @@ export function ChartCard({
               </PieChart>
             )}
           </ResponsiveContainer>
+
+          {/* Footer pill – shows for ANY variant if you pass footerActionLabel */}
+          {footerActionLabel && (
+            <button
+              type="button"
+              onClick={onFooterActionClick}
+              className="pointer-events-auto absolute bottom-4 right-4 inline-flex items-center gap-1 rounded-full bg-[#7B00D4]/5 px-3 py-1 text-xs font-medium text-[#7B00D4] hover:bg-[#7B00D4]/10"
+            >
+              <span>{footerActionLabel}</span>
+              <span className="text-[10px] leading-none">▾</span>
+            </button>
+          )}
         </div>
       </div>
     </Card>

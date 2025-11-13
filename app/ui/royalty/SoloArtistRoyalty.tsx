@@ -1,49 +1,23 @@
 'use client';
 
-import {  useState } from 'react';
+import { useState } from 'react';
 import { ChevronDown, Download, Calendar } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ReferenceArea,
-} from 'recharts';
+
 import { ChartCard } from '@/components/dashboard/ChartCard';
 
 const PURPLE = '#7B00D4';
 
-/* ---------- Shared UI ---------- */
-interface BlackTooltipProps {
-  active?: boolean;
-  label?: string | number;
-  payload?: Array<{
-    value?: number | string | null;
-    payload?: {
-      title?: string;
-      [key: string]: unknown;
-    } | null;
-  }>;
-}
+const FILTER_OPTIONS = [
+  { key: 'all_months', label: 'All months' },
+  { key: 'last_30_days', label: 'Last 30 days' },
+  { key: 'this_year', label: 'This year' },
+];
 
-function BlackTooltip({ active, label, payload }: BlackTooltipProps) {
-  if (!active || !payload?.length) return null;
-  const v = payload[0].value;
-  const extra = payload[0]?.payload?.title;
-  return (
-    <div className="rounded-xl bg-neutral-900 px-3 py-2 text-white shadow-lg">
-      {extra && <p className="text-[11px] text-neutral-300">{extra}</p>}
-      <p className="text-sm font-semibold">
-        {label}
-        {v != null ? `\n$${Number(v).toLocaleString()}` : ''}
-      </p>
-    </div>
-  );
-}
+/* ---------- Shared UI ---------- */
+
+
+
 
 function SoftHeader({
   title,
@@ -69,8 +43,6 @@ function FilterPill({ label = 'All months' }: { label?: string }) {
 
 /* ---------- Mock data (swap with API) ---------- */
 // 1) Track revenue per DSP (per-DSP axis)
-
-
 
 // 2) Track streams per DSP (donut) — we’ll show only total in center here
 const donutParts = [
@@ -100,16 +72,7 @@ const revPerTrack = [
   { x: 'Dec', v: 66 },
 ];
 
-// 5) Revenue per DSP (time series monthly)
-const revenuePerDSPMonthly = [
-  { x: 'Jan', value: 28, title: 'Apple Music' },
-  { x: 'Feb', value: 35, title: 'Apple Music' },
-  { x: 'Mar', value: 50, title: 'Apple Music' },
-  { x: 'Apr', value: 58, title: 'Apple Music' },
-  { x: 'May', value: 55, title: 'Apple Music' },
-  { x: 'Jun', value: 57, title: 'Apple Music' },
-  { x: 'Jul', value: 75, title: 'Apple Music' },
-];
+
 
 // 6) Streams per DSP (bars + legend)
 const streamsByDSP = {
@@ -160,11 +123,17 @@ function WorldMiniMap() {
   );
 }
 
-
-
 /* ======================= PAGE ======================= */
 export default function SoloArtistRoyalty() {
   const [year] = useState(2024);
+  const [filter1, setFilter1] = useState('all_months');
+  const [filter2, setFilter2] = useState('all_months');
+  const [filter3, setFilter3] = useState('all_months');
+  const [filter4, setFilter4] = useState('all_months');
+  const [showDropdown1, setShowDropdown1] = useState(false);
+  const [showDropdown2, setShowDropdown2] = useState(false);
+  const [showDropdown3, setShowDropdown3] = useState(false);
+  const [showDropdown4, setShowDropdown4] = useState(false);
 
   const maxTerritory = Math.max(...territories.map((t) => t.value));
 
@@ -203,7 +172,7 @@ export default function SoloArtistRoyalty() {
       {/* ===== GRID A (4 cards) ===== */}
       <div className="flex flex-col xl:flex-row gap-4 mt-6">
         {/* 1) Track revenue per DSP */}
-        <div className="flex-1">
+        <div className="flex-1 relative">
           <ChartCard
             title="Track revenue per DSP"
             variant="line"
@@ -221,34 +190,84 @@ export default function SoloArtistRoyalty() {
             yKey="value"
             color="#7B00D4"
             lineType="linear"
+            headerFilterLabel={
+              FILTER_OPTIONS.find((f) => f.key === filter1)?.label ||
+              'All months'
+            }
+            onHeaderFilterClick={() => setShowDropdown1(!showDropdown1)}
+            footerActionLabel="View all report insight"
+            onFooterActionClick={() => {
+              /* navigate */
+            }}
           />
+          {showDropdown1 && (
+            <div className="absolute top-16 right-6 z-10 w-48 rounded-xl border border-neutral-200 bg-white shadow-lg">
+              {FILTER_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => {
+                    setFilter1(opt.key);
+                    setShowDropdown1(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-neutral-50 first:rounded-t-xl last:rounded-b-xl"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 2) Track streams per DSP (donut look-alike center total) */}
         {/* <SoftHeader title="Track streams per DSP" right={<FilterPill />} /> */}
-        <div className="xl:w-[25.11%]">
+        <div className="xl:w-[30%] relative">
           <ChartCard
             title="Track Interaction Type"
             variant="donut"
             data={donutParts}
             donutInnerText={'Total\nInteraction'}
+            headerFilterLabel={
+              FILTER_OPTIONS.find((f) => f.key === filter2)?.label ||
+              'All months'
+            }
+            onHeaderFilterClick={() => setShowDropdown2(!showDropdown2)}
+            footerActionLabel="View all report insight"
+            onFooterActionClick={() => {
+              /* navigate */
+            }}
           />
+          {showDropdown2 && (
+            <div className="absolute top-16 right-6 z-10 w-48 rounded-xl border border-neutral-200 bg-white shadow-lg">
+              {FILTER_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => {
+                    setFilter2(opt.key);
+                    setShowDropdown2(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-neutral-50 first:rounded-t-xl last:rounded-b-xl"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-      <div>
+      <div className="flex flex-col xl:flex-row gap-4 mt-6">
         {/* 3) Streams per Track */}
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden  xl:w-[30%]">
           <SoftHeader title="Streams per Track" right={<FilterPill />} />
           <div className="bg-white p-4">
             <div className="mb-3 flex items-baseline gap-2">
               <div className="text-4xl font-semibold">84</div>
               <div className="text-sm text-neutral-500">Total Stream</div>
             </div>
-            <div className="grid grid-cols-14 gap-1 rounded-xl bg-neutral-50 p-3">
+            <div className="flex gap-0.5 rounded-xl bg-neutral-50 p-3">
               {streamsBarsA.map((_, i) => (
                 <div
                   key={i}
-                  className="h-3 rounded bg-gradient-to-b from-[#B57CF6] to-[#E8D7FF]"
+                  className="h-3 w-2 rounded bg-gradient-to-b from-[#B57CF6] to-[#E8D7FF]"
                 />
               ))}
             </div>
@@ -256,94 +275,85 @@ export default function SoloArtistRoyalty() {
         </Card>
 
         {/* 4) Revenue per Track */}
-        <Card className="overflow-hidden">
-          <SoftHeader title="Revenue per Track" right={<FilterPill />} />
-          <div className="h-[310px] bg-white px-3 pt-6">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={revPerTrack}
-                margin={{ left: 6, right: 10, top: 0, bottom: 0 }}
-              >
-                <CartesianGrid stroke="#EEE" vertical={false} />
-                <XAxis
-                  dataKey="x"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: '#9CA3AF' }}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: '#9CA3AF' }}
-                />
-                <Tooltip
-                  content={<BlackTooltip />}
-                  cursor={{ stroke: '#E5E7EB' }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="v"
-                  stroke={PURPLE}
-                  strokeWidth={3}
-                  dot={false}
-                  activeDot={{ r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
+        {/* <SoftHeader title="Revenue per Track" right={<FilterPill />} /> */}
+        <div className="flex-1 relative">
+          <ChartCard
+            title="All album performance"
+            variant="line"
+            data={revPerTrack}
+            xKey="x"
+            yKey="v"
+            lineType="monotone"
+            headerFilterLabel={
+              FILTER_OPTIONS.find((f) => f.key === filter3)?.label ||
+              'All months'
+            }
+            onHeaderFilterClick={() => setShowDropdown3(!showDropdown3)}
+            footerActionLabel="View all report insight"
+            onFooterActionClick={() => {
+              /* navigate */
+            }}
+          />
+          {showDropdown3 && (
+            <div className="absolute top-16 right-6 z-10 w-48 rounded-xl border border-neutral-200 bg-white shadow-lg">
+              {FILTER_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => {
+                    setFilter3(opt.key);
+                    setShowDropdown3(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-neutral-50 first:rounded-t-xl last:rounded-b-xl"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ===== GRID B (4 cards) ===== */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="flex flex-col xl:flex-row gap-4 mt-6">
         {/* 5) Revenue per DSP (monthly) */}
-        <Card className="overflow-hidden">
-          <SoftHeader title="Revenue per DSP" right={<FilterPill />} />
-          <div className="h-[310px] bg-white px-3 pt-6">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={revenuePerDSPMonthly}
-                margin={{ left: 6, right: 10, top: 0, bottom: 0 }}
-              >
-                <CartesianGrid stroke="#EEE" vertical={false} />
-                <XAxis
-                  dataKey="x"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: '#9CA3AF' }}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: '#9CA3AF' }}
-                />
-                <ReferenceArea
-                  x1="Feb"
-                  x2="Feb"
-                  y1={0}
-                  y2={100}
-                  fill={PURPLE}
-                  fillOpacity={0.08}
-                />
-                <Tooltip
-                  content={<BlackTooltip />}
-                  cursor={{ stroke: '#E5E7EB' }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="value"
-                  stroke={PURPLE}
-                  strokeWidth={3}
-                  dot={false}
-                  activeDot={{ r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
+        <div className="overflow-hidden flex-1 relative">
+          <ChartCard
+            title="Revenue per DSP"
+            variant="line"
+            data={revPerTrack}
+            xKey="x"
+            yKey="v"
+            lineType="monotone"
+            headerFilterLabel={
+              FILTER_OPTIONS.find((f) => f.key === filter4)?.label ||
+              'All months'
+            }
+            onHeaderFilterClick={() => setShowDropdown4(!showDropdown4)}
+            footerActionLabel="View all report insight"
+            onFooterActionClick={() => {
+              /* navigate */
+            }}
+          />
+          {showDropdown4 && (
+            <div className="absolute top-16 right-6 z-10 w-48 rounded-xl border border-neutral-200 bg-white shadow-lg">
+              {FILTER_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => {
+                    setFilter4(opt.key);
+                    setShowDropdown4(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-neutral-50 first:rounded-t-xl last:rounded-b-xl"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* 6) Streams per DSP (bars + legend) */}
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden xl:w-[30%]">
           <SoftHeader title="Streams per DSP" right={<FilterPill />} />
           <div className="bg-white p-4">
             <div className="mb-3 flex items-baseline gap-2">
@@ -380,9 +390,11 @@ export default function SoloArtistRoyalty() {
             </div>
           </div>
         </Card>
+      </div>
 
+      <div className="flex flex-col w-full xl:flex-row gap-4 mt-6">
         {/* 7) Territory Analysis (list + bars) */}
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden flex-1">
           <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50/70 px-3 py-2 rounded-t-2xl">
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-semibold">{totalTerritories}</span>
@@ -423,7 +435,7 @@ export default function SoloArtistRoyalty() {
         </Card>
 
         {/* 8) Territory map */}
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden flex-1">
           <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50/70 px-3 py-2 rounded-t-2xl">
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-semibold">{totalTerritories}</span>

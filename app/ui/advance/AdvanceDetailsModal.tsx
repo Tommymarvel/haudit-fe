@@ -2,7 +2,7 @@
 import Modal from '@/components/ui/Modal';
 import { StatusPill } from '@/components/ui/StatusPill';
 import {
-  X,
+
   Calendar,
   DollarSign,
   RefreshCw,

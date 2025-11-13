@@ -103,6 +103,7 @@ export default function SoloArtistDashboard() {
             data={performanceAllTracks}
             xKey="label"
             yKey="value"
+            lineType="monotone"
           />
         </div>
       </div>
@@ -115,6 +116,7 @@ export default function SoloArtistDashboard() {
             data={performanceAllTracks}
             xKey="label"
             yKey="value"
+            lineType="monotone"
           />
         </div>
         <div className="w-[45.11%]">

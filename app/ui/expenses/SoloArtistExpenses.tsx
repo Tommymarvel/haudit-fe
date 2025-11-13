@@ -136,6 +136,7 @@ const SoloArtistExpenses = () => {
           yKey="value"
           color={BRAND.purple}
           bandFill="#F4F4F4"
+          lineType="monotone"
         />
       </div>
       <Card className=" flex-1 mt-8">

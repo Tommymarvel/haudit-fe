@@ -1,6 +1,5 @@
 'use client';
 import { useCallback, useRef, useState } from 'react';
-import { UploadCloud } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 export type DropFile = File & { preview?: string };

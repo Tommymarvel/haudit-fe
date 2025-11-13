@@ -27,6 +27,8 @@ export default function SignInPage() {
  const router = useRouter();
  const [isLogin, setIsLogin] = useState(false);
 
+  console.log(isLogin ? 'Logging in with Google...' : '');
+
  const handleGoogleLogin = async () => {
    let sessionEmail = '';
    try {
