@@ -1,122 +1,47 @@
-'use client';
-import Link from 'next/link';
-import Image from 'next/image';
-import { Formik, Form, Field, ErrorMessage } from 'formik';
-import * as Yup from 'yup';
-import PasswordField from '../components/auth/PasswordField';
-import axiosInstance from '@/lib/axiosinstance';
-import {
-  AuthErrorCodes,
-  GoogleAuthProvider,
-  signInWithPopup,
-} from 'firebase/auth';
-import { auth } from '@/lib/auth/firebase';
-import { FirebaseError } from 'firebase/app';
-import { toast } from 'react-toastify';
-import { AxiosError } from 'axios';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+"use client";
+import { useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import { Formik, Form, Field, ErrorMessage } from "formik";
+import * as Yup from "yup";
+import PasswordField from "../components/auth/PasswordField";
+import { useLoginFlow, useGoogleLogin } from '../hooks/useAuth';
+import VerifyOTPModal from "../components/auth/VerifyOTPModal";
 
 const Schema = Yup.object({
-  email: Yup.string().email('Invalid email').required('Required'),
-  password: Yup.string().required('Required'),
+  email: Yup.string().email("Invalid email").required("Required"),
+  password: Yup.string().required("Required"),
   remember: Yup.boolean(),
 });
 
 export default function SignInPage() {
- const router = useRouter();
- const [isLogin, setIsLogin] = useState(false);
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [verifyEmail, setVerifyEmail] = useState("");
+  const [verifyPassword, setVerifyPassword] = useState("");
 
-  console.log(isLogin ? 'Logging in with Google...' : '');
+  const { login, submitting } = useLoginFlow((email, password) => {
+    setVerifyEmail(email);
+    if (password) setVerifyPassword(password);
+    setShowVerifyModal(true);
+  });
+  const { loginWithGoogle, isLogin } = useGoogleLogin();
 
- const handleGoogleLogin = async () => {
-   let sessionEmail = '';
-   try {
-     sessionStorage.removeItem('verifyEmail');
-     const provider = new GoogleAuthProvider();
-     const result = await signInWithPopup(auth, provider);
-     const idToken = await result.user.getIdToken();
-     const refreshToken = result.user.refreshToken;
-     sessionEmail = result.user.email || '';
-     sessionStorage.setItem('verifyEmail', sessionEmail);
-
-     setIsLogin(true);
-
-     const res = await axiosInstance.post('/auth/login', {
-       idToken,
-       refreshToken,
-     });
-     const token = res.data.token;
-
-     if (token) {
-       localStorage.setItem('authToken', token);
-     }
-
-     console.log(res);
-
-     if (res.data.status === 304) {
-       router.push('/signup/verify-otp');
-       return;
-     }
-
-     const backendUser = res.data.user;
-     if (backendUser.bvn == null) {
-       router.push('/signup/onboarding');
-     } else if (backendUser.business_document !== 'submitted') {
-       router.push('/signup/business-info');
-     } else {
-       router.push('/dashboard');
-     }
-   } catch (error) {
-     if (sessionEmail) {
-       sessionStorage.setItem('verifyEmail', sessionEmail);
-     }
-
-     if (error instanceof FirebaseError) {
-       let msg: string;
-       switch (error.code) {
-         case AuthErrorCodes.POPUP_CLOSED_BY_USER:
-           msg = 'Authentication popup was closed before completing sign-in.';
-           break;
-         case AuthErrorCodes.NETWORK_REQUEST_FAILED:
-           msg = 'Network error — please check your connection and try again.';
-           break;
-         case AuthErrorCodes.INVALID_OAUTH_CLIENT_ID:
-           msg = 'Configuration error — please contact support.';
-           break;
-         default:
-           msg = error.message;
-       }
-       toast.error(msg);
-
-       const axiosError = error as AxiosError<{ message?: string }>;
-       if (
-         axiosError.response?.data.message ===
-         'Looks like we sent you one recently, kindly check for that and input in the fields'
-       ) {
-         toast.error(
-           'Looks like we sent you one recently, kindly check for that and input in the fields'
-         );
-
-         router.push('/signup/verify-otp');
-       } else {
-         toast.error(
-           (axiosError.response && axiosError.response.data
-             ? axiosError.response.data.message || axiosError.response.data
-             : axiosError.message || 'An error occurred'
-           ).toString()
-         );
-       }
-     }
-   } finally {
-     setIsLogin(false);
-   }
- };
- 
-
+  const handleVerifySuccess = async () => {
+    setShowVerifyModal(false);
+    // Re-login to establish session
+    if (verifyEmail && verifyPassword) {
+      await login(verifyEmail, verifyPassword);
+    }
+  };
 
   return (
     <>
+      <VerifyOTPModal
+        isOpen={showVerifyModal}
+        onClose={() => setShowVerifyModal(false)}
+        email={verifyEmail}
+        onSuccess={handleVerifySuccess}
+      />
       <div className="rounded-l grid place-items-center">
         <Image src="/haudit-logo.svg" alt="Haudit" width={48} height={48} />
       </div>
@@ -128,18 +53,13 @@ export default function SignInPage() {
       </p>
 
       <Formik
-        initialValues={{ email: '', password: '', remember: false }}
+        initialValues={{ email: "", password: "", remember: false }}
         validationSchema={Schema}
         onSubmit={async (vals) => {
-          // TODO: await api.post('/auth/signin', vals)
-          console.log('signin', vals);
+          await login(vals.email, vals.password);
         }}
       >
-        {({ values, isSubmitting }) => {
-          // Check if all required fields are filled
-          const isFormValid =
-            values.email.trim() !== '' && values.password.trim() !== '';
-
+        {({ isValid, isSubmitting }) => {
           return (
             <Form className="space-y-5 mt-6 max-w-[550px] w-full mx-auto">
               <div>
@@ -191,36 +111,37 @@ export default function SignInPage() {
               </div>
               <button
                 type="submit"
-                disabled={!isFormValid || isSubmitting}
+                disabled={!isValid || isSubmitting || submitting}
                 className="w-full rounded-2xl text-white py-3 font-medium transition-colors disabled:bg-[#959595] enabled:bg-[#7B00D4] enabled:hover:bg-[#6A00B8]"
               >
-                Sign in
+                {submitting ? 'Signing in...' : 'Sign in'}
               </button>
 
               <button
                 type="button"
-                onClick={handleGoogleLogin}
-                className="w-full rounded-2xl border border-neutral-300 px-3 text-black bg-white py-2.5 font-medium"
+                onClick={loginWithGoogle}
+                disabled={isLogin}
+                className="w-full rounded-2xl border border-neutral-300 px-3 text-black bg-white py-2.5 font-medium disabled:opacity-50"
               >
                 <span className="inline-flex items-center gap-2.5">
                   <GoogleIcon />
-                  Sign in with Google
+                  {isLogin ? 'Signing in...' : 'Sign in with Google'}
                 </span>
               </button>
 
               <p className="text-center text-sm text-neutral-500">
-                Don&apos;t have an account?{' '}
+                Don&apos;t have an account?{" "}
                 <Link href="/signup" className="text-[#7B00D4] hover:underline">
                   Create account
                 </Link>
               </p>
 
               <p className="text-center text-sm text-[#5A5A5A]">
-                By signing in, I agree to your{' '}
+                By signing in, I agree to your{" "}
                 <Link href="/terms" className="underline text-[#7B00D4]">
                   Terms of service
-                </Link>{' '}
-                and{' '}
+                </Link>{" "}
+                and{" "}
                 <Link href="/privacy" className="underline text-[#7B00D4]">
                   Privacy Policy
                 </Link>

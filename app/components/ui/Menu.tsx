@@ -20,7 +20,7 @@ export function Menu({
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
   return (
-    <div ref={ref} className="relative w-full">
+    <div ref={ref} className="relative ">
       <div onClick={() => setOpen((v) => !v)}>{trigger}</div>
       {open && (
         <div

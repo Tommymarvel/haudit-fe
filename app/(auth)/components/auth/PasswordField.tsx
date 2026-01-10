@@ -1,16 +1,21 @@
 'use client';
 import { useState } from 'react';
+import { Field } from 'formik';
 import { Eye, EyeOff } from 'lucide-react';
 
-export default function PasswordField(
-  props: React.InputHTMLAttributes<HTMLInputElement>
-) {
+interface PasswordFieldProps {
+  name: string;
+  placeholder?: string;
+}
+
+export default function PasswordField({ name, placeholder }: PasswordFieldProps) {
   const [show, setShow] = useState(false);
   return (
     <div className="relative">
-      <input
-        {...props}
+      <Field
+        name={name}
         type={show ? 'text' : 'password'}
+        placeholder={placeholder}
         className="w-full rounded-xl border border-neutral-200 bg-white pr-10 px-3 py-2.5 text-black  text-sm outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
       />
       <button

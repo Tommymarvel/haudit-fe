@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './globals.css';
+import { AuthProvider } from './contexts/AuthContext';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -22,7 +23,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} font-sans antialiased`}>
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
         <ToastContainer
           position="top-right"
           autoClose={3000}

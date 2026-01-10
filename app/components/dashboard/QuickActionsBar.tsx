@@ -13,9 +13,9 @@ export default function QuickActionsBar({
   onMore?: (key: string) => void;
 }) {
   return (
-    <div className="flex items-center  flex-col lg:flex-row gap-3">
-      <Button variant="primary" className="px-10 py-3 w-full">
-        <Upload className="h-4 w-4" /> Add File
+    <div className="flex items-center mt-2  flex-row gap-3">
+      <Button variant="primary" className="py-3 w-full whitespace-nowrap">
+        <Upload className="h-4 w-4" /> Add new royalty record
       </Button>
       <Button className="bg-[#00D447] px-10 py-3 w-full inline-flex whitespace-nowrap hover:bg-emerald-700 text-white">
         <Wallet className="h-4 w-4" /> Add advance

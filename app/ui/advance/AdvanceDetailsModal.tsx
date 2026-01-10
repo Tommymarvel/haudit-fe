@@ -25,8 +25,10 @@ export type AdvanceDetails = {
   email: string;
   proofs?: string[]; // filenames
   purpose?: string; // long text
+
   history?: {
     date: string;
+    time: string;
     repaidAmount: number;
     balanceAmount: number;
     proofs?: string[];
@@ -55,14 +57,14 @@ export default function AdvanceDetailsModal({
     >
       {/* Header bar */}
       <div className="rounded-t-2xl border border-[#D5D5D5] px-4 py-3">
-        <div className="text-sm text-neutral-500">
+        <div className="text-sm text-neutral-500 truncate">
           Advance O Meter / {data.id}
         </div>
       </div>
 
       <div className="p-4 md:p-6 max-h-[calc(100vh-6rem)] overflow-y-auto">
         {/* Title + 2-column summary */}
-        <h2 className="mb-4 text-2xl font-semibold text-neutral-900">
+        <h2 className="mb-4 text-2xl font-semibold text-neutral-900 truncate">
           {data.id}
         </h2>
 
@@ -147,38 +149,42 @@ export default function AdvanceDetailsModal({
             <header className="rounded-t-2xl border-b border-[#D5D5D5] px-3 py-2 text-sm font-medium">
               Repayment History
             </header>
-            <div className="p-3 text-sm bg-neutral-50">
+            <div className="p-3 text-sm bg-neutral-50 max-h-[300px] overflow-y-auto">
               {data.history?.length ? (
-                <dl className="space-y-2">
+                <dl className="space-y-0">
                   {data.history.map((h, i) => (
-                    <div
-                      key={i}
-                      className="grid grid-cols-2 gap-2 rounded-xl  p-3"
-                    >
-                      <dt className="text-neutral-500">Date</dt>
-                      <dd className="text-neutral-900">{h.date}</dd>
-                      <dt className="text-neutral-500">Repaid Amount</dt>
-                      <dd className="text-neutral-900">
-                        {currency(h.repaidAmount)}
-                      </dd>
-                      <dt className="text-neutral-500">Balance Amount</dt>
-                      <dd className="text-neutral-900">
-                        {currency(h.balanceAmount)}
-                      </dd>
-                      {h.proofs && h.proofs.length > 0 && (
-                        <>
-                          <dt className="text-neutral-500">Repayment Proof</dt>
-                          <dd className="flex flex-wrap gap-2">
-                            {h.proofs.map((p, j) => (
-                              <span
-                                key={j}
-                                className="truncate rounded-lg bg-neutral-100 px-2 py-1 text-xs text-neutral-700"
-                              >
-                                {p}
-                              </span>
-                            ))}
-                          </dd>
-                        </>
+                    <div key={i}>
+                      <div className="grid grid-cols-2 gap-2 rounded-xl p-3">
+                        <dt className="text-neutral-500">Date</dt>
+                        <dd className="text-neutral-900">{h.date}</dd>
+                        <dt className="text-neutral-500">Time</dt>
+                        <dd className="text-neutral-900">{h.time}</dd>
+                        <dt className="text-neutral-500">Repaid Amount</dt>
+                        <dd className="text-neutral-900">
+                          {currency(h.repaidAmount)}
+                        </dd>
+                        <dt className="text-neutral-500">Balance Amount</dt>
+                        <dd className="text-neutral-900">
+                          {currency(h.balanceAmount)}
+                        </dd>
+                        {h.proofs && h.proofs.length > 0 && (
+                          <>
+                            <dt className="text-neutral-500">Repayment Proof</dt>
+                            <dd className="flex flex-wrap gap-2">
+                              {h.proofs.map((p, j) => (
+                                <span
+                                  key={j}
+                                  className="truncate rounded-lg bg-neutral-100 px-2 py-1 text-xs text-neutral-700"
+                                >
+                                  {p}
+                                </span>
+                              ))}
+                            </dd>
+                          </>
+                        )}
+                      </div>
+                      {i < data.history!.length - 1 && (
+                        <div className="border-b border-neutral-200 my-2"></div>
                       )}
                     </div>
                   ))}

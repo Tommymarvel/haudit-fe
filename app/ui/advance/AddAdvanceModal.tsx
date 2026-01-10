@@ -4,6 +4,7 @@ import FileDropzone from '@/components/ui/FIleDropzone';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
 import Image from 'next/image';
+import { Loader2 } from 'lucide-react';
 
 const BRAND_PURPLE = '#7B00D4';
 
@@ -15,7 +16,13 @@ const Schema = Yup.object({
   sourceName: Yup.string().required('Source name is required'),
   phone: Yup.string().min(7, 'Too short').required('Phone is required'),
   email: Yup.string().email('Invalid email').required('Email is required'),
-  purpose: Yup.string().max(800, 'Too long'),
+  advanceType: Yup.string()
+    .oneOf(['personal', 'marketting'], 'Select a valid advance type')
+    .required('Advance type is required'),
+  repaymentStatus: Yup.string()
+    .oneOf(['repaid', 'outstanding'], 'Select a valid repayment status')
+    .required('Repayment status is required'),
+  purpose: Yup.string().max(800, 'Too long').required('Purpose is required'),
   proofs: Yup.array().of(Yup.mixed<File>()).optional(),
 });
 
@@ -24,6 +31,8 @@ export type NewAdvancePayload = {
   sourceName: string;
   phone: string;
   email: string;
+  advanceType: 'personal' | 'marketting';
+  repaymentStatus: 'repaid' | 'outstanding';
   purpose?: string;
   proofs?: File[];
 };
@@ -64,6 +73,8 @@ export default function AddAdvanceModal({
             sourceName: '',
             phone: '',
             email: '',
+            advanceType: 'personal',
+            repaymentStatus: 'outstanding',
             purpose: '',
             proofs: [] as File[],
           }}
@@ -75,6 +86,8 @@ export default function AddAdvanceModal({
                 sourceName: vals.sourceName.trim(),
                 phone: vals.phone.trim(),
                 email: vals.email.trim(),
+                advanceType: vals.advanceType as 'personal' | 'marketting',
+                repaymentStatus: vals.repaymentStatus as 'repaid' | 'outstanding',
                 purpose: vals.purpose?.trim() || undefined,
                 proofs: vals.proofs,
               });
@@ -158,26 +171,27 @@ export default function AddAdvanceModal({
                     className="mt-1 text-xs text-rose-600"
                   />
                 </div>
-                {/* Purpose */}
+                {/* Advance type */}
                 <div>
                   <label className="mb-3 block text-sm font-medium text-neutral-700">
                     Advance type
                   </label>
                   <Field
                     as="select"
-                    rows={4}
-                    name="purpose"
-                    placeholder="Tell us briefly why you’re requesting this advance"
+                    name="advanceType"
                     className="w-full rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none
                            focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                  />
+                  >
+                    <option value="personal">Personal</option>
+                    <option value="marketting">Marketing</option>
+                  </Field>
                   <ErrorMessage
-                    name="purpose"
+                    name="advanceType"
                     component="p"
                     className="mt-1 text-xs text-rose-600"
                   />
                 </div>
-                {/* {status} */}
+                {/* Repayment status */}
                 <div>
                   <label className="mb-3 block text-sm font-medium text-neutral-700">
                     Repayment status
@@ -185,12 +199,33 @@ export default function AddAdvanceModal({
                   <Field
                     as="select"
                     name="repaymentStatus"
-                    placeholder="Tell us briefly why you’re requesting this advance"
+                    className="w-full rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none
+                           focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
+                  >
+                    <option value="outstanding">Outstanding</option>
+                    <option value="repaid">Repaid</option>
+                  </Field>
+                  <ErrorMessage
+                    name="repaymentStatus"
+                    component="p"
+                    className="mt-1 text-xs text-rose-600"
+                  />
+                </div>
+                {/* Purpose */}
+                <div>
+                  <label className="mb-3 block text-sm font-medium text-neutral-700">
+                    Purpose
+                  </label>
+                  <Field
+                    as="textarea"
+                    rows={7}
+                    name="purpose"
+                    placeholder="Give a detailed purpose of the request"
                     className="w-full rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none
                            focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
                   />
                   <ErrorMessage
-                    name="repaymentStatus"
+                    name="purpose"
                     component="p"
                     className="mt-1 text-xs text-rose-600"
                   />
@@ -212,24 +247,7 @@ export default function AddAdvanceModal({
                     </ul>
                   )}
                 </div>
-                <div>
-                  <label className="mb-3 block text-sm font-medium text-neutral-700">
-                    Purpose
-                  </label>
-                  <Field
-                    as="textarea"
-                    rows={7}
-                    name="purpose"
-                    placeholder="Give a detailed purpose of the request"
-                    className="w-full rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none
-                           focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                  />
-                  <ErrorMessage
-                    name="purpose"
-                    component="p"
-                    className="mt-1 text-xs text-rose-600"
-                  />
-                </div>{' '}
+                {' '}
               </div>
 
               {/* Submit */}
@@ -240,7 +258,14 @@ export default function AddAdvanceModal({
                          disabled:opacity-60"
                 style={{ backgroundColor: BRAND_PURPLE }}
               >
-                Submit request
+                {isSubmitting ? (
+                  <span className="inline-flex items-center justify-center">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Submitting...
+                  </span>
+                ) : (
+                  'Submit request'
+                )}
               </button>
             </Form>
           )}

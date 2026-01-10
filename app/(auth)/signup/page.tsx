@@ -1,13 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
 import { Eye, EyeOff, Check } from 'lucide-react';
 import clsx from 'clsx';
 import { useSignupFlow, useGoogleLogin } from '../hooks/useAuth';
+import { useSearchParams } from 'next/navigation';
+import VerifyOTPModal from '../components/auth/VerifyOTPModal';
+import { useAuth } from '@/contexts/AuthContext';
 
 const PasswordSchema = Yup.object({
   firstName: Yup.string().required('Required'),
@@ -20,10 +24,34 @@ const PasswordSchema = Yup.object({
     .required('Required'),
 });
 
-export default function SignupPage() {
+function SignupContent() {
   const [show, setShow] = useState(false);
-  const { signup, submitting } = useSignupFlow();
+  const [showOTPModal, setShowOTPModal] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState('');
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const { refreshUser } = useAuth();
+  const userType = searchParams.get('user') || 'artist'; // Default to 'artist' if not provided
+  
+  const handleSignupSuccess = (email: string) => {
+    setRegisteredEmail(email);
+    setShowOTPModal(true);
+  };
+  
+  const { signup, submitting } = useSignupFlow(handleSignupSuccess);
   const { loginWithGoogle } = useGoogleLogin();
+
+  const handleVerifyOTP = async () => {
+    // Refresh user data and navigate to dashboard after successful verification
+    await refreshUser();
+    setShowOTPModal(false);
+    router.push('/dashboard');
+  };
+
+  const handleResendOTP = () => {
+    // The resend is now handled inside the modal
+    console.log('OTP resent to:', registeredEmail);
+  };
 
   return (
     <>
@@ -50,7 +78,8 @@ export default function SignupPage() {
             values.email,
             values.password,
             values.firstName,
-            values.lastName
+            values.lastName,
+            userType
           );
         }}
       >
@@ -223,6 +252,15 @@ export default function SignupPage() {
           );
         }}
       </Formik>
+
+      {/* OTP Verification Modal */}
+      <VerifyOTPModal
+        isOpen={showOTPModal}
+        onClose={() => setShowOTPModal(false)}
+        email={registeredEmail}
+        onVerify={handleVerifyOTP}
+        onResend={handleResendOTP}
+      />
     </>
   );
 }
@@ -263,5 +301,13 @@ function GoogleIcon() {
         d="M43.61 20.083H24v8h11.284a12.03 12.03 0 0 1-4.264 5.152l.006-.004 6.466 5.472C41.17 35.92 46 30.664 46 24c0-1.32-.14-2.61-.39-3.917z"
       />
     </svg>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <SignupContent />
+    </Suspense>
   );
 }

@@ -11,8 +11,9 @@ import { FirebaseError } from 'firebase/app';
 import { AxiosError } from 'axios';
 import { toast } from 'react-toastify';
 import axiosInstance from '@/lib/axiosinstance';
+import { createAuthCookie } from '@/actions/auth';
 
-export function useSignupFlow() {
+export function useSignupFlow(onSuccess?: (email: string) => void) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
 
@@ -20,7 +21,8 @@ export function useSignupFlow() {
     email: string,
     password: string,
     firstName: string,
-    lastName: string
+    lastName: string,
+    userType: string = 'artist'
   ) {
     setSubmitting(true);
     try {
@@ -38,12 +40,25 @@ export function useSignupFlow() {
         first_name: firstName,
         last_name: lastName,
         email: email,
+        user_type: userType,
       });
 
-      // 4) stash email and navigate
+      // 4) Request OTP immediately after signup
+      await axiosInstance.post('/auth/request-verify-email', {
+        email,
+      });
+
+      // 5) stash email and trigger success callback (for modal)
       sessionStorage.setItem('verifyEmail', email);
       toast.info('Account created. Check email to verify.');
-      router.push('/signup/verify-otp');
+      
+      // If onSuccess callback is provided, call it (to show modal)
+      // Otherwise, navigate to verify-otp page (fallback)
+      if (onSuccess) {
+        onSuccess(email);
+      } else {
+        router.push('/signup/verify-otp');
+      }
     } catch (error) {
       if (error instanceof AxiosError) {
         const axiosError = error as AxiosError<{ message?: string }>;
@@ -96,11 +111,7 @@ export function useGoogleLogin() {
       const res = await axiosInstance.post('/auth/login', {
         idToken,
       });
-      const token = res.data.token;
-
-      if (token) {
-        localStorage.setItem('authToken', token);
-      }
+      // Token cookie is set automatically by the server
 
       console.log(res);
 
@@ -109,6 +120,7 @@ export function useGoogleLogin() {
         return;
       }
 
+      await createAuthCookie();
       router.push('/dashboard');
     } catch (error) {
       if (sessionEmail) {
@@ -159,4 +171,87 @@ export function useGoogleLogin() {
   }
 
   return { loginWithGoogle, isLogin };
+}
+
+export function useLoginFlow(onVerifyEmail?: (email: string, password?: string) => void) {
+  const router = useRouter();
+  const [submitting, setSubmitting] = useState(false);
+
+  async function login(email: string, password: string) {
+    setSubmitting(true);
+    try {
+      // 1) Sign in with Firebase
+      const { signInWithEmailAndPassword } = await import('firebase/auth');
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+
+      // 2) Get idToken
+      const idToken = await cred.user.getIdToken();
+
+      // 3) Send to backend
+      const res = await axiosInstance.post('/auth/login', {
+        idToken,
+      });
+
+      // Token cookie is set automatically by the server
+      toast.success('Login successful!');
+      
+      // Navigate based on user status
+      if (res.data.status === 304) {
+        if (onVerifyEmail) {
+          onVerifyEmail(email, password);
+        } else {
+          router.push('/signup/verify-otp');
+        }
+        return;
+      }
+
+      await createAuthCookie();
+      router.push('/dashboard');
+    } catch (error) {
+      if (error instanceof FirebaseError) {
+        let msg: string;
+        switch (error.code) {
+          case AuthErrorCodes.INVALID_EMAIL:
+            msg = 'Invalid email address.';
+            break;
+          case AuthErrorCodes.USER_DELETED:
+            msg = 'No account found with this email.';
+            break;
+          case AuthErrorCodes.INVALID_PASSWORD:
+          case 'auth/wrong-password':
+            msg = 'Incorrect password.';
+            break;
+          case AuthErrorCodes.TOO_MANY_ATTEMPTS_TRY_LATER:
+            msg = 'Too many failed attempts. Please try again later.';
+            break;
+          default:
+            msg = error.message;
+        }
+        toast.error(msg);
+      } else if (error instanceof AxiosError) {
+        const axiosError = error as AxiosError<{ message?: string; statusCode?: number }>;
+        const responseData = axiosError.response?.data;
+        const errorMessage = responseData?.message || axiosError.message || 'An error occurred';
+        
+        // Check for unverified email error
+        if (
+          (responseData?.statusCode === 400 || axiosError.response?.status === 400) &&
+          errorMessage === "You are yet to be verified, kindly check your email for the one time password"
+        ) {
+          toast.info("Please verify your email to continue.");
+          if (onVerifyEmail) {
+            onVerifyEmail(email, password);
+          }
+        } else {
+          toast.error(errorMessage.toString());
+        }
+      } else {
+        toast.error('An unexpected error occurred');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return { login, submitting };
 }

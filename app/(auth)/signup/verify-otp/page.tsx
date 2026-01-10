@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { User, Pencil } from 'lucide-react';
-import OTPInput from '../components/auth/OTPInput';
+import OTPInput from '../../components/auth/OTPInput';
 
 export default function VerifyEmailPage({
   searchParams,

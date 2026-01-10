@@ -1,11 +1,13 @@
 import { Button } from "../ui/Button";
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Topbar() {
+  const { user } = useAuth();
   return (
     <div className="flex items-center justify-between border-neutral-200  ">
       <div>
         <h1 className="text-3xl font-medium text-[#3C3C3C]">
-          Welcome back, Odedeyi
+          Welcome back, {user ? user.first_name : 'User'}
         </h1>
         <p className=" text-[#777777]">
           Track, manage and forecast your customers and orders.

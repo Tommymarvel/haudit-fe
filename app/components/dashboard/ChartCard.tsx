@@ -16,7 +16,9 @@ import {
   PieChart,
   Pie,
   Cell,
+  ReferenceArea, // ⬅️ added for hover band in multi-series
 } from 'recharts';
+import { ChevronDown } from 'lucide-react';
 
 /** ── Tooltip (shared) ─────────────────────────────────────────────── */
 function BlackTooltip({
@@ -26,15 +28,43 @@ function BlackTooltip({
 }: {
   active?: boolean;
   label?: string;
-  payload?: Array<{ value: number; name?: string }>;
+  payload?: Array<{
+    value: number;
+    name?: string;
+    stroke?: string;
+    dataKey?: string;
+  }>;
 }) {
   if (!active || !payload?.length) return null;
-  const v = payload[0].value;
-  const name = payload[0].name ?? label;
+
+  // If multiple series, list them; else keep your old look
+  const isMulti = payload.length > 1;
   return (
     <div className="rounded-xl bg-neutral-900 px-3 py-2 text-white shadow-lg">
-      <p className="text-[11px] text-neutral-300">{name}</p>
-      <p className="text-sm font-semibold">{Number(v).toLocaleString()}</p>
+      <p className="text-[11px] text-neutral-300">{label}</p>
+      {isMulti ? (
+        payload.map((p) => (
+          <p key={p.dataKey ?? p.name} className="text-sm font-semibold">
+            <span
+              style={{
+                display: 'inline-block',
+                width: 8,
+                height: 8,
+                borderRadius: 9999,
+                background: p.stroke ?? '#fff',
+                marginRight: 6,
+              }}
+            />
+            {p.name ?? p.dataKey}: {Number(p.value).toLocaleString()}
+          </p>
+        ))
+      ) : (
+        <>
+          <p className="text-sm font-semibold">
+            {Number(payload[0].value).toLocaleString()}
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -139,12 +169,16 @@ type LineType =
   | 'stepBefore'
   | 'stepAfter';
 
+type SeriesDef = { key: string; label?: string; color?: string };
+
 interface ChartCardProps {
   title: string;
   variant?: 'line' | 'bar' | 'donut';
   data: DonutSlice[] | Array<Record<string, unknown>>;
   xKey?: string;
-  yKey?: string;
+  yKey?: string; // single-series key (back-compat)
+  /** Provide to plot multiple series: one line per key */
+  series?: SeriesDef[];
   color?: string;
   bandFill?: string;
   donutInnerText?: string;
@@ -159,6 +193,22 @@ interface ChartCardProps {
 }
 
 const HOVER_KEY = '__hoverArea__';
+const PALETTE = [
+  '#7B00D4',
+  '#00AA39',
+  '#F59E0B',
+  '#EF4444',
+  '#3B82F6',
+  '#14B8A6',
+  '#8B5CF6',
+  '#EA580C',
+];
+const colorFor = (name: string) => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++)
+    hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  return PALETTE[Math.abs(hash) % PALETTE.length];
+};
 
 /** ── Component ───────────────────────────────────────────────────── */
 export function ChartCard({
@@ -167,6 +217,7 @@ export function ChartCard({
   data,
   xKey,
   yKey,
+  series, // ⬅️ new (optional)
   color,
   bandFill = '#F4F4F4',
   donutInnerText = 'Total\nInteraction',
@@ -179,7 +230,7 @@ export function ChartCard({
 }: ChartCardProps) {
   const stroke = color ?? (variant === 'line' ? '#7B00D4' : '#CA98EE');
 
-  // which line types count as “curved” (always-on gradient)
+  // curved lines (always-on gradient for single series)
   const isCurvedLine =
     lineType === 'monotone' ||
     lineType === 'monotoneX' ||
@@ -188,21 +239,39 @@ export function ChartCard({
 
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
-  const isLineVariant = variant === 'line' && !!yKey && !!xKey;
+  const isLineVariant =
+    variant === 'line' && !!xKey && (!!yKey || (series && series.length > 0));
+  const isMulti = Boolean(series && series.length > 0);
 
+  // x labels (for hover band width in multi mode)
+  const xLabels = useMemo(
+    () =>
+      isLineVariant
+        ? (data as Array<Record<string, unknown>>).map((d) => String(d[xKey as string]))
+        : [],
+    [data, isLineVariant, xKey]
+  );
+
+  // Build chartData:
+  // - single straight line uses HOVER_KEY for hover-only area
+  // - everything else just passes through base data
   const chartData = useMemo(() => {
     const base = (data as Array<Record<string, unknown>>) ?? [];
-    if (!isLineVariant || !yKey) return base;
+    if (!isLineVariant) return base;
 
-    if (isCurvedLine) return base; // curved uses yKey directly for Area
+    if (isMulti) return base; // multi-series: use ReferenceArea for hover band
 
-    // straight line → only hovered point gets value for HOVER_KEY
+    if (!yKey) return base; // defensive
+
+    if (isCurvedLine) return base; // curved single-series uses always-on area with yKey
+
+    // single-series straight line: inject HOVER_KEY for hovered point
     return base.map((point, idx) => ({
       ...point,
       [HOVER_KEY]:
         activeIndex != null && idx === activeIndex ? point[yKey] : null,
     }));
-  }, [data, isLineVariant, yKey, activeIndex, isCurvedLine]);
+  }, [data, isLineVariant, isMulti, yKey, activeIndex, isCurvedLine]);
 
   const total =
     variant === 'donut'
@@ -215,7 +284,7 @@ export function ChartCard({
         className="px-3 py-3 bg-[color:var(--bandFill)]"
         style={{ '--bandFill': bandFill } as React.CSSProperties}
       >
-        {/* Header: title + optional filter (works for ALL variants) */}
+        {/* Header: title + optional filter */}
         <div className="flex items-center justify-between pb-2">
           <div className="text-sm font-semibold text-[#3C3C3C]">{title}</div>
 
@@ -231,7 +300,7 @@ export function ChartCard({
           )}
         </div>
 
-        {/* Chart body (shared container for line / bar / donut) */}
+        {/* Chart body */}
         <div className="relative h-[350px] rounded-xl bg-white pt-6">
           <ResponsiveContainer width="100%" height="100%">
             {isLineVariant ? (
@@ -255,6 +324,11 @@ export function ChartCard({
                     <stop offset="0%" stopColor={stroke} stopOpacity={0.2} />
                     <stop offset="100%" stopColor={stroke} stopOpacity={0} />
                   </linearGradient>
+                  {/* neutral hover band for multi-series */}
+                  <linearGradient id="hoverBand" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#000" stopOpacity={0.1} />
+                    <stop offset="100%" stopColor="#000" stopOpacity={0} />
+                  </linearGradient>
                 </defs>
 
                 <CartesianGrid
@@ -272,38 +346,84 @@ export function ChartCard({
                   tickLine={false}
                   axisLine={false}
                   tick={{ fill: '#AAAAAA', fontSize: 14 }}
-                  padding={{ bottom: 8 }} // space between axes & bottom
+                  padding={{ bottom: 8 }}
                 />
                 <Tooltip
                   content={<BlackTooltip />}
                   cursor={{ stroke: '#E5E7EB' }}
                 />
 
-                {/* Area:
-                    - curved → always-on using yKey
-                    - straight → hover-only using HOVER_KEY
-                 */}
-                <Area
-                  type={lineType}
-                  dataKey={isCurvedLine ? (yKey as string) : HOVER_KEY}
-                  fill="url(#lineGradient)"
-                  stroke="none"
-                  connectNulls
-                  isAnimationActive={false}
-                />
+                {/* Hover band:
+                    - single straight line: use Area + HOVER_KEY
+                    - multi-series OR curved lines: show a neutral ReferenceArea on hover */}
+                {isMulti || isCurvedLine ? (
+                  activeIndex != null && xLabels.length > 0 ? (
+                    <ReferenceArea
+                      x1={xLabels[Math.max(0, activeIndex - 1)]}
+                      x2={xLabels[activeIndex]}
+                      y1="dataMin"
+                      y2="dataMax"
+                      fill="url(#hoverBand)"
+                      strokeOpacity={0}
+                      ifOverflow="hidden"
+                    />
+                  ) : null
+                ) : (
+                  <Area
+                    type={lineType}
+                    dataKey={HOVER_KEY}
+                    fill="url(#lineGradient)"
+                    stroke="none"
+                    connectNulls
+                    isAnimationActive={false}
+                  />
+                )}
 
-                <Line
-                  type={lineType}
-                  dataKey={yKey}
-                  stroke={stroke}
-                  strokeWidth={3}
-                  dot={showDots}
-                  activeDot={{ r: 4 }}
-                  connectNulls
-                  strokeLinecap="butt"
-                  strokeLinejoin="miter"
-                  isAnimationActive={false}
-                />
+                {/* Lines */}
+                {isMulti
+                  ? (series as SeriesDef[]).map((s) => (
+                      <Line
+                        key={s.key}
+                        name={s.label ?? s.key}
+                        type={lineType}
+                        dataKey={s.key}
+                        stroke={s.color ?? colorFor(s.key)}
+                        strokeWidth={3}
+                        dot={showDots}
+                        activeDot={{ r: 4 }}
+                        connectNulls
+                        strokeLinecap="butt"
+                        strokeLinejoin="miter"
+                        isAnimationActive={false}
+                      />
+                    ))
+                  : yKey && (
+                      <>
+                        {/* Curved single-series wants always-on area under the line */}
+                        {isCurvedLine && (
+                          <Area
+                            type={lineType}
+                            dataKey={yKey}
+                            fill="url(#lineGradient)"
+                            stroke="none"
+                            connectNulls
+                            isAnimationActive={false}
+                          />
+                        )}
+                        <Line
+                          type={lineType}
+                          dataKey={yKey}
+                          stroke={stroke}
+                          strokeWidth={3}
+                          dot={showDots}
+                          activeDot={{ r: 4 }}
+                          connectNulls
+                          strokeLinecap="butt"
+                          strokeLinejoin="miter"
+                          isAnimationActive={false}
+                        />
+                      </>
+                    )}
               </ComposedChart>
             ) : variant === 'bar' && yKey && xKey ? (
               <BarChart
@@ -376,10 +496,10 @@ export function ChartCard({
             <button
               type="button"
               onClick={onFooterActionClick}
-              className="pointer-events-auto absolute bottom-4 right-4 inline-flex items-center gap-1 rounded-full bg-[#7B00D4]/5 px-3 py-1 text-xs font-medium text-[#7B00D4] hover:bg-[#7B00D4]/10"
+              className="pointer-events-auto absolute bottom-4 right-4 inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-medium text-[#7B00D4] shadow-md hover:shadow-lg"
             >
               <span>{footerActionLabel}</span>
-              <span className="text-[10px] leading-none">▾</span>
+              <ChevronDown className="h-3.5 w-3.5" />
             </button>
           )}
         </div>

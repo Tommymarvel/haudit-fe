@@ -4,17 +4,34 @@ import FileDropzone from '@/components/ui/FIleDropzone';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
 import Image from 'next/image';
+import { ChevronDown, Loader2 } from 'lucide-react';
 
 const BRAND_PURPLE = '#7B00D4';
 
-const Categories = ['Marketing', 'Production', 'Operations', 'Legal'] as const;
+const Categories = ['marketting', 'production', 'personal'] as const;
 type Category = (typeof Categories)[number];
 
+const Currencies = ['NGN', 'USD'] as const;
+
+// Currency prefix mapping to display symbols/text
+const CurrencyPrefix: Record<(typeof Currencies)[number], string> = {
+  NGN: '₦',
+  USD: '$',
+};
+
+// Display names for categories
+const CategoryDisplay: Record<Category, string> = {
+  marketting: 'Marketing',
+  production: 'Production',
+  personal: 'Personal',
+};
+
 const Schema = Yup.object({
-  date: Yup.string().required('Date is required'),
+  expense_date: Yup.string().required('Date is required'),
   category: Yup.mixed<Category>()
     .oneOf([...Categories] as readonly Category[], 'Select a valid category')
     .required('Category is required'),
+  currency: Yup.string().required('Currency is required'),
   amount: Yup.number()
     .typeError('Enter a valid amount')
     .min(1, 'Must be at least 1')
@@ -24,9 +41,10 @@ const Schema = Yup.object({
 });
 
 export type NewExpensesPayload = {
-  date: string; // e.g. 2025-03-01 (or your preferred format)
+  expense_date: string; // e.g. 2025-03-01 (or your preferred format)
   category: Category;
   amount: number;
+  currency: string;
   description?: string;
   proofs?: File[];
 };
@@ -60,9 +78,10 @@ export default function AddExpensesModal({
 
         <Formik
           initialValues={{
-            date: '',
+            expense_date: '',
             category: '',
             amount: '',
+            currency: 'NGN',
             description: '',
             proofs: [] as File[],
           }}
@@ -70,9 +89,10 @@ export default function AddExpensesModal({
           onSubmit={async (vals, { setSubmitting }) => {
             try {
               await onSubmit({
-                date: vals.date,
+                expense_date: vals.expense_date,
                 category: vals.category as Category,
                 amount: Number(vals.amount),
+                currency: vals.currency,
                 description: vals.description?.trim() || undefined,
                 proofs: vals.proofs,
               });
@@ -91,12 +111,12 @@ export default function AddExpensesModal({
                     Date
                   </label>
                   <Field
-                    name="date"
+                    name="expense_date"
                     type="date"
                     className="w-full rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
                   />
                   <ErrorMessage
-                    name="date"
+                    name="expense_date"
                     component="p"
                     className="mt-1 text-xs text-rose-600"
                   />
@@ -115,7 +135,7 @@ export default function AddExpensesModal({
                     <option value="">Select category</option>
                     {Categories.map((c) => (
                       <option key={c} value={c}>
-                        {c}
+                        {CategoryDisplay[c]}
                       </option>
                     ))}
                   </Field>
@@ -131,12 +151,30 @@ export default function AddExpensesModal({
                   <label className="mb-3 block text-sm font-medium text-neutral-700">
                     Amount
                   </label>
-                  <Field
-                    name="amount"
-                    inputMode="decimal"
-                    placeholder="Enter amount"
-                    className="w-full rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                  />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3">
+                      <div className="relative">
+                        <Field
+                          as="select"
+                          name="currency"
+                          className="appearance-none bg-transparent pr-6 text-sm font-medium text-neutral-700 outline-none"
+                        >
+                          {Currencies.map((c) => (
+                            <option key={c} value={c}>
+                              {CurrencyPrefix[c]} {c}
+                            </option>
+                          ))}
+                        </Field>
+                        <ChevronDown className="pointer-events-none absolute right-0 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
+                      </div>
+                    </div>
+                    <Field
+                      name="amount"
+                      inputMode="decimal"
+                      placeholder="Enter amount"
+                      className="w-full rounded-2xl border border-neutral-300 bg-white py-3 pl-23  text-sm outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
+                    />
+                  </div>
                   <ErrorMessage
                     name="amount"
                     component="p"
@@ -185,10 +223,11 @@ export default function AddExpensesModal({
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full rounded-2xl px-4 py-3 text-sm font-medium text-white shadow-sm transition-colors disabled:opacity-60"
+                className="w-full rounded-2xl px-4 py-3 text-sm font-medium text-white shadow-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
                 style={{ backgroundColor: BRAND_PURPLE }}
               >
-                Save expense
+                {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isSubmitting ? 'Saving...' : 'Save expense'}
               </button>
             </Form>
           )}
