@@ -7,6 +7,7 @@ import * as Yup from "yup";
 import PasswordField from "../components/auth/PasswordField";
 import { useLoginFlow, useGoogleLogin } from '../hooks/useAuth';
 import VerifyOTPModal from "../components/auth/VerifyOTPModal";
+import { useAuth } from '@/contexts/AuthContext';
 
 const Schema = Yup.object({
   email: Yup.string().email("Invalid email").required("Required"),
@@ -18,7 +19,8 @@ export default function SignInPage() {
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState("");
   const [verifyPassword, setVerifyPassword] = useState("");
-
+  
+  const { refreshUser } = useAuth();
   const { login, submitting } = useLoginFlow((email, password) => {
     setVerifyEmail(email);
     if (password) setVerifyPassword(password);
@@ -30,7 +32,7 @@ export default function SignInPage() {
     setShowVerifyModal(false);
     // Re-login to establish session
     if (verifyEmail && verifyPassword) {
-      await login(verifyEmail, verifyPassword);
+      await login(verifyEmail, verifyPassword, refreshUser);
     }
   };
 
@@ -56,7 +58,7 @@ export default function SignInPage() {
         initialValues={{ email: "", password: "", remember: false }}
         validationSchema={Schema}
         onSubmit={async (vals) => {
-          await login(vals.email, vals.password);
+          await login(vals.email, vals.password, refreshUser);
         }}
       >
         {({ isValid, isSubmitting }) => {
@@ -119,7 +121,7 @@ export default function SignInPage() {
 
               <button
                 type="button"
-                onClick={loginWithGoogle}
+                onClick={() => loginWithGoogle(refreshUser)}
                 disabled={isLogin}
                 className="w-full rounded-2xl border border-neutral-300 px-3 text-black bg-white py-2.5 font-medium disabled:opacity-50"
               >

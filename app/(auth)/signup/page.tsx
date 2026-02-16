@@ -223,7 +223,7 @@ function SignupContent() {
               <button
                 type="button"
                 className="w-full rounded-2xl border border-neutral-300 px-3 text-black  bg-white py-2.5 font-medium"
-                onClick={loginWithGoogle}
+                onClick={() => loginWithGoogle(refreshUser)}
               >
                 <span className="inline-flex items-center gap-2.5">
                   <GoogleIcon />

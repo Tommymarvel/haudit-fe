@@ -96,7 +96,7 @@ export function useGoogleLogin() {
   const router = useRouter();
   const [isLogin, setIsLogin] = useState(false);
 
-  async function loginWithGoogle() {
+  async function loginWithGoogle(refreshUser?: () => Promise<void>) {
     let sessionEmail = '';
     try {
       sessionStorage.removeItem('verifyEmail');
@@ -121,6 +121,12 @@ export function useGoogleLogin() {
       }
 
       await createAuthCookie();
+      
+      // Refresh user context before navigating
+      if (refreshUser) {
+        await refreshUser();
+      }
+      
       router.push('/dashboard');
     } catch (error) {
       if (sessionEmail) {
@@ -177,7 +183,7 @@ export function useLoginFlow(onVerifyEmail?: (email: string, password?: string) 
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
 
-  async function login(email: string, password: string) {
+  async function login(email: string, password: string, refreshUser?: () => Promise<void>) {
     setSubmitting(true);
     try {
       // 1) Sign in with Firebase
@@ -206,6 +212,12 @@ export function useLoginFlow(onVerifyEmail?: (email: string, password?: string) 
       }
 
       await createAuthCookie();
+      
+      // Refresh user context before navigating
+      if (refreshUser) {
+        await refreshUser();
+      }
+      
       router.push('/dashboard');
     } catch (error) {
       if (error instanceof FirebaseError) {
