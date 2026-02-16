@@ -47,9 +47,26 @@ export interface TrackRevenueDsp {
   [key: string]: unknown;
 }
 
+export interface DspStreamPercentage {
+  dsp: string;
+  streams: number;
+  percentage: number;
+}
+
+export interface TrackDspStream {
+  dsp: string;
+  streams: number;
+}
+
+export interface TrackBreakdown {
+  title: string;
+  isrc: string;
+  dsps: TrackDspStream[];
+}
+
 export interface TrackStreamsDsp {
-  // Structure not fully visible in screenshot, assuming generic for now
-  [key: string]: unknown;
+  dspSummary: DspStreamPercentage[];
+  trackBreakdown: TrackBreakdown[];
 }
 
 export interface TrackStreams {

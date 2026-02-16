@@ -1,9 +1,11 @@
 // TrackRevenuePerDSPPanel.tsx
 "use client";
 import { useMemo, useState } from "react";
+import useSWR from "swr";
+import axiosInstance from "@/lib/axiosinstance";
 import AppShell from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/Button";
-import { Calendar } from "lucide-react";
+import { Calendar, ChevronDown } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import {
   Line,
@@ -20,28 +22,55 @@ type Row = {
   values: number[]; // per DSP index 0..6
 };
 
-// Example: your table rows
-const rowsSeed: Row[] = [
-  { track: "Track A", values: [87, 50, 70, 100, 88, 30, 100] },
-  { track: "Track B", values: [60, 55, 62, 72, 50, 40, 65] },
-  { track: "Track C", values: [68, 15, 39, 41, 60, 81, 35] },
-  // ...
-];
-
-const dspLabels = [
-  "DSP 1",
-  "DSP 2",
-  "DSP 3",
-  "DSP 4",
-  "DSP 5",
-  "DSP 6",
-  "DSP 7",
-];
+const fetcher = (url: string) => axiosInstance.get(url).then((res) => res.data);
 
 export default function TrackRevenuePerDSPPanel() {
-  const [rows] = useState<Row[]>(rowsSeed);
-  const [selected, setSelected] = useState<Set<string>>(new Set(["Track A"]));
+  const currentYear = new Date().getFullYear();
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [showYearPicker, setShowYearPicker] = useState(false);
 
+  const { data: trackRevenueDsp, isLoading: isTrackRevenueDspLoading } = useSWR<Array<{ assetId: string; assetTitle: string; dsps: Array<{ dsp: string; revenue: number }> }>>(
+    `/royalties/track-revenue-dsp?year=${selectedYear}&monthly=false`,
+    fetcher
+  );
+
+  // Extract unique DSP names and transform API data to rows
+  const { dspLabels, rows } = useMemo(() => {
+    if (!trackRevenueDsp || trackRevenueDsp.length === 0) {
+      return { dspLabels: [], rows: [] };
+    }
+
+    // Collect all unique DSP names
+    const dspSet = new Set<string>();
+    trackRevenueDsp.forEach((track) => {
+      track.dsps.forEach((dspData) => {
+        dspSet.add(dspData.dsp);
+      });
+    });
+    const dspLabels = Array.from(dspSet);
+
+    // Transform to rows format
+    const rows: Row[] = trackRevenueDsp.map((track) => {
+      const values = dspLabels.map((dspName) => {
+        const dspData = track.dsps.find((d) => d.dsp === dspName);
+        return dspData?.revenue ?? 0;
+      });
+      return {
+        track: track.assetTitle,
+        values,
+      };
+    });
+
+    return { dspLabels, rows };
+  }, [trackRevenueDsp]);
+
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Auto-select first track when data loads
+  useMemo(() => {
+    if (rows.length > 0 && selected.size === 0) {
+      setSelected(new Set([rows[0].track]));
+    }
+  }, [rows, selected.size]);
   const toggle = (name: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -88,12 +117,37 @@ export default function TrackRevenuePerDSPPanel() {
             </p>
           </div>
           <div className="w-full lg:w-fit flex gap-2">
-            <Button
-              variant="outline"
-              className="w-full bg-[#EAEAEA] rounded-2xl lg:w-auto"
-            >
-              <Calendar className="h-4 w-4" /> Year
-            </Button>
+            <div className="relative">
+              <Button
+                variant="outline"
+                className="w-full bg-[#EAEAEA] rounded-2xl lg:w-auto"
+                onClick={() => setShowYearPicker(!showYearPicker)}
+              >
+                <Calendar className="h-4 w-4" /> {selectedYear} <ChevronDown className="h-4 w-4 ml-1" />
+              </Button>
+              {showYearPicker && (
+                <div className="absolute top-full mt-2 left-0 z-50 w-64 rounded-xl border border-neutral-200 bg-white shadow-lg p-4">
+                  <div className="grid grid-cols-4 gap-2">
+                    {Array.from({ length: 10 }, (_, i) => currentYear - i).map((year) => (
+                      <button
+                        key={year}
+                        onClick={() => {
+                          setSelectedYear(year);
+                          setShowYearPicker(false);
+                        }}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          year === selectedYear
+                            ? 'bg-[#7B00D4] text-white'
+                            : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100'
+                        }`}
+                      >
+                        {year}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             <Button
               variant="primary"
               className="w-full rounded-2xl lg:w-auto"
@@ -125,7 +179,16 @@ export default function TrackRevenuePerDSPPanel() {
           </div>
         </div>
 
-        <div className="mt-7 space-y-4">
+        {isTrackRevenueDspLoading ? (
+          <div className="mt-7 text-center py-12 text-neutral-500">
+            Loading track revenue data...
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="mt-7 text-center py-12 text-neutral-500">
+            No track revenue data available
+          </div>
+        ) : (
+          <div className="mt-7 space-y-4">
           {/* Chart without ChartCard wrapper */}
           <div className="h-[400px] w-full bg-white rounded-xl">
             <ResponsiveContainer width="100%" height="100%">
@@ -262,6 +325,7 @@ export default function TrackRevenuePerDSPPanel() {
             </table>
           </div>
         </div>
+        )}
       </div>
     </AppShell>
   );

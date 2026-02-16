@@ -2,10 +2,12 @@
 'use client';
 import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import useSWR from 'swr';
+import axiosInstance from '@/lib/axiosinstance';
 import AppShell from '@/components/layout/AppShell';
 import { ViewToggle } from '@/components/dashboard/ViewToggle';
 import { Button } from '@/components/ui/Button';
-import { Calendar } from 'lucide-react';
+import { Calendar, ChevronDown } from 'lucide-react';
 import { BRAND } from '@/lib/brand';
 import {
   Line,
@@ -19,37 +21,112 @@ import {
 
 type Row = {
   track: string;
-  values: number[]; // per month index 0..7
+  values: number[]; // per month
 };
 
-// Example: your table rows
-const rowsSeed: Row[] = [
-  { track: 'Track A', values: [500, 200, 407, 300, 500, 700, 400, 450] },
-  { track: 'Track B', values: [500, 200, 407, 300, 500, 700, 400, 450] },
-  { track: 'Track C', values: [600, 300, 350, 250, 450, 650, 500, 380] },
-  { track: 'Track D', values: [400, 150, 500, 350, 550, 750, 300, 420] },
-  { track: 'Track E', values: [700, 250, 400, 400, 600, 800, 450, 520] },
-  { track: 'Track F', values: [550, 350, 420, 280, 480, 680, 380, 410] },
-  { track: 'Track G', values: [480, 180, 550, 320, 580, 780, 320, 390] },
-];
+type ApiTrack = {
+  assetISRC?: string;
+  isrc?: string;
+  assetTitle?: string;
+  title?: string;
+  dsps: Array<{ dsp: string; revenue?: number; streams?: number }>;
+  monthly: Array<{
+    month: number;
+    dsps: Array<{ dsp: string; revenue?: number; streams?: number }>;
+  }>;
+};
 
-const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'];
+const MONTH_NAMES = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const fetcher = (url: string) => axiosInstance.get(url).then((res) => res.data);
 
 export default function StreamPerDSPPanel() {
-  const [rows] = useState<Row[]>(rowsSeed);
-  const [selected, setSelected] = useState<Set<string>>(
-    new Set(['Track A', 'Track F'])
-  );
+  const currentYear = new Date().getFullYear();
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [showYearPicker, setShowYearPicker] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const router = useRouter();
   const searchParams = useSearchParams();
   const viewMode = (searchParams.get('view') as 'streams' | 'revenue') || 'streams';
+
+  // Use different endpoint based on view mode
+  const apiEndpoint = viewMode === 'revenue' 
+    ? `/royalties/track-revenue-dsp?year=${selectedYear}&monthly=false`
+    : `/royalties/track-streams-dsp?year=${selectedYear}&monthly=false`;
+
+  const { data: apiResponse, isLoading } = useSWR<{
+    trackBreakdown?: ApiTrack[];
+  } | ApiTrack[]>(
+    apiEndpoint,
+    fetcher
+  );
+
+  // Extract trackBreakdown array from response
+  const apiData = useMemo(() => {
+    if (!apiResponse) return null;
+    // Handle both response formats
+    if (Array.isArray(apiResponse)) return apiResponse;
+    return apiResponse.trackBreakdown || null;
+  }, [apiResponse]);
 
   const handleViewChange = (newView: 'streams' | 'revenue') => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('view', newView);
     router.push(`?${params.toString()}`);
   };
+
+  // Transform API data to DSP-grouped row format
+  const { rows, monthLabels } = useMemo(() => {
+    if (!apiData || apiData.length === 0) {
+      return { rows: [], monthLabels: [] };
+    }
+
+    // Get all unique months across all tracks
+    const monthSet = new Set<number>();
+    apiData.forEach(track => {
+      track.monthly?.forEach(m => monthSet.add(m.month));
+    });
+    const months = Array.from(monthSet).sort((a, b) => a - b);
+    const labels = months.map(m => MONTH_NAMES[m]);
+
+    // Collect all DSP values grouped by DSP name
+    const dspValuesByMonth = new Map<string, Map<number, number>>();
+    const fieldName = viewMode === 'revenue' ? 'revenue' : 'streams';
+
+    apiData.forEach(track => {
+      track.monthly?.forEach(monthData => {
+        monthData.dsps.forEach(dsp => {
+          if (!dspValuesByMonth.has(dsp.dsp)) {
+            dspValuesByMonth.set(dsp.dsp, new Map());
+          }
+          const dspMonths = dspValuesByMonth.get(dsp.dsp)!;
+          const currentValue = dspMonths.get(monthData.month) || 0;
+          const dspValue = dsp[fieldName as keyof typeof dsp] as number | undefined;
+          dspMonths.set(monthData.month, currentValue + (dspValue || 0));
+        });
+      });
+    });
+
+    // Transform to row format
+    const transformedRows: Row[] = Array.from(dspValuesByMonth.entries()).map(([dspName, monthValues]) => {
+      const values = months.map(month => monthValues.get(month) || 0);
+      return {
+        track: dspName, // Using 'track' field for DSP name
+        values,
+      };
+    });
+
+    return { rows: transformedRows, monthLabels: labels };
+  }, [apiData, viewMode]);
+
+  // Auto-select first two DSPs when data loads
+  useMemo(() => {
+    if (rows.length > 0 && selected.size === 0) {
+      const firstTwo = rows.slice(0, 2).map(r => r.track);
+      setSelected(new Set(firstTwo));
+    }
+  }, [rows]);
 
   const toggle = (name: string) => {
     setSelected((prev) => {
@@ -69,23 +146,18 @@ export default function StreamPerDSPPanel() {
       prev.size === rows.length ? new Set() : new Set(rows.map((r) => r.track))
     );
 
-  // Transform to chart data: [{ x:'Jan', 'Track A':500, 'Track B':... }, ...]
+  // Transform to chart data: [{ x:'Jan', 'DSP A':500, 'DSP B':... }, ...]
   const chartData = useMemo(() => {
     return monthLabels.map((label, idx) => {
       const point: Record<string, unknown> = { x: label };
       rows.forEach((r) => {
         if (selected.has(r.track)) {
-          const baseValue = r.values[idx] ?? null;
-          // If revenue mode, multiply by a factor (e.g., $1 per stream)
-          point[r.track] =
-            viewMode === 'revenue' && baseValue !== null
-              ? baseValue * 1
-              : baseValue;
+          point[r.track] = r.values[idx] ?? null;
         }
       });
       return point;
     });
-  }, [rows, selected, viewMode]);
+  }, [rows, selected, monthLabels]);
 
   return (
     <AppShell>
@@ -104,12 +176,37 @@ export default function StreamPerDSPPanel() {
             </p>
           </div>
           <div className="w-full lg:w-fit flex gap-2">
-            <Button
-              variant="outline"
-              className="w-full bg-[#EAEAEA] rounded-2xl lg:w-auto"
-            >
-              <Calendar className="h-4 w-4" /> Year
-            </Button>
+            <div className="relative">
+              <Button
+                variant="outline"
+                className="w-full bg-[#EAEAEA] rounded-2xl lg:w-auto"
+                onClick={() => setShowYearPicker(!showYearPicker)}
+              >
+                <Calendar className="h-4 w-4" /> {selectedYear} <ChevronDown className="h-4 w-4 ml-1" />
+              </Button>
+              {showYearPicker && (
+                <div className="absolute top-full mt-2 bg-white rounded-xl shadow-lg p-4 z-50 min-w-[280px]">
+                  <div className="grid grid-cols-4 gap-2">
+                    {Array.from({ length: 10 }, (_, i) => currentYear - i).map((year) => (
+                      <button
+                        key={year}
+                        onClick={() => {
+                          setSelectedYear(year);
+                          setShowYearPicker(false);
+                        }}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          year === selectedYear
+                            ? 'bg-[#7B00D4] text-white'
+                            : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100'
+                        }`}
+                      >
+                        {year}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             <Button
               variant="primary"
               className="w-full rounded-2xl lg:w-auto"
@@ -129,6 +226,16 @@ export default function StreamPerDSPPanel() {
         </div>
 
         <div className="mt-7 space-y-4">
+          {isLoading ? (
+            <div className="h-[400px] w-full bg-white rounded-xl flex items-center justify-center">
+              <p className="text-neutral-500">Loading...</p>
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="h-[400px] w-full bg-white rounded-xl flex items-center justify-center">
+              <p className="text-neutral-500">No data available</p>
+            </div>
+          ) : (
+            <>
           {/* Chart without ChartCard wrapper */}
           <div className="h-[400px] w-full bg-white rounded-xl">
             <ResponsiveContainer width="100%" height="100%">
@@ -213,7 +320,7 @@ export default function StreamPerDSPPanel() {
                       className="h-4 w-4 rounded accent-black"
                     />
                   </th>
-                  <th className="py-3 pr-4 whitespace-nowrap">Track</th>
+                  <th className="py-3 pr-4 whitespace-nowrap">DSP</th>
                   {monthLabels.map((m) => (
                     <th
                       key={m}
@@ -257,6 +364,8 @@ export default function StreamPerDSPPanel() {
               </tbody>
             </table>
           </div>
+          </>
+          )}
         </div>
       </div>
     </AppShell>

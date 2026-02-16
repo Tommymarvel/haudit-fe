@@ -44,43 +44,6 @@ function FilterPill({ label = "All months" }: { label?: string }) {
   );
 }
 
-/* ---------- Mock data (swap with API) ---------- */
-// 1) Track revenue per DSP (per-DSP axis)
-
-// 2) Track streams per DSP (donut) — we’ll show only total in center here
-// const donutParts = [
-//   { name: "Apple music", value: 500, color: "#E9D7FE" },
-//   { name: "YouTube", value: 240, color: "#FFDFAF" },
-//   { name: "Spotify", value: 122, color: "#00C853" },
-//   { name: "Audiomack", value: 12, color: "#8A8A8A" },
-//   { name: "Others", value: 74, color: PURPLE },
-// ];
-
-
-// 4) Revenue per Track (time series)
-const revPerTrack = [
-  { x: "Jan", v: 30 },
-  { x: "Feb", v: 20 },
-  { x: "Mar", v: 65 },
-  { x: "Apr", v: 75 },
-  { x: "May", v: 60 },
-  { x: "Jun", v: 32 },
-  { x: "Jul", v: 85 },
-  { x: "Aug", v: 78 },
-  { x: "Sep", v: 40 },
-  { x: "Oct", v: 45 },
-  { x: "Nov", v: 70 },
-  { x: "Dec", v: 66 },
-];
-
-// 6) Streams per DSP (bars + legend)
-// const streamsByDSP = {
-//   legend: [
-//     { label: "WON BUMI", color: PURPLE, value: 700 },
-//     { label: "WON BUMI", color: "#00C853", value: 700 },
-//     { label: "WON BUMI", color: "#FFC24D", value: 700 },
-//   ],
-// };
 
 const PRIMARY = "#000";
 const PRIMARY_SOFT = "#CA98EE";
@@ -116,42 +79,14 @@ const TERRITORY_DATA: Record<FilterKey, Territory[]> = {
   ],
 };
 
-/* ======================= PAGE ======================= */
-
-// Mock files data
-// const MOCK_FILES = [
-//   {
-//     id: 1,
-//     name: "Royalty_Statement_Q1_2024.pdf",
-//     date: "Jan 15, 2024",
-//     size: "2.4 MB",
-//   },
-//   {
-//     id: 2,
-//     name: "Royalty_Statement_Q2_2024.pdf",
-//     date: "Apr 10, 2024",
-//     size: "2.1 MB",
-//   },
-//   {
-//     id: 3,
-//     name: "Royalty_Statement_Q3_2024.pdf",
-//     date: "Jul 22, 2024",
-//     size: "2.8 MB",
-//   },
-//   {
-//     id: 4,
-//     name: "Royalty_Statement_Q4_2024.pdf",
-//     date: "Oct 5, 2024",
-//     size: "3.2 MB",
-//   },
-// ];
 
 export default function SoloArtistRoyalty() {
   const { 
     dashboardMetrics, 
     uploads, 
     isUploadsLoading, 
-    uploadRoyaltyFile 
+    uploadRoyaltyFile,
+    albumPerformance 
   } = useRoyalty();
 
   const [activeTab, setActiveTab] = useState<"analytics" | "files">(
@@ -233,6 +168,14 @@ export default function SoloArtistRoyalty() {
     // TODO: Update when revenueBySource endpoint is available
     return { legend: [] };
   }, []);
+
+  const albumPerformanceData = useMemo(() => {
+    if (!albumPerformance) return [];
+    return albumPerformance.map(item => ({
+      x: item.day,
+      v: item.streams
+    }));
+  }, [albumPerformance]);
 
   const activeFilter = FILTER_OPTIONS.find((f) => f.key === filter)!;
 
@@ -581,7 +524,7 @@ export default function SoloArtistRoyalty() {
               <ChartCard
                 title="All album performance"
                 variant="line"
-                data={revPerTrack}
+                data={albumPerformanceData}
                 xKey="x"
                 yKey="v"
                 lineType="monotone"
@@ -631,7 +574,7 @@ export default function SoloArtistRoyalty() {
                 onHeaderFilterClick={() => setShowDropdown4(!showDropdown4)}
                 footerActionLabel="View all report insight"
                 onFooterActionClick={() => {
-                  router.push("/royalty/stream-per-dsp?view=revenue");
+                  router.push("/royalty/stream-per-dsp");
                 }}
               />
               {showDropdown4 && (
@@ -734,7 +677,7 @@ export default function SoloArtistRoyalty() {
                 )}
                 <button
                   type="button"
-                  onClick={() => router.push("/royalty/stream-per-dsp")}
+                  onClick={() => router.push("/royalty/stream-per-dsp?view=revenue")}
                   className="absolute bottom-4 right-4 inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-medium text-[#7B00D4] shadow-md hover:shadow-lg"
                 >
                   <span>View all report insight</span>

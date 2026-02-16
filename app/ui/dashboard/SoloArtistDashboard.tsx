@@ -6,14 +6,13 @@ import { ChevronDown } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { ChartCard, DonutSlice } from '@/components/dashboard/ChartCard';
 
-import { performanceAllTracks, revenueByMonth as mockRevenueByMonth } from '@/lib/data/mockDashboard';
 import Image from 'next/image';
 import Topbar from '@/components/layout/Topbar';
 import { useMemo } from 'react';
 import { useRoyalty } from '@/hooks/useRoyalty';
 
 export default function SoloArtistDashboard() {
-  const { dashboardMetrics } = useRoyalty();
+  const { dashboardMetrics, albumPerformance, albumRevenue, albumInteractions } = useRoyalty();
 
   const sparkUp = [
     { v: 20 },
@@ -66,6 +65,36 @@ export default function SoloArtistDashboard() {
       })),
     [dashboardMetrics]
   );
+
+  const albumPerformanceData = useMemo(
+    () =>
+      (albumPerformance ?? []).map((item) => ({
+        label: item.day,
+        value: item.streams,
+      })),
+    [albumPerformance]
+  );
+
+  const albumRevenueData = useMemo(
+    () =>
+      (albumRevenue ?? []).map((item) => ({
+        label: item.day,
+        value: item.revenue,
+      })),
+    [albumRevenue]
+  );
+
+  const albumInteractionData: DonutSlice[] = useMemo(
+    () => [
+      { 
+        name: 'Stream', 
+        value: albumInteractions?.totalStreams ?? 0, 
+        color: '#7B00D4' 
+      },
+    ],
+    [albumInteractions]
+  );
+
   return (
     <div>
       <div className="">
@@ -167,7 +196,7 @@ export default function SoloArtistDashboard() {
           <ChartCard
             title="All album performance"
             variant="line"
-            data={performanceAllTracks}
+            data={albumPerformanceData}
             xKey="label"
             yKey="value"
             lineType="monotone"
@@ -177,7 +206,7 @@ export default function SoloArtistDashboard() {
           <ChartCard
             title="Revenue by album"
             variant="bar"
-            data={mockRevenueByMonth}
+            data={albumRevenueData}
             xKey="label"
             yKey="value"
           />
@@ -196,7 +225,7 @@ export default function SoloArtistDashboard() {
           <ChartCard
             title="Album Interaction Type"
             variant="donut"
-            data={interactionData}
+            data={albumInteractionData}
             donutInnerText={'Total\nInteraction'}
           />
         </div>

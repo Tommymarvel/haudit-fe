@@ -31,77 +31,9 @@ type Row = {
   email?: string;
 };
 
-const MOCK_MARKETING_TREND = [
-  { label: "Jan", value: 800 },
-  { label: "Feb", value: 1200 },
-  { label: "Mar", value: 3500 },
-  { label: "Apr", value: 3000 },
-  { label: "May", value: 3300 },
-  { label: "Jun", value: 4100 },
-  { label: "Jul", value: 2100 },
-  { label: "Aug", value: 2200 },
-  { label: "Sep", value: 2600 },
-  { label: "Oct", value: 2400 },
-  { label: "Nov", value: 4500 },
-  { label: "Dec", value: 5000 },
-];
-
-const MOCK_PERSONAL_TREND = MOCK_MARKETING_TREND.map((d, i) => ({
-  label: d.label,
-  value: Math.max(400, d.value - (i % 5) * 800),
-}));
-
-const donutData = [
-  { name: "Marketing", value: 1500, color: BRAND.purple },
-  { name: "Personal", value: 2000, color: BRAND.green },
-];
-
-const MOCK_ROWS: Row[] = [
-  {
-    id: "mock-1",
-    date: "12/01/2024",
-    amount: 5000,
-    type: "Marketing",
-    status: "Outstanding",
-    source: "Label A",
-    totalAdvance: 5000,
-    repaidAdvance: 1000,
-    advanceBalance: 4000,
-    phone: "123-456-7890",
-    email: "contact@labela.com",
-  },
-  {
-    id: "mock-2",
-    date: "11/15/2024",
-    amount: 2000,
-    type: "Personal",
-    status: "Repaid",
-    source: "Manager B",
-    totalAdvance: 2000,
-    repaidAdvance: 2000,
-    advanceBalance: 0,
-    phone: "987-654-3210",
-    email: "manager@b.com",
-  },
-  {
-    id: "mock-3",
-    date: "10/20/2024",
-    amount: 10000,
-    type: "Marketing",
-    status: "Pending",
-    source: "Label A",
-    totalAdvance: 10000,
-    repaidAdvance: 0,
-    advanceBalance: 10000,
-    phone: "123-456-7890",
-    email: "contact@labela.com",
-  },
-];
-
 const SoloArtistAdvance = () => {
   const { advances, overview, marketingTrend, personalTrend, typePercentage, createAdvance, createRepayment, getRepayments } =
     useAdvance();
-  const [isDemoMode, setIsDemoMode] = useState(false);
   const [tab, setTab] = useState<"analytics" | "source">("analytics");
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("All");
@@ -111,7 +43,7 @@ const SoloArtistAdvance = () => {
   const [openAdd, setOpenAdd] = useState(false);
   const [selectedAdvance, setSelectedAdvance] = useState<Row | null>(null);
 
-  const apiRows: Row[] = useMemo(() => {
+  const rows: Row[] = useMemo(() => {
     if (!advances) return [];
     return advances.map((adv) => ({
       id: adv._id,
@@ -132,16 +64,7 @@ const SoloArtistAdvance = () => {
     }));
   }, [advances]);
 
-  const rows = isDemoMode ? MOCK_ROWS : apiRows;
-
   const kpis = useMemo(() => {
-    if (isDemoMode) {
-      return {
-        sources: 20,
-        total: 15000,
-        repaid: 2400,
-      };
-    }
     if (!overview) return { sources: 0, total: 0, repaid: 0 };
 
     return {
@@ -149,17 +72,9 @@ const SoloArtistAdvance = () => {
       total: overview.totalAdvanceUSD,
       repaid: overview.totalRepaidUSD,
     };
-  }, [isDemoMode, overview]);
+  }, [overview]);
 
   const charts = useMemo(() => {
-    if (isDemoMode) {
-      return {
-        marketing: MOCK_MARKETING_TREND,
-        personal: MOCK_PERSONAL_TREND,
-        donut: donutData,
-      };
-    }
-
     const marketingTrendData = (marketingTrend || []).map((item) => ({
       label: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       value: item.totalUSD,
@@ -180,7 +95,7 @@ const SoloArtistAdvance = () => {
       personal: personalTrendData.length > 0 ? personalTrendData : [{ label: 'No data', value: 0 }],
       donut: realDonut,
     };
-  }, [isDemoMode, marketingTrend, personalTrend, typePercentage]);
+  }, [marketingTrend, personalTrend, typePercentage]);
 
   const filtered = useMemo(
     () =>
@@ -298,8 +213,8 @@ const SoloArtistAdvance = () => {
               </Button>
             }
             items={[
-              { label: "Export analytics", onClick: () => {} },
-              { label: "Export data", onClick: () => {} },
+              { label: "Export analytics", onClick: () => { } },
+              { label: "Export data", onClick: () => { } },
             ]}
           />
 
@@ -321,14 +236,6 @@ const SoloArtistAdvance = () => {
             ]}
           />
 
-          {/* Demo Toggle */}
-          <div className="flex items-center justify-center col-span-2 lg:col-span-1">
-            <Switch
-              checked={isDemoMode}
-              onChange={setIsDemoMode}
-              label="Demo Data"
-            />
-          </div>
         </div>
       </div>
 
@@ -375,21 +282,19 @@ const SoloArtistAdvance = () => {
         <div className="flex items-center gap-6">
           <button
             onClick={() => setTab("analytics")}
-            className={`px-1 py-2 text-sm ${
-              tab === "analytics"
+            className={`px-1 py-2 text-sm ${tab === "analytics"
                 ? "text-neutral-900 font-medium border-b-2 border-[color:#7B00D4]"
                 : "text-neutral-500"
-            }`}
+              }`}
           >
             Analytics
           </button>
           <button
             onClick={() => setTab("source")}
-            className={`px-1 py-2 text-sm ${
-              tab === "source"
+            className={`px-1 py-2 text-sm ${tab === "source"
                 ? "text-neutral-900 font-medium border-b-2 border-[color:#7B00D4]"
                 : "text-neutral-500"
-            }`}
+              }`}
           >
             Advance source
           </button>

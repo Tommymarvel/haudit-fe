@@ -70,22 +70,23 @@ export default function Modal({
 
       {/* panel */}
       <div className="absolute inset-0 grid place-items-center p-4">
-        {/* Outside "island" close */}
-        {closeVariant === 'island' && (
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="
-                     grid h-9 w-9 place-items-center rounded-full bg-white
-                     shadow-lg ring-1 ring-black/10 hover:shadow-xl z-10"
-          >
-            <X className="h-4 w-4 text-rose-500" />
-          </button>
-        )}
         <div
           ref={panelRef}
           className={`relative w-full ${SIZES[size]} overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-black/5`}
         >
+          {/* Outside "island" close */}
+          {closeVariant === 'island' && (
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="
+                       absolute -top-2 -right-2 z-10
+                       grid h-9 w-9 place-items-center rounded-full bg-white
+                       shadow-lg ring-1 ring-black/10 hover:shadow-xl transition-shadow"
+            >
+              <X className="h-4 w-4 text-rose-500" />
+            </button>
+          )}
           {headerVariant === 'bar' && (
             <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50/70 px-4 py-3">
               <p className="text-sm font-medium text-neutral-700">{title}</p>
