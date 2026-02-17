@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useRef } from 'react';
+
+import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
@@ -37,7 +38,6 @@ export default function Modal({
   children,
 }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
 
   // ESC to close
   useEffect(() => {
@@ -70,39 +70,50 @@ export default function Modal({
 
       {/* panel */}
       <div className="absolute inset-0 grid place-items-center p-4">
-        <div
-          ref={panelRef}
-          className={`relative w-full ${SIZES[size]} overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-black/5`}
-        >
-          {/* Outside "island" close */}
+        {/*
+          IMPORTANT:
+          - This outer wrapper is `overflow-visible` so the floating close button can sit OUTSIDE the rounded panel.
+          - The inner panel keeps `overflow-hidden` for rounded corners.
+        */}
+        <div className={`relative w-full ${SIZES[size]} overflow-visible`}>
+          {/* Outside floating close (matches your reference screenshot) */}
           {closeVariant === 'island' && (
             <button
               onClick={onClose}
               aria-label="Close"
-              className="
-                       absolute -top-2 -right-2 z-10
-                       grid h-9 w-9 place-items-center rounded-full bg-white
-                       shadow-lg ring-1 ring-black/10 hover:shadow-xl transition-shadow"
+              className={
+                "absolute z-10 grid h-9 w-9 place-items-center rounded-full bg-white " +
+                "shadow-lg ring-1 ring-black/10 hover:shadow-xl transition-shadow " +
+                // Mobile: keep it safely INSIDE the modal
+                "right-3 top-3 " +
+                // >=sm: float it OUTSIDE the top-right corner (centered on the corner)
+                "sm:right-0 sm:top-0 sm:translate-x-1/2 sm:-translate-y-1/2"
+              }
             >
               <X className="h-4 w-4 text-rose-500" />
             </button>
           )}
-          {headerVariant === 'bar' && (
-            <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50/70 px-4 py-3">
-              <p className="text-sm font-medium text-neutral-700">{title}</p>
-              {closeVariant === 'inline' && (
-                <button
-                  onClick={onClose}
-                  aria-label="Close"
-                  className="rounded-full p-1.5 hover:bg-neutral-200"
-                >
-                  <X className="h-4 w-4 text-neutral-600" />
-                </button>
-              )}
-            </div>
-          )}
 
-          <div className="">{children}</div>
+          {/* Actual modal panel */}
+          <div className="overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-black/5">
+            {headerVariant === 'bar' && (
+              <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50/70 px-4 py-3">
+                <p className="text-sm font-medium text-neutral-700">{title}</p>
+
+                {closeVariant === 'inline' && (
+                  <button
+                    onClick={onClose}
+                    aria-label="Close"
+                    className="rounded-full p-1.5 hover:bg-neutral-200"
+                  >
+                    <X className="h-4 w-4 text-neutral-600" />
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div>{children}</div>
+          </div>
         </div>
       </div>
     </div>
