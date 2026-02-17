@@ -1,9 +1,10 @@
 // lib/firebase.ts
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import {
   getAuth,
   setPersistence,
   browserLocalPersistence,
+  Auth,
 } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -15,8 +16,16 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
 };
 
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-export const auth = getAuth(app);
+// Only initialize Firebase in the browser
+let app: FirebaseApp | undefined;
+let authInstance: Auth | undefined;
 
-// Persist auth state in localStorage so tokens auto-refresh:
-setPersistence(auth, browserLocalPersistence);
+if (typeof window !== 'undefined') {
+  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+  authInstance = getAuth(app);
+  // Persist auth state in localStorage so tokens auto-refresh
+  setPersistence(authInstance, browserLocalPersistence);
+}
+
+// Export auth instance (will be undefined during SSR, but that's okay since it's only used client-side)
+export const auth = authInstance as Auth;
