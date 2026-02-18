@@ -1,56 +1,58 @@
-'use client';
+"use client";
 
-import { useState, Suspense } from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Formik, Form, Field, ErrorMessage } from 'formik';
-import * as Yup from 'yup';
-import { Eye, EyeOff, Check } from 'lucide-react';
-import clsx from 'clsx';
-import { useSignupFlow, useGoogleLogin } from '../hooks/useAuth';
-import { useSearchParams } from 'next/navigation';
-import VerifyOTPModal from '../components/auth/VerifyOTPModal';
-import { useAuth } from '@/contexts/AuthContext';
+import { useState, Suspense } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Formik, Form, Field, ErrorMessage } from "formik";
+import * as Yup from "yup";
+import { Eye, EyeOff, Check } from "lucide-react";
+import clsx from "clsx";
+import { useSignupFlow, useGoogleSignup } from "../hooks/useAuth";
+import { useSearchParams } from "next/navigation";
+import VerifyOTPModal from "../components/auth/VerifyOTPModal";
+import { useAuth } from "@/contexts/AuthContext";
+import { TagInput } from "@/components/ui/TagInput";
 
 const PasswordSchema = Yup.object({
-  firstName: Yup.string().required('Required'),
-  lastName: Yup.string().required('Required'),
-  email: Yup.string().email('Invalid email').required('Required'),
+  firstName: Yup.string().required("Required"),
+  lastName: Yup.string().required("Required"),
+  other_names: Yup.array().of(Yup.string()),
+  email: Yup.string().email("Invalid email").required("Required"),
   password: Yup.string()
-    .min(8, 'At least 8 characters')
-    .matches(/[!@#$%^&*(),.?":{}|<>]/, 'Add a special character')
-    .matches(/\d/, 'Add a number')
-    .required('Required'),
+    .min(8, "At least 8 characters")
+    .matches(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/, "Add a special character")
+    .matches(/\d/, "Add a number")
+    .required("Required"),
 });
 
 function SignupContent() {
   const [show, setShow] = useState(false);
   const [showOTPModal, setShowOTPModal] = useState(false);
-  const [registeredEmail, setRegisteredEmail] = useState('');
+  const [registeredEmail, setRegisteredEmail] = useState("");
   const searchParams = useSearchParams();
   const router = useRouter();
   const { refreshUser } = useAuth();
-  const userType = searchParams.get('user') || 'artist'; // Default to 'artist' if not provided
-  
+  const userType = searchParams.get("user");
+
   const handleSignupSuccess = (email: string) => {
     setRegisteredEmail(email);
     setShowOTPModal(true);
   };
-  
+
   const { signup, submitting } = useSignupFlow(handleSignupSuccess);
-  const { loginWithGoogle } = useGoogleLogin();
+  const { signupWithGoogle } = useGoogleSignup(userType || '', handleSignupSuccess);
 
   const handleVerifyOTP = async () => {
     // Refresh user data and navigate to dashboard after successful verification
     await refreshUser();
     setShowOTPModal(false);
-    router.push('/dashboard');
+    router.push("/dashboard");
   };
 
   const handleResendOTP = () => {
     // The resend is now handled inside the modal
-    console.log('OTP resent to:', registeredEmail);
+    console.log("OTP resent to:", registeredEmail);
   };
 
   return (
@@ -59,18 +61,19 @@ function SignupContent() {
         <Image src="/haudit-logo.svg" alt="Haudit" width={48} height={48} />
       </div>
       <h1 className="mt-6 text-2xl text-center font-medium text-[#1F1F1F]">
-        Create Haudit account{' '}
+        Create Haudit account{" "}
       </h1>
       <p className="mt-1 text-sm text-center text-neutral-500">
-        Analyse and visualise your royalty report with few clicks.{' '}
+        Analyse and visualise your royalty report with few clicks.{" "}
       </p>
 
       <Formik
         initialValues={{
-          firstName: '',
-          lastName: '',
-          email: '',
-          password: '',
+          firstName: "",
+          lastName: "",
+          other_names: [] as string[],
+          email: "",
+          password: "",
         }}
         validationSchema={PasswordSchema}
         onSubmit={(values) => {
@@ -79,25 +82,25 @@ function SignupContent() {
             values.password,
             values.firstName,
             values.lastName,
-            userType
+            userType || '',
           );
         }}
       >
-        {({ values }) => {
-          const pass = values.password ?? '';
+        {({ values, setFieldValue }) => {
+          const pass = values.password ?? "";
           const rules = {
             len: pass.length >= 8,
-            special: /[!@#$%^&*(),.?":{}|<>]/.test(pass),
+            special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(pass),
             number: /\d/.test(pass),
           };
 
           // Check if all fields are filled and password rules are met
           const allRulesPassed = rules.len && rules.special && rules.number;
           const allFieldsFilled =
-            values.firstName.trim() !== '' &&
-            values.lastName.trim() !== '' &&
-            values.email.trim() !== '' &&
-            values.password.trim() !== '';
+            values.firstName.trim() !== "" &&
+            values.lastName.trim() !== "" &&
+            values.email.trim() !== "" &&
+            values.password.trim() !== "";
           const isFormValid = allFieldsFilled && allRulesPassed;
 
           return (
@@ -160,6 +163,41 @@ function SignupContent() {
                 />
               </div>
 
+              {/* Other Names */}
+              <div>
+                <label className="mb-2 block text-sm text-neutral-700">
+                  Other Names <span className="text-red-500">*</span>
+                </label>
+                <TagInput
+                  value={values.other_names}
+                  onChange={(newValue) => setFieldValue("other_names", newValue)}
+                  placeholder="Type other names and press Enter"
+                />
+                <div className="mt-2 rounded-lg bg-yellow-50 border border-yellow-200 p-3 flex gap-2">
+                  <span className="text-yellow-600 flex-shrink-0 mt-0.5">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M7.99992 5.33301V7.99967M7.99992 10.6663H8.00659M14.6666 7.99967C14.6666 11.6816 11.6818 14.6663 7.99992 14.6663C4.31802 14.6663 1.33325 11.6816 1.33325 7.99967C1.33325 4.31778 4.31802 1.33301 7.99992 1.33301C11.6818 1.33301 14.6666 4.31778 14.6666 7.99967Z"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                  <p className="text-sm text-yellow-800">
+                    Manage your alternate names, including stage names and
+                    aliases used in reporting files.
+                  </p>
+                </div>
+              </div>
+
               {/* Password */}
               <div>
                 <label className="mb-2 block text-sm text-neutral-700">
@@ -168,7 +206,7 @@ function SignupContent() {
                 <div className="relative">
                   <Field
                     name="password"
-                    type={show ? 'text' : 'password'}
+                    type={show ? "text" : "password"}
                     placeholder="Enter your password"
                     className="w-full rounded-2xl border border-neutral-200  pr-10 px-3 py-2.5 text-black outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
                   />
@@ -176,7 +214,7 @@ function SignupContent() {
                     type="button"
                     onClick={() => setShow((s) => !s)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-                    aria-label={show ? 'Hide password' : 'Show password'}
+                    aria-label={show ? "Hide password" : "Show password"}
                   >
                     {show ? (
                       <EyeOff className="h-5 w-5" />
@@ -216,14 +254,14 @@ function SignupContent() {
                 disabled={!isFormValid || submitting}
                 className="w-full rounded-2xl text-white py-3 font-medium transition-colors disabled:bg-[#959595] enabled:bg-[#7B00D4] enabled:hover:bg-[#6A00B8]"
               >
-                {submitting ? 'Creating account...' : 'Create account'}
+                {submitting ? "Creating account..." : "Create account"}
               </button>
 
               {/* Google OAuth placeholder */}
               <button
                 type="button"
                 className="w-full rounded-2xl border border-neutral-300 px-3 text-black  bg-white py-2.5 font-medium"
-                onClick={() => loginWithGoogle(refreshUser)}
+                onClick={signupWithGoogle}
               >
                 <span className="inline-flex items-center gap-2.5">
                   <GoogleIcon />
@@ -232,18 +270,18 @@ function SignupContent() {
               </button>
 
               <p className="text-center text-sm text-neutral-500">
-                Already have an account?{' '}
+                Already have an account?{" "}
                 <Link href="/login" className="text-[#7B00D4] hover:underline">
                   Sign in
                 </Link>
               </p>
 
               <p className="text-center  text-sm text-[#5A5A5A]">
-                By clicking “create account”, I agree to your{' '}
+                By clicking “create account”, I agree to your{" "}
                 <Link href="/terms" className="underline text-[#7B00D4]">
                   Terms of service
-                </Link>{' '}
-                and{' '}
+                </Link>{" "}
+                and{" "}
                 <Link href="/privacy" className="underline text-[#7B00D4]">
                   Privacy Policy
                 </Link>
@@ -269,12 +307,12 @@ function Rule({ ok, label }: { ok: boolean; label: string }) {
   return (
     <li
       className={clsx(
-        'flex items-center gap-2',
-        ok ? 'text-green-600' : 'text-neutral-400'
+        "flex items-center gap-2",
+        ok ? "text-green-600" : "text-neutral-400",
       )}
     >
       <Check
-        className={clsx('h-4 w-4', ok ? 'text-green-600' : 'text-neutral-300')}
+        className={clsx("h-4 w-4", ok ? "text-green-600" : "text-neutral-300")}
       />
       {label}
     </li>
