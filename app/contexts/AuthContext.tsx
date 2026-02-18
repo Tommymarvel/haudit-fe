@@ -15,6 +15,7 @@ interface User {
   bvn?: string;
   business_document?: string;
   email_verified?: boolean;
+  other_names?: string[];
 }
 
 interface AuthContextType {
