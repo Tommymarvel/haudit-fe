@@ -48,8 +48,9 @@ const Page = ({ defaultValue = 'solo', onChange }: Props) => {
 
   const handleContinue = () => {
     const userType = ROLE_TO_USER_TYPE[value];
-    // Pass user_type as a query parameter to signup page
-    router.push(`/signup?user=${userType}`);
+    // Store user_type in sessionStorage and redirect to complete-profile
+    sessionStorage.setItem('user_type', userType);
+    router.push(`/complete-profile?user=${userType}`);
   };
   return (
     <div className=''>
