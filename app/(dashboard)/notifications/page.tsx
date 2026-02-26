@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { X, Calendar, Search } from "lucide-react";
 import { cn } from "@/lib/cn";
 import AppShell from "@/components/layout/AppShell";
+import { toast } from "react-toastify";
 
 const NotificationIcon = ({ type }: { type: string }) => {
   const icons = {
@@ -132,11 +133,18 @@ export default function NotificationsPage() {
     await markAsRead(id);
   };
 
+  const previewToastMessage =
+    "Lorem Ipsum is simply dummy text of the printing and typesetting industry.";
+
+  const showToastPreview = (type: "success" | "warning" | "info" | "error") => {
+    toast[type](previewToastMessage);
+  };
+
   return (
     <AppShell>
       <div className="p-6">
         {/* Header */}
-        <div className="flex justify-between mb-6">
+        <div className="flex flex-col gap-1 md:flex-row justify-between mb-6">
           <div>
             {" "}
             <h1 className="text-2xl font-semibold text-neutral-900">
@@ -219,6 +227,43 @@ export default function NotificationsPage() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* Toast Preview */}
+        <div className="mb-6 rounded-2xl border border-neutral-200 bg-white p-4">
+          <p className="text-sm font-semibold text-neutral-900 mb-3">
+            Toast Preview
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => showToastPreview("success")}
+              className="rounded-lg border-neutral-200"
+            >
+              Show Success
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => showToastPreview("warning")}
+              className="rounded-lg border-neutral-200"
+            >
+              Show Warning
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => showToastPreview("info")}
+              className="rounded-lg border-neutral-200"
+            >
+              Show Info
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => showToastPreview("error")}
+              className="rounded-lg border-neutral-200"
+            >
+              Show Error
+            </Button>
           </div>
         </div>
 
