@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import { toast } from "react-toastify";
 import { AxiosError } from "axios";
@@ -35,17 +36,28 @@ export default function VerifyOTPModal({
   const [isVerifying, setIsVerifying] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [otpExpiryTime, setOtpExpiryTime] = useState(OTP_EXPIRY);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     setEmail(initialEmail);
   }, [initialEmail]);
 
-  // Start timers when modal opens
+  // Start timers when modal opens and reset when it closes
   useEffect(() => {
     if (isOpen) {
       // Start with 5 minute cooldown on initial open (OTP was just sent after signup)
       setResendCooldown(RESEND_COOLDOWN);
       setOtpExpiryTime(OTP_EXPIRY);
+      setOtp(''); // Clear any previous OTP
+    } else {
+      // Reset timers when modal closes
+      setResendCooldown(0);
+      setOtpExpiryTime(0);
+      setOtp('');
     }
   }, [isOpen]);
 
@@ -152,19 +164,20 @@ export default function VerifyOTPModal({
   };
 
   if (!isOpen) return null;
+  if (!mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-50">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] overflow-y-auto">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/10"
         aria-hidden="true"
         onClick={onClose}
       />
 
       {/* Centered dialog */}
-      <div className="absolute inset-0 grid place-items-center px-4">
-        <div className="w-full max-w-md rounded-2xl bg-white shadow-xl ring-1 ring-black/5 p-8">
+      <div className="relative min-h-screen grid place-items-center px-4 py-8">
+        <div className="relative w-full max-w-md rounded-2xl bg-white shadow-xl ring-1 ring-black/5 p-8 my-8">
           <h2 className="text-2xl font-medium text-[#1F1F1F]">
             Verify your email
           </h2>
@@ -214,11 +227,11 @@ export default function VerifyOTPModal({
               <OTPInput length={4} value={otp} onChange={setOtp} />
             </div>
             {otpExpiryTime > 0 ? (
-              <p className="mt-2 text-xs text-neutral-500">
+              <p className="mt-2 text-xs text-neutral-600 font-medium">
                 Code expires in {formatTime(otpExpiryTime)}
               </p>
             ) : (
-              <p className="mt-2 text-xs text-rose-600">
+              <p className="mt-2 text-xs text-rose-600 font-medium">
                 This code has expired. Please request a new one.
               </p>
             )}
@@ -236,7 +249,7 @@ export default function VerifyOTPModal({
             {resendCooldown > 0 ? (
               <p>
                 Didn&apos;t receive the code?{" "}
-                <span className="text-[#959595]">
+                <span className="text-neutral-600 font-medium">
                   Resend available in {formatTime(resendCooldown)}
                 </span>
               </p>
@@ -255,6 +268,7 @@ export default function VerifyOTPModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

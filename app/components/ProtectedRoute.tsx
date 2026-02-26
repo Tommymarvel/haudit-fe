@@ -14,18 +14,13 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     }
   }, [isAuthenticated, isLoading, router]);
 
-  // Show loading spinner while checking authentication
-  if (isLoading) {
+  // Show loading spinner while checking authentication OR if not authenticated (during redirect)
+  if (isLoading || !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#7B00D4]"></div>
       </div>
     );
-  }
-
-  // Don't render children if not authenticated
-  if (!isAuthenticated) {
-    return null;
   }
 
   return <>{children}</>;

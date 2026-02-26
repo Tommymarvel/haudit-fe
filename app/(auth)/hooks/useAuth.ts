@@ -12,6 +12,7 @@ import { AxiosError } from 'axios';
 import { toast } from 'react-toastify';
 import axiosInstance from '@/lib/axiosinstance';
 import { createAuthCookie } from '@/actions/auth';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function useSignupFlow(onSuccess?: (email: string) => void) {
   const router = useRouter();
@@ -19,21 +20,9 @@ export function useSignupFlow(onSuccess?: (email: string) => void) {
 
   async function signup(
     email: string,
-    password: string,
-    firstName: string,
-    lastName: string,
-    userType: string
+    password: string
   ) {
     setSubmitting(true);
-    
-    // Validate user_type before proceeding
-    const validUserTypes = ['artist', 'label_artist', 'record_label'];
-    if (!userType || !validUserTypes.includes(userType)) {
-      toast.error('Please select your account type.');
-      router.push('/whoareyou');
-      setSubmitting(false);
-      return;
-    }
     
     try {
       // 1) create user
@@ -47,10 +36,7 @@ export function useSignupFlow(onSuccess?: (email: string) => void) {
       await axiosInstance.post('/auth/signup', {
         idToken,
         refreshToken,
-        first_name: firstName,
-        last_name: lastName,
         email: email,
-        user_type: userType,
       });
 
       // 4) Request OTP immediately after signup
@@ -76,16 +62,6 @@ export function useSignupFlow(onSuccess?: (email: string) => void) {
         const errorMessage = Array.isArray(responseData?.message) 
           ? responseData.message[0] 
           : (responseData?.message || axiosError.message || 'An error occurred');
-        
-        // Check for user_type validation error
-        if (
-          (responseData?.statusCode === 400 || axiosError.response?.status === 400) &&
-          (typeof errorMessage === 'string' && errorMessage.includes('user_type must be one of the following values'))
-        ) {
-          toast.error('Please select your account type.');
-          router.push('/whoareyou');
-          return;
-        }
         
         // Check for unverified email error
         if (
@@ -125,7 +101,7 @@ export function useSignupFlow(onSuccess?: (email: string) => void) {
   return { signup, submitting };
 }
 
-export function useGoogleSignup(userType: string, onSuccess?: (email: string) => void) {
+export function useGoogleSignup(onSuccess?: (email: string) => void) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
 
@@ -133,43 +109,35 @@ export function useGoogleSignup(userType: string, onSuccess?: (email: string) =>
     let sessionEmail = '';
     setSubmitting(true);
     
-    // Validate user_type before proceeding
-    const validUserTypes = ['artist', 'label_artist', 'record_label'];
-    if (!userType || !validUserTypes.includes(userType)) {
-      toast.error('Please select your account type.');
-      router.push('/whoareyou');
-      setSubmitting(false);
-      return;
-    }
-    
     try {
       sessionStorage.removeItem('verifyEmail');
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const idToken = await result.user.getIdToken();
+      const refreshToken = result.user.refreshToken;
       sessionEmail = result.user.email || '';
       sessionStorage.setItem('verifyEmail', sessionEmail);
 
-      // Call login endpoint to create new account
-      const res = await axiosInstance.post('/auth/login', {
+      // Call signup endpoint to create new account
+      await axiosInstance.post('/auth/signup', {
         idToken,
+        refreshToken,
         email: sessionEmail,
-        user_type: userType,
       });
 
-      // Check if verification is needed
-      if (res.data.status === 302) {
-        if (onSuccess) {
-          onSuccess(sessionEmail);
-        } else {
-          router.push('/signup/verify-otp');
-        }
-        return;
-      }
+      // Request OTP immediately after signup
+      await axiosInstance.post('/auth/request-verify-email', {
+        email: sessionEmail,
+      });
 
-      toast.success('Account created successfully!');
-      await createAuthCookie();
-      router.push('/dashboard');
+      toast.info('Account created. Check email to verify.');
+      
+      // Show verification modal via callback
+      if (onSuccess) {
+        onSuccess(sessionEmail);
+      } else {
+        router.push('/signup/verify-otp');
+      }
     } catch (error) {
       if (sessionEmail) {
         sessionStorage.setItem('verifyEmail', sessionEmail);
@@ -198,15 +166,6 @@ export function useGoogleSignup(userType: string, onSuccess?: (email: string) =>
           ? responseData.message[0] 
           : (responseData?.message || axiosError.message || 'An error occurred');
         
-        // Check for user_type validation error
-        if (
-          (responseData?.statusCode === 400 || axiosError.response?.status === 400) &&
-          (typeof errorMessage === 'string' && errorMessage.includes('user_type must be one of the following values'))
-        ) {
-          toast.error('Please select your account type.');
-          router.push('/whoareyou');
-          return;
-        }
         
         // Check for unverified email error
         if (
@@ -219,11 +178,6 @@ export function useGoogleSignup(userType: string, onSuccess?: (email: string) =>
           } else {
             router.push('/signup/verify-otp');
           }
-        } else if (
-          errorMessage === 'Looks like we sent you one recently, kindly check for that and input in the fields'
-        ) {
-          toast.error(errorMessage);
-          router.push('/signup/verify-otp');
         } else {
           toast.error(errorMessage.toString());
         }
@@ -238,9 +192,10 @@ export function useGoogleSignup(userType: string, onSuccess?: (email: string) =>
   return { signupWithGoogle, submitting };
 }
 
-export function useGoogleLogin() {
+export function useGoogleLogin(onVerifyEmail?: (email: string) => void) {
   const router = useRouter();
   const [isLogin, setIsLogin] = useState(false);
+  const { refreshUser } = useAuth();
 
   async function loginWithGoogle() {
     let sessionEmail = '';
@@ -265,13 +220,29 @@ export function useGoogleLogin() {
 
       // Check if verification is needed
       if (res.data.status === 302 || res.data.status === 304) {
-        router.push('/signup/verify-otp');
+        toast.info("Please verify your email to continue.");
+        if (onVerifyEmail) {
+          onVerifyEmail(sessionEmail);
+        } else {
+          router.push('/signup/verify-otp');
+        }
         return;
       }
 
       toast.success('Login successful!');
       await createAuthCookie();
-      router.push('/dashboard');
+      await refreshUser();
+      
+      // Check if user has completed profile using data from login response
+      const user = res.data.user;
+      
+      if (!user.user_type) {
+        // User hasn't completed profile - redirect to whoareyou
+        router.push('/whoareyou');
+      } else {
+        // User has completed profile - redirect to dashboard
+        router.push('/dashboard');
+      }
     } catch (error) {
       if (sessionEmail) {
         sessionStorage.setItem('verifyEmail', sessionEmail);
@@ -306,12 +277,11 @@ export function useGoogleLogin() {
           errorMessage === "You are yet to be verified, kindly check your email for the one time password"
         ) {
           toast.info("Please verify your email to continue.");
-          router.push('/signup/verify-otp');
-        } else if (
-          errorMessage === 'Looks like we sent you one recently, kindly check for that and input in the fields'
-        ) {
-          toast.error(errorMessage);
-          router.push('/signup/verify-otp');
+          if (onVerifyEmail) {
+            onVerifyEmail(sessionEmail);
+          } else {
+            router.push('/signup/verify-otp');
+          }
         } else if (errorMessage === 'Looks like you do not have an account with us') {
           // Account doesn't exist in backend - delete the Firebase account that was just created
           console.log('Attempting to delete Firebase user...');
@@ -350,6 +320,7 @@ export function useGoogleLogin() {
 export function useLoginFlow(onVerifyEmail?: (email: string, password?: string) => void) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
+  const { refreshUser } = useAuth();
 
   async function login(email: string, password: string) {
     setSubmitting(true);
@@ -379,8 +350,20 @@ export function useLoginFlow(onVerifyEmail?: (email: string, password?: string) 
         return;
       }
 
+      // Refresh user data to get latest profile
       await createAuthCookie();
-      router.push('/dashboard');
+      await refreshUser();
+      
+      // Check if user has completed profile using data from login response
+      const user = res.data.user;
+      
+      if (!user.user_type) {
+        // User hasn't completed profile - redirect to whoareyou
+        router.push('/whoareyou');
+      } else {
+        // User has completed profile - redirect to dashboard
+        router.push('/dashboard');
+      }
     } catch (error) {
       if (error instanceof FirebaseError) {
         let msg: string;

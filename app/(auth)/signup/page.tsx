@@ -9,15 +9,14 @@ import * as Yup from "yup";
 import { Eye, EyeOff, Check } from "lucide-react";
 import clsx from "clsx";
 import { useSignupFlow, useGoogleSignup } from "../hooks/useAuth";
-import { useSearchParams } from "next/navigation";
 import VerifyOTPModal from "../components/auth/VerifyOTPModal";
 import { useAuth } from "@/contexts/AuthContext";
-import { TagInput } from "@/components/ui/TagInput";
+import { auth } from "@/lib/auth/firebase";
+import axiosInstance from "@/lib/axiosinstance";
+import { createAuthCookie } from "@/actions/auth";
+import { toast } from "react-toastify";
 
 const PasswordSchema = Yup.object({
-  firstName: Yup.string().required("Required"),
-  lastName: Yup.string().required("Required"),
-  other_names: Yup.array().of(Yup.string()),
   email: Yup.string().email("Invalid email").required("Required"),
   password: Yup.string()
     .min(8, "At least 8 characters")
@@ -30,10 +29,9 @@ function SignupContent() {
   const [show, setShow] = useState(false);
   const [showOTPModal, setShowOTPModal] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState("");
-  const searchParams = useSearchParams();
+  const [registeredPassword, setRegisteredPassword] = useState("");
   const router = useRouter();
   const { refreshUser } = useAuth();
-  const userType = searchParams.get("user");
 
   const handleSignupSuccess = (email: string) => {
     setRegisteredEmail(email);
@@ -41,18 +39,51 @@ function SignupContent() {
   };
 
   const { signup, submitting } = useSignupFlow(handleSignupSuccess);
-  const { signupWithGoogle } = useGoogleSignup(userType || '', handleSignupSuccess);
+  const { signupWithGoogle, submitting: googleSubmitting } = useGoogleSignup((email) => {
+    setRegisteredEmail(email);
+    setShowOTPModal(true);
+  });
 
-  const handleVerifyOTP = async () => {
-    // Refresh user data and navigate to dashboard after successful verification
-    await refreshUser();
+  const handleVerifyOTPSuccess = async () => {
     setShowOTPModal(false);
-    router.push("/dashboard");
-  };
-
-  const handleResendOTP = () => {
-    // The resend is now handled inside the modal
-    console.log("OTP resent to:", registeredEmail);
+    
+    try {
+      // Auto-login after successful verification
+      let idToken: string;
+      
+      // Try to use existing Firebase session first (for Google auth)
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        idToken = await currentUser.getIdToken(true);
+      } else if (registeredEmail && registeredPassword) {
+        // For email/password auth, auto-login with stored credentials
+        const { signInWithEmailAndPassword } = await import('firebase/auth');
+        const cred = await signInWithEmailAndPassword(auth, registeredEmail, registeredPassword);
+        idToken = await cred.user.getIdToken();
+      } else {
+        throw new Error('No authentication credentials available');
+      }
+      
+      const res = await axiosInstance.post('/auth/login', {
+        idToken,
+      });
+      
+      toast.success('Account verified successfully!');
+      await createAuthCookie();
+      await refreshUser();
+      
+      // Redirect to profile completion
+      const user = res.data.user;
+      if (!user.user_type) {
+        router.push('/whoareyou');
+      } else {
+        router.push('/dashboard');
+      }
+    } catch (error) {
+      toast.error('Failed to complete signup. Please try logging in.');
+      console.error('Post-verification login error:', error);
+      router.push('/login');
+    }
   };
 
   return (
@@ -69,24 +100,22 @@ function SignupContent() {
 
       <Formik
         initialValues={{
-          firstName: "",
-          lastName: "",
-          other_names: [] as string[],
           email: "",
           password: "",
         }}
         validationSchema={PasswordSchema}
         onSubmit={(values) => {
+          // Store credentials for auto-login after verification
+          setRegisteredEmail(values.email);
+          setRegisteredPassword(values.password);
+          
           signup(
             values.email,
-            values.password,
-            values.firstName,
-            values.lastName,
-            userType || '',
+            values.password
           );
         }}
       >
-        {({ values, setFieldValue }) => {
+        {({ values }) => {
           const pass = values.password ?? "";
           const rules = {
             len: pass.length >= 8,
@@ -97,52 +126,12 @@ function SignupContent() {
           // Check if all fields are filled and password rules are met
           const allRulesPassed = rules.len && rules.special && rules.number;
           const allFieldsFilled =
-            values.firstName.trim() !== "" &&
-            values.lastName.trim() !== "" &&
             values.email.trim() !== "" &&
             values.password.trim() !== "";
           const isFormValid = allFieldsFilled && allRulesPassed;
 
           return (
             <Form className="space-y-5 mt-6 max-w-[550px] w-full mx-auto">
-              {/* Name */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-2 block text-sm text-neutral-700">
-                    Firstname
-                  </label>
-                  <div className="relative">
-                    <Field
-                      name="firstName"
-                      placeholder="Enter your firstname"
-                      className="w-full rounded-2xl border border-neutral-200 px-3 py-2.5 text-black outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                    />
-                  </div>
-                  <ErrorMessage
-                    name="firstName"
-                    component="p"
-                    className="mt-1 text-xs text-rose-600"
-                  />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm text-neutral-700">
-                    Lastname
-                  </label>
-                  <div className="relative">
-                    <Field
-                      name="lastName"
-                      placeholder="Enter your lastname"
-                      className="w-full rounded-2xl border border-neutral-200 px-3 py-2.5 text-black  outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                    />
-                  </div>
-                  <ErrorMessage
-                    name="lastName"
-                    component="p"
-                    className="mt-1 text-xs text-rose-600"
-                  />
-                </div>
-              </div>
-
               {/* Email */}
               <div>
                 <label className="mb-2 block text-sm text-neutral-700">
@@ -161,41 +150,6 @@ function SignupContent() {
                   component="p"
                   className="mt-1 text-xs text-rose-600"
                 />
-              </div>
-
-              {/* Other Names */}
-              <div>
-                <label className="mb-2 block text-sm text-neutral-700">
-                  Other Names <span className="text-red-500">*</span>
-                </label>
-                <TagInput
-                  value={values.other_names}
-                  onChange={(newValue) => setFieldValue("other_names", newValue)}
-                  placeholder="Type other names and press Enter"
-                />
-                <div className="mt-2 rounded-lg bg-yellow-50 border border-yellow-200 p-3 flex gap-2">
-                  <span className="text-yellow-600 flex-shrink-0 mt-0.5">
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        d="M7.99992 5.33301V7.99967M7.99992 10.6663H8.00659M14.6666 7.99967C14.6666 11.6816 11.6818 14.6663 7.99992 14.6663C4.31802 14.6663 1.33325 11.6816 1.33325 7.99967C1.33325 4.31778 4.31802 1.33301 7.99992 1.33301C11.6818 1.33301 14.6666 4.31778 14.6666 7.99967Z"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </span>
-                  <p className="text-sm text-yellow-800">
-                    Manage your alternate names, including stage names and
-                    aliases used in reporting files.
-                  </p>
-                </div>
               </div>
 
               {/* Password */}
@@ -260,12 +214,13 @@ function SignupContent() {
               {/* Google OAuth placeholder */}
               <button
                 type="button"
-                className="w-full rounded-2xl border border-neutral-300 px-3 text-black  bg-white py-2.5 font-medium"
+                className="w-full rounded-2xl border border-neutral-300 px-3 text-black  bg-white py-2.5 font-medium disabled:opacity-50"
                 onClick={signupWithGoogle}
+                disabled={googleSubmitting}
               >
                 <span className="inline-flex items-center gap-2.5">
                   <GoogleIcon />
-                  Sign up with Google
+                  {googleSubmitting ? 'Creating account...' : 'Sign up with Google'}
                 </span>
               </button>
 
@@ -296,8 +251,7 @@ function SignupContent() {
         isOpen={showOTPModal}
         onClose={() => setShowOTPModal(false)}
         email={registeredEmail}
-        onVerify={handleVerifyOTP}
-        onResend={handleResendOTP}
+        onSuccess={handleVerifyOTPSuccess}
       />
     </>
   );
