@@ -49,7 +49,7 @@ const NotificationIcon = ({ type }: { type: string }) => {
             height="26"
             rx="13"
             stroke="#079455"
-            stroke-width="2"
+            strokeWidth="2"
           />
         </g>
         <g opacity="0.1">
@@ -60,16 +60,16 @@ const NotificationIcon = ({ type }: { type: string }) => {
             height="36"
             rx="18"
             stroke="#079455"
-            stroke-width="2"
+            strokeWidth="2"
           />
         </g>
         <g clip-path="url(#clip0_722_13212)">
           <path
             d="M15.2513 19.0003L17.7513 21.5003L22.7513 16.5003M27.3346 19.0003C27.3346 23.6027 23.6037 27.3337 19.0013 27.3337C14.3989 27.3337 10.668 23.6027 10.668 19.0003C10.668 14.398 14.3989 10.667 19.0013 10.667C23.6037 10.667 27.3346 14.398 27.3346 19.0003Z"
             stroke="#079455"
-            stroke-width="1.66667"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+            strokeWidth="1.66667"
+            strokeLinecap="round"
+            strokeLinejoin="round"
           />
         </g>
         <defs>
@@ -87,12 +87,12 @@ const NotificationIcon = ({ type }: { type: string }) => {
     upload: (
    <svg width="38" height="38" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
 <g opacity="0.3">
-<rect x="6" y="6" width="26" height="26" rx="13" stroke="#535862" stroke-width="2"/>
+<rect x="6" y="6" width="26" height="26" rx="13" stroke="#535862" strokeWidth="2"/>
 </g>
 <g opacity="0.1">
-<rect x="1" y="1" width="36" height="36" rx="18" stroke="#535862" stroke-width="2"/>
+<rect x="1" y="1" width="36" height="36" rx="18" stroke="#535862" strokeWidth="2"/>
 </g>
-<path d="M12.3346 22.5352C11.3296 21.8625 10.668 20.7168 10.668 19.4167C10.668 17.4637 12.1609 15.8594 14.0678 15.6828C14.4578 13.3101 16.5182 11.5 19.0013 11.5C21.4844 11.5 23.5448 13.3101 23.9348 15.6828C25.8417 15.8594 27.3346 17.4637 27.3346 19.4167C27.3346 20.7168 26.673 21.8625 25.668 22.5352M15.668 22.3333L19.0013 19M19.0013 19L22.3346 22.3333M19.0013 19V26.5" stroke="#535862" stroke-width="1.66667" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12.3346 22.5352C11.3296 21.8625 10.668 20.7168 10.668 19.4167C10.668 17.4637 12.1609 15.8594 14.0678 15.6828C14.4578 13.3101 16.5182 11.5 19.0013 11.5C21.4844 11.5 23.5448 13.3101 23.9348 15.6828C25.8417 15.8594 27.3346 17.4637 27.3346 19.4167C27.3346 20.7168 26.673 21.8625 25.668 22.5352M15.668 22.3333L19.0013 19M19.0013 19L22.3346 22.3333M19.0013 19V26.5" stroke="#535862" strokeWidth="1.66667" strokeLinecap="round" strokeLinejoin="round"/>
 </svg>
 
     ),
