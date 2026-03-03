@@ -1,11 +1,16 @@
 'use client';
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
 import { Eye, EyeOff, Check } from 'lucide-react';
 import clsx from 'clsx';
 import Image from 'next/image';
+import { toast } from 'react-toastify';
+import axiosInstance from '@/lib/axiosinstance';
+import { AxiosError } from 'axios';
+import { useRouter } from 'next/navigation';
 
 const schema = Yup.object({
   password: Yup.string()
@@ -18,9 +23,12 @@ const schema = Yup.object({
     .required('Required'),
 });
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const token = searchParams.get('token') ?? '';
 
   return (
     <>
@@ -31,15 +39,33 @@ export default function ResetPasswordPage() {
         Reset Password
       </h1>
       <p className="mt-1 text-sm text-center text-neutral-500">
-        Enter your new password to keep your account safe & secure.
+        Enter your new password to keep your account safe &amp; secure.
       </p>
 
       <Formik
         initialValues={{ password: '', confirm: '' }}
         validationSchema={schema}
-        onSubmit={async ({ password }) => {
-          // TODO: await api.post('/auth/password/reset', { password, token: ... })
-          console.log('reset', password);
+        onSubmit={async ({ password }, { setSubmitting }) => {
+          try {
+            await axiosInstance.post('/auth/password/reset', {
+              password,
+              token,
+            });
+            toast.success('Password reset successfully! Please sign in.');
+            router.push('/login');
+          } catch (error) {
+            if (error instanceof AxiosError) {
+              toast.error(
+                error.response?.data?.message ||
+                  error.message ||
+                  'Failed to reset password'
+              );
+            } else {
+              toast.error('An unexpected error occurred');
+            }
+          } finally {
+            setSubmitting(false);
+          }
         }}
       >
         {({ values, isSubmitting }) => {
@@ -50,7 +76,6 @@ export default function ResetPasswordPage() {
             number: /\d/.test(pass),
           };
 
-          // Check if all fields are filled and password rules are met
           const allRulesPassed = rules.len && rules.special && rules.number;
           const passwordsMatch =
             values.password === values.confirm && values.confirm !== '';
@@ -86,7 +111,6 @@ export default function ResetPasswordPage() {
                   </button>
                 </div>
 
-                {/* Inline rules - only show when user starts typing */}
                 {pass.length > 0 && (
                   <ul className="mt-3 space-y-1.5 text-sm">
                     <Rule
@@ -146,7 +170,7 @@ export default function ResetPasswordPage() {
                 disabled={!isFormValid || isSubmitting}
                 className="w-full rounded-2xl text-white py-3 font-medium transition-colors disabled:bg-[#959595] enabled:bg-[#7B00D4] enabled:hover:bg-[#6A00B8]"
               >
-                Continue
+                {isSubmitting ? 'Resetting...' : 'Continue'}
               </button>
               <Link
                 href="/login"
@@ -186,5 +210,13 @@ function Rule({ ok, label }: { ok: boolean; label: string }) {
       />
       {label}
     </li>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ResetPasswordContent />
+    </Suspense>
   );
 }
