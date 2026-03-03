@@ -7,16 +7,26 @@ import { ChartCard, DonutSlice } from '@/components/dashboard/ChartCard';
 import { useRoyalty } from '@/hooks/useRoyalty';
 import { BRAND } from '@/lib/brand';
 
+const DSP_COLORS = [
+  BRAND.purple,
+  BRAND.green,
+  '#F59E0B',
+  '#EF4444',
+  '#3B82F6',
+  '#14B8A6',
+];
+
 export default function LabelArtistDashboard() {
-  const { dashboardMetrics, albumPerformance, albumRevenue, albumInteractions } = useRoyalty();
+  const {
+    dashboardMetrics,
+    albumPerformance,
+    albumRevenue,
+    trackStreamsDsp,
+    tracksStreams,
+  } = useRoyalty();
 
   const sparkUp = [{ v: 20 }, { v: 35 }, { v: 30 }, { v: 55 }, { v: 52 }, { v: 70 }];
   const sparkDown = [{ v: 65 }, { v: 40 }, { v: 45 }, { v: 38 }, { v: 42 }, { v: 35 }];
-
-  const interactionData: DonutSlice[] = [
-    { name: 'Download', value: 244, color: BRAND.green },
-    { name: 'Stream', value: 500, color: BRAND.purple },
-  ];
 
   const totalRevenueValue = useMemo(
     () => `$${Math.floor((dashboardMetrics?.totalRevenue ?? 0) * 1000) / 1000}`,
@@ -30,7 +40,8 @@ export default function LabelArtistDashboard() {
 
   const topTrackTitle = dashboardMetrics?.topTrack?.title ?? '-';
 
-  const revenueByTrackData = useMemo(
+  /* Row 1 — left: monthly revenue trend (area/monotone line) */
+  const revenueTrendData = useMemo(
     () =>
       (dashboardMetrics?.revenueByMonth ?? []).map((m) => ({
         label: m.label,
@@ -39,7 +50,31 @@ export default function LabelArtistDashboard() {
     [dashboardMetrics]
   );
 
-  const allTracksPerformanceData = useMemo(
+  /* Row 1 — right: streams per DSP (donut) */
+  const dspDonutData: DonutSlice[] = useMemo(
+    () =>
+      (trackStreamsDsp?.dspSummary ?? [])
+        .slice(0, 6)
+        .map((dsp, i) => ({
+          name: dsp.dsp,
+          value: dsp.streams,
+          color: DSP_COLORS[i % DSP_COLORS.length],
+        })),
+    [trackStreamsDsp]
+  );
+
+  /* Row 2 — left: top tracks by streams (bar) */
+  const topTracksBarData = useMemo(
+    () =>
+      (tracksStreams?.tracks ?? []).slice(0, 6).map((t) => ({
+        label: t.title.length > 14 ? `${t.title.substring(0, 14)}…` : t.title,
+        value: t.totalStreams,
+      })),
+    [tracksStreams]
+  );
+
+  /* Row 2 — right: monthly streams trend (area/monotone line) */
+  const streamsTrendData = useMemo(
     () =>
       (dashboardMetrics?.streamsByMonth ?? []).map((m) => ({
         label: m.label,
@@ -48,26 +83,23 @@ export default function LabelArtistDashboard() {
     [dashboardMetrics]
   );
 
+  /* Row 3 — left: album performance over time (line/monotone) */
   const albumPerformanceData = useMemo(
     () => (albumPerformance ?? []).map((item) => ({ label: item.day, value: item.streams })),
     [albumPerformance]
   );
 
+  /* Row 3 — right: revenue by album (bar) */
   const albumRevenueData = useMemo(
     () => (albumRevenue ?? []).map((item) => ({ label: item.day, value: item.revenue })),
     [albumRevenue]
-  );
-
-  const albumInteractionData: DonutSlice[] = useMemo(
-    () => [{ name: 'Stream', value: albumInteractions?.totalStreams ?? 0, color: BRAND.purple }],
-    [albumInteractions]
   );
 
   return (
     <div>
       <Topbar />
 
-      {/* Stats */}
+      {/* ── Stats ── */}
       <div className="mt-6 flex flex-nowrap xl:grid xl:grid-cols-3 gap-4 overflow-x-auto xl:overflow-x-visible pb-2">
         <StatCard
           className="min-w-[280px] xl:min-w-0 flex-shrink-0"
@@ -92,22 +124,46 @@ export default function LabelArtistDashboard() {
         />
       </div>
 
-      {/* Charts row 1 */}
+      {/* ── Row 1: Revenue Trend (area/monotone) + Streams per DSP (donut) ── */}
       <div className="mt-6 flex flex-col xl:flex-row gap-4">
-        <div className="w-full xl:w-[45.11%]">
+        <div className="w-full xl:flex-1">
           <ChartCard
-            title="Revenue by track"
-            variant="bar"
-            data={revenueByTrackData}
+            title="Revenue Trend"
+            variant="line"
+            data={revenueTrendData}
             xKey="label"
             yKey="value"
+            color={BRAND.purple}
+            lineType="monotone"
+          />
+        </div>
+        <div className="w-full xl:w-[35%]">
+          <ChartCard
+            title="Streams per DSP"
+            variant="donut"
+            data={dspDonutData}
+            donutInnerText={'Total\nStreams'}
+          />
+        </div>
+      </div>
+
+      {/* ── Row 2: Top Tracks by streams (bar) + Streams Trend (area/monotone) ── */}
+      <div className="mt-6 flex flex-col xl:flex-row gap-4">
+        <div className="w-full xl:w-[45%]">
+          <ChartCard
+            title="Top tracks by streams"
+            variant="bar"
+            data={topTracksBarData}
+            xKey="label"
+            yKey="value"
+            color={BRAND.green}
           />
         </div>
         <div className="w-full xl:flex-1">
           <ChartCard
-            title="All tracks performance"
+            title="Streams Trend"
             variant="line"
-            data={allTracksPerformanceData}
+            data={streamsTrendData}
             xKey="label"
             yKey="value"
             lineType="monotone"
@@ -115,11 +171,11 @@ export default function LabelArtistDashboard() {
         </div>
       </div>
 
-      {/* Charts row 2 */}
+      {/* ── Row 3: Album Performance (monotone line) + Revenue by Album (bar) ── */}
       <div className="mt-6 flex flex-col xl:flex-row gap-4">
         <div className="w-full xl:flex-1">
           <ChartCard
-            title="All album performance"
+            title="Album performance"
             variant="line"
             data={albumPerformanceData}
             xKey="label"
@@ -127,33 +183,13 @@ export default function LabelArtistDashboard() {
             lineType="monotone"
           />
         </div>
-        <div className="w-full xl:w-[45.11%]">
+        <div className="w-full xl:w-[45%]">
           <ChartCard
             title="Revenue by album"
             variant="bar"
             data={albumRevenueData}
             xKey="label"
             yKey="value"
-          />
-        </div>
-      </div>
-
-      {/* Charts row 3 */}
-      <div className="mt-6 flex flex-col xl:flex-row gap-4">
-        <div className="w-full xl:w-[45.11%]">
-          <ChartCard
-            title="Track Interaction Type"
-            variant="donut"
-            data={interactionData}
-            donutInnerText={'Total\nInteraction'}
-          />
-        </div>
-        <div className="w-full xl:flex-1">
-          <ChartCard
-            title="Album Interaction Type"
-            variant="donut"
-            data={albumInteractionData}
-            donutInnerText={'Total\nInteraction'}
           />
         </div>
       </div>
