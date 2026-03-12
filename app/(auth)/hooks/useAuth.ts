@@ -12,6 +12,7 @@ import { AxiosError } from 'axios';
 import { toast } from 'react-toastify';
 import axiosInstance from '@/lib/axiosinstance';
 import { createAuthCookie } from '@/actions/auth';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function useSignupFlow(onSuccess?: (email: string) => void) {
   const router = useRouter();
@@ -19,12 +20,10 @@ export function useSignupFlow(onSuccess?: (email: string) => void) {
 
   async function signup(
     email: string,
-    password: string,
-    firstName: string,
-    lastName: string,
-    userType: string = 'artist'
+    password: string
   ) {
     setSubmitting(true);
+    
     try {
       // 1) create user
       const cred = await createUserWithEmailAndPassword(auth, email, password);
@@ -37,10 +36,7 @@ export function useSignupFlow(onSuccess?: (email: string) => void) {
       await axiosInstance.post('/auth/signup', {
         idToken,
         refreshToken,
-        first_name: firstName,
-        last_name: lastName,
         email: email,
-        user_type: userType,
       });
 
       // 4) Request OTP immediately after signup
@@ -61,13 +57,26 @@ export function useSignupFlow(onSuccess?: (email: string) => void) {
       }
     } catch (error) {
       if (error instanceof AxiosError) {
-        const axiosError = error as AxiosError<{ message?: string }>;
-        toast.error(
-          (axiosError.response && axiosError.response.data
-            ? axiosError.response.data.message || axiosError.response.data
-            : axiosError.message || 'An error occurred'
-          ).toString()
-        );
+        const axiosError = error as AxiosError<{ message?: string | string[]; statusCode?: number }>;
+        const responseData = axiosError.response?.data;
+        const errorMessage = Array.isArray(responseData?.message) 
+          ? responseData.message[0] 
+          : (responseData?.message || axiosError.message || 'An error occurred');
+        
+        // Check for unverified email error
+        if (
+          (responseData?.statusCode === 400 || axiosError.response?.status === 400) &&
+          errorMessage === "You are yet to be verified, kindly check your email for the one time password"
+        ) {
+          toast.info("Please verify your email to continue.");
+          if (onSuccess) {
+            onSuccess(email);
+          } else {
+            router.push('/signup/verify-otp');
+          }
+        } else {
+          toast.error(errorMessage.toString());
+        }
       } else if (error instanceof FirebaseError) {
         let msg: string;
         switch (error.code) {
@@ -92,42 +101,43 @@ export function useSignupFlow(onSuccess?: (email: string) => void) {
   return { signup, submitting };
 }
 
-export function useGoogleLogin() {
+export function useGoogleSignup(onSuccess?: (email: string) => void) {
   const router = useRouter();
-  const [isLogin, setIsLogin] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  async function loginWithGoogle(refreshUser?: () => Promise<void>) {
+  async function signupWithGoogle() {
     let sessionEmail = '';
+    setSubmitting(true);
+    
     try {
       sessionStorage.removeItem('verifyEmail');
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const idToken = await result.user.getIdToken();
+      const refreshToken = result.user.refreshToken;
       sessionEmail = result.user.email || '';
       sessionStorage.setItem('verifyEmail', sessionEmail);
 
-      setIsLogin(true);
-
-      const res = await axiosInstance.post('/auth/login', {
+      // Call signup endpoint to create new account
+      await axiosInstance.post('/auth/signup', {
         idToken,
+        refreshToken,
+        email: sessionEmail,
       });
-      // Token cookie is set automatically by the server
 
-      console.log(res);
+      // Request OTP immediately after signup
+      await axiosInstance.post('/auth/request-verify-email', {
+        email: sessionEmail,
+      });
 
-      if (res.data.status === 302) {
+      toast.info('Account created. Check email to verify.');
+      
+      // Show verification modal via callback
+      if (onSuccess) {
+        onSuccess(sessionEmail);
+      } else {
         router.push('/signup/verify-otp');
-        return;
       }
-
-      await createAuthCookie();
-      
-      // Refresh user context before navigating
-      if (refreshUser) {
-        await refreshUser();
-      }
-      
-      router.push('/dashboard');
     } catch (error) {
       if (sessionEmail) {
         sessionStorage.setItem('verifyEmail', sessionEmail);
@@ -150,23 +160,151 @@ export function useGoogleLogin() {
         }
         toast.error(msg);
       } else if (error instanceof AxiosError) {
-        const axiosError = error as AxiosError<{ message?: string }>;
+        const axiosError = error as AxiosError<{ message?: string | string[]; statusCode?: number }>;
+        const responseData = axiosError.response?.data;
+        const errorMessage = Array.isArray(responseData?.message) 
+          ? responseData.message[0] 
+          : (responseData?.message || axiosError.message || 'An error occurred');
+        
+        
+        // Check for unverified email error
         if (
-          axiosError.response?.data.message ===
-          'Looks like we sent you one recently, kindly check for that and input in the fields'
+          (responseData?.statusCode === 400 || axiosError.response?.status === 400) &&
+          errorMessage === "You are yet to be verified, kindly check your email for the one time password"
         ) {
-          toast.error(
-            'Looks like we sent you one recently, kindly check for that and input in the fields'
-          );
-
-          router.push('/signup/verify-otp');
+          toast.info("Please verify your email to continue.");
+          if (onSuccess) {
+            onSuccess(sessionEmail);
+          } else {
+            router.push('/signup/verify-otp');
+          }
         } else {
-          toast.error(
-            (axiosError.response && axiosError.response.data
-              ? axiosError.response.data.message || axiosError.response.data
-              : axiosError.message || 'An error occurred'
-            ).toString()
-          );
+          toast.error(errorMessage.toString());
+        }
+      } else {
+        toast.error('An unexpected error occurred');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return { signupWithGoogle, submitting };
+}
+
+export function useGoogleLogin(onVerifyEmail?: (email: string) => void) {
+  const router = useRouter();
+  const [isLogin, setIsLogin] = useState(false);
+  const { refreshUser } = useAuth();
+
+  async function loginWithGoogle() {
+    let sessionEmail = '';
+    let firebaseUser = null;
+    try {
+      sessionStorage.removeItem('verifyEmail');
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      firebaseUser = result.user; // Store the Firebase user
+      const idToken = await result.user.getIdToken();
+      sessionEmail = result.user.email || '';
+      sessionStorage.setItem('verifyEmail', sessionEmail);
+
+      setIsLogin(true);
+
+      // Call login endpoint - should only work for existing accounts
+      const res = await axiosInstance.post('/auth/login', {
+        idToken,
+      });
+
+      console.log(res);
+
+      // Check if verification is needed
+      if (res.data.status === 302 || res.data.status === 304) {
+        toast.info("Please verify your email to continue.");
+        if (onVerifyEmail) {
+          onVerifyEmail(sessionEmail);
+        } else {
+          router.push('/signup/verify-otp');
+        }
+        return;
+      }
+
+      toast.success('Login successful!');
+      await createAuthCookie();
+      await refreshUser();
+      
+      // Check if user has completed profile using data from login response
+      const user = res.data.user;
+      
+      if (!user.user_type) {
+        // User hasn't completed profile - redirect to whoareyou
+        router.push('/whoareyou');
+      } else {
+        // User has completed profile - redirect to dashboard
+        router.push('/dashboard');
+      }
+    } catch (error) {
+      if (sessionEmail) {
+        sessionStorage.setItem('verifyEmail', sessionEmail);
+      }
+
+      if (error instanceof FirebaseError) {
+        let msg: string;
+        switch (error.code) {
+          case AuthErrorCodes.POPUP_CLOSED_BY_USER:
+            msg = 'Authentication popup was closed before completing sign-in.';
+            break;
+          case AuthErrorCodes.NETWORK_REQUEST_FAILED:
+            msg = 'Network error — please check your connection and try again.';
+            break;
+          case AuthErrorCodes.INVALID_OAUTH_CLIENT_ID:
+            msg = 'Configuration error — please contact support.';
+            break;
+          default:
+            msg = error.message;
+        }
+        toast.error(msg);
+      } else if (error instanceof AxiosError) {
+        const axiosError = error as AxiosError<{ message?: string; statusCode?: number }>;
+        const responseData = axiosError.response?.data;
+        const errorMessage = responseData?.message || axiosError.message || 'An error occurred';
+        
+        console.log('Login error:', { statusCode: responseData?.statusCode, message: errorMessage });
+        
+        // Check for unverified email error
+        if (
+          (responseData?.statusCode === 400 || axiosError.response?.status === 400) &&
+          errorMessage === "You are yet to be verified, kindly check your email for the one time password"
+        ) {
+          toast.info("Please verify your email to continue.");
+          if (onVerifyEmail) {
+            onVerifyEmail(sessionEmail);
+          } else {
+            router.push('/signup/verify-otp');
+          }
+        } else if (errorMessage === 'Looks like you do not have an account with us') {
+          // Account doesn't exist in backend - delete the Firebase account that was just created
+          console.log('Attempting to delete Firebase user...');
+          if (firebaseUser) {
+            try {
+              // Delete the Firebase user account
+              await firebaseUser.delete();
+              console.log('Firebase user deleted successfully');
+              // Clear any remaining auth state
+              await auth.signOut();
+            } catch (deleteError) {
+              console.error('Failed to delete Firebase user:', deleteError);
+              // Force sign out even if delete failed
+              try {
+                await auth.signOut();
+              } catch (signOutError) {
+                console.error('Failed to sign out:', signOutError);
+              }
+            }
+          }
+          toast.error('No account found. Please sign up first.');
+        } else {
+          toast.error(errorMessage.toString());
         }
       } else {
         toast.error('An unexpected error occurred');
@@ -182,8 +320,9 @@ export function useGoogleLogin() {
 export function useLoginFlow(onVerifyEmail?: (email: string, password?: string) => void) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
+  const { refreshUser } = useAuth();
 
-  async function login(email: string, password: string, refreshUser?: () => Promise<void>) {
+  async function login(email: string, password: string) {
     setSubmitting(true);
     try {
       // 1) Sign in with Firebase
@@ -211,14 +350,20 @@ export function useLoginFlow(onVerifyEmail?: (email: string, password?: string) 
         return;
       }
 
+      // Refresh user data to get latest profile
       await createAuthCookie();
+      await refreshUser();
       
-      // Refresh user context before navigating
-      if (refreshUser) {
-        await refreshUser();
+      // Check if user has completed profile using data from login response
+      const user = res.data.user;
+      
+      if (!user.user_type) {
+        // User hasn't completed profile - redirect to whoareyou
+        router.push('/whoareyou');
+      } else {
+        // User has completed profile - redirect to dashboard
+        router.push('/dashboard');
       }
-      
-      router.push('/dashboard');
     } catch (error) {
       if (error instanceof FirebaseError) {
         let msg: string;

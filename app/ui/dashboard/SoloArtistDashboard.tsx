@@ -108,9 +108,9 @@ export default function SoloArtistDashboard() {
         
         <div className="hidden lg:block">
           <QuickActionsBar
-            onAddFile={() => console.log('Add file')}
-            onAddAdvance={() => console.log('Add advance')}
-            onMore={(key) => console.log('More:', key)}
+            onAddFile={() => {}}
+            onAddAdvance={() => {}}
+            onMore={() => {}}
           />
         </div>
 
@@ -122,11 +122,11 @@ export default function SoloArtistDashboard() {
               </Button>
             }
             items={[
-              { label: 'Add new royalty record', onClick: () => console.log('Add file') },
-              { label: 'Add Advance', onClick: () => console.log('Add advance') },
-              { label: 'Add Expense', onClick: () => console.log('More:', 'expense') },
-              { label: 'Export Table', onClick: () => console.log('More:', 'export-table') },
-              { label: 'Export Analytics', onClick: () => console.log('More:', 'export-analytics') },
+              { label: 'Add new royalty record', onClick: () => {} },
+              { label: 'Add Advance', onClick: () => {} },
+              { label: 'Add Expense', onClick: () => {} },
+              { label: 'Export Table', onClick: () => {} },
+              { label: 'Export Analytics', onClick: () => {} },
             ]}
           />
         </div>
