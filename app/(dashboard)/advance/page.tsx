@@ -8,18 +8,37 @@ import LabelArtistAdvance from '@/ui/advance/LabelArtistAdvance';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function AdvancePage() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
 
-  const AdvanceComponent =
-    user?.user_type === 'record_label'
-      ? RecordLabelAdvance
-      : user?.user_type === 'label_artist'
-      ? LabelArtistAdvance
-      : SoloArtistAdvance;
+  if (isLoading) {
+    return (
+      <AppShell>
+        <div className="flex h-full items-center justify-center py-24">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-neutral-200 border-t-[#7B00D4]" />
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (user?.user_type === 'record_label') {
+    return (
+      <AppShell>
+        <RecordLabelAdvance />
+      </AppShell>
+    );
+  }
+
+  if (user?.user_type === 'label_artist') {
+    return (
+      <AppShell>
+        <LabelArtistAdvance />
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
-      <AdvanceComponent />
+      <SoloArtistAdvance />
     </AppShell>
   );
 }
