@@ -18,7 +18,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     // FLEX ROW at all sizes, not block/grid (prevents stacking)
-    <div className="h-screen flex bg-neutral-100 overflow-hidden">
+    <div className="h-screen flex  overflow-hidden">
       {/* Sidebar: fixed width, don't shrink, fixed position */}
       <aside className="hidden md:flex w-[23%] shrink-0 h-screen overflow-y-auto">
         <Sidebar />
@@ -44,7 +44,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Content column - scrollable */}
-      <div className="flex min-w-0 flex-1 flex-col bg-white h-screen overflow-y-auto">
+      <div className="flex max-w-[1440px] flex-1 mx-auto flex-col bg-white h-screen overflow-y-auto">
         {/* Mobile Header */}
         <div className="flex items-center gap-3 p-4 md:hidden border-b border-neutral-100 sticky top-0 bg-white z-30">
           <button

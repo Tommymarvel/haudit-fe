@@ -172,7 +172,7 @@ const SoloArtistAdvance = () => {
       <div className="flex flex-col items-start gap-3 lg:flex-row lg:items-center justify-between ">
         <div>
           <h1 className="text-2xl font-medium text-[#3C3C3C]">
-            Welcome to Advance-O-Meter Diamond
+            Welcome to Advance-O-Meter
           </h1>
           <p className="text-base text-[#777777]">
             Track and get more info on your advance request

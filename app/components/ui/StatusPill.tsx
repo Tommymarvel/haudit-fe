@@ -3,12 +3,13 @@ import { cn } from '@/lib/cn';
 export function StatusPill({
   label,
 }: {
-  label: 'Repaid' | 'Outstanding' | 'Pending';
+  label: 'Repaid' | 'Outstanding' | 'Pending' | 'Approved';
 }) {
   const map = {
     Repaid: 'bg-emerald-50 text-emerald-700',
+    Approved: 'bg-emerald-50 text-emerald-700',
     Outstanding: 'bg-amber-50 text-amber-700',
-    Pending: 'bg-neutral-100 text-neutral-700',
+    Pending: 'bg-amber-50 text-amber-700',
   } as const;
   return (
     <span

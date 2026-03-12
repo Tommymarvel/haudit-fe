@@ -7,7 +7,12 @@ import * as Yup from "yup";
 import PasswordField from "../components/auth/PasswordField";
 import { useLoginFlow, useGoogleLogin } from '../hooks/useAuth';
 import VerifyOTPModal from "../components/auth/VerifyOTPModal";
-import { useAuth } from '@/contexts/AuthContext';
+import { auth } from "@/lib/auth/firebase";
+import axiosInstance from "@/lib/axiosinstance";
+import { createAuthCookie } from "@/actions/auth";
+import { useRouter } from "next/navigation";
+import { toast } from "react-toastify";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Schema = Yup.object({
   email: Yup.string().email("Invalid email").required("Required"),
@@ -19,20 +24,60 @@ export default function SignInPage() {
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState("");
   const [verifyPassword, setVerifyPassword] = useState("");
-  
+  const [isGoogleAuth, setIsGoogleAuth] = useState(false);
+  const router = useRouter();
   const { refreshUser } = useAuth();
+
   const { login, submitting } = useLoginFlow((email, password) => {
     setVerifyEmail(email);
     if (password) setVerifyPassword(password);
+    setIsGoogleAuth(false);
     setShowVerifyModal(true);
   });
-  const { loginWithGoogle, isLogin } = useGoogleLogin();
+  const { loginWithGoogle, isLogin } = useGoogleLogin((email) => {
+    setVerifyEmail(email);
+    setVerifyPassword("");
+    setIsGoogleAuth(true);
+    setShowVerifyModal(true);
+  });
 
   const handleVerifySuccess = async () => {
     setShowVerifyModal(false);
-    // Re-login to establish session
-    if (verifyEmail && verifyPassword) {
-      await login(verifyEmail, verifyPassword, refreshUser);
+    
+    try {
+      // Re-login to establish session after verification
+      if (isGoogleAuth) {
+        // For Google auth, use existing Firebase session to get fresh token
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          const idToken = await currentUser.getIdToken(true); // Force refresh
+          
+          const res = await axiosInstance.post('/auth/login', {
+            idToken,
+          });
+          
+          toast.success('Login successful!');
+          await createAuthCookie();
+          await refreshUser();
+          
+          // Check if user has completed profile
+          const user = res.data.user;
+          if (!user.user_type) {
+            router.push('/whoareyou');
+          } else {
+            router.push('/dashboard');
+          }
+        } else {
+          toast.error('Session expired. Please sign in again.');
+          router.push('/login');
+        }
+      } else if (verifyEmail && verifyPassword) {
+        // For email/password auth, re-login with stored credentials
+        await login(verifyEmail, verifyPassword);
+      }
+    } catch (error) {
+      toast.error('Failed to complete login. Please try again.');
+      console.error('Post-verification login error:', error);
     }
   };
 
@@ -58,7 +103,7 @@ export default function SignInPage() {
         initialValues={{ email: "", password: "", remember: false }}
         validationSchema={Schema}
         onSubmit={async (vals) => {
-          await login(vals.email, vals.password, refreshUser);
+          await login(vals.email, vals.password);
         }}
       >
         {({ isValid, isSubmitting }) => {
@@ -121,7 +166,7 @@ export default function SignInPage() {
 
               <button
                 type="button"
-                onClick={() => loginWithGoogle(refreshUser)}
+                onClick={loginWithGoogle}
                 disabled={isLogin}
                 className="w-full rounded-2xl border border-neutral-300 px-3 text-black bg-white py-2.5 font-medium disabled:opacity-50"
               >
