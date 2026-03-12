@@ -221,9 +221,7 @@ export default function StreamsAndRevenuePerTerritory() {
                 {/* Header */}
                 <div className="flex flex-col items-start gap-3 lg:flex-row lg:items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-medium text-[#3C3C3C]">
-                            Streams and revenue per Territory
-                        </h1>
+                        <ReportInsightDropdown currentLabel="Streams and revenue per Territory" />
                         <p className="text-base text-[#777777]">
                             Dashboard / Royalty /{' '}
                             <span className="text-[#7B00D4] font-bold">

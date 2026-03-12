@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -8,16 +9,18 @@ import {
   HelpCircle,
   ChevronDown,
   Bell,
+  BarChart2,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
 
 type NavItem = {
-  href: string;
+  href?: string;
   label: string;
   icon: React.ReactNode;
   badge?: boolean;
+  subItems?: { href: string; label: string }[];
 };
 
 const NAV: NavItem[] = [
@@ -27,8 +30,17 @@ const NAV: NavItem[] = [
     icon: <Home className="h-5 w-5" />,
   },
   {
+    label: 'Analytics',
+    icon: <BarChart2 className="h-5 w-5" />,
+    subItems: [
+      { href: '/royalty/report-insight', label: 'Report Insight' },
+      { href: '/catalog', label: 'Catalog' },
+      { href: '/split', label: 'Split' },
+    ],
+  },
+  {
     href: '/advance',
-    label: 'Advance-O-Meter',
+    label: 'Advance',
     icon: (
       <svg
         width="20"
@@ -94,17 +106,19 @@ const NAV: NavItem[] = [
 ];
 
 
-function SidebarLink({ href, label, icon, badge }: { href: string; label: string; icon: React.ReactNode; badge?: boolean }) {
+function SidebarLink({ href, label, icon, badge }: { href?: string; label: string; icon: React.ReactNode; badge?: boolean }) {
   const pathname = usePathname();
-  const active = pathname?.startsWith(href);
+  const active = href ? pathname?.startsWith(href) : false;
   const { unreadCount } = useNotifications();
+
+  if (!href) return null; // Fallback for safety, collapsible links shouldn't use this component
 
   return (
     <Link
       href={href}
       className={cn(
         'group relative mb-1 flex items-center gap-3  px-3 py-2 text-sm text-[#5A5A5A] hover:bg-[#DFDFDF]',
-        active && 'bg-[#DFDFDF] text-neutral-900'
+        active && 'bg-[#DFDFDF] text-neutral-900 border-l-2 border-[#7B00D4]'
       )}
     >
       <span
@@ -123,11 +137,113 @@ function SidebarLink({ href, label, icon, badge }: { href: string; label: string
       {/* Purple active strip */}
       <span
         className={cn(
-          'absolute right-0 top-0 h-full w-[3px] rounded-r-sm bg-[#7B00D4] transition-opacity',
+          'absolute right-0 top-0 h-full w-[3px] rounded-l-sm bg-[#7B00D4] transition-opacity',
           active ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'
         )}
       />
     </Link>
+  );
+}
+
+function SidebarCollapsibleLink({ item }: { item: NavItem }) {
+  const pathname = usePathname();
+  const isActive = item.subItems?.some(sub => pathname?.startsWith(sub.href));
+  const [open, setOpen] = useState(isActive || false);
+
+  return (
+    <div className="mb-1">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={cn(
+          'w-full group relative flex items-center justify-between px-3 py-2 text-sm text-[#5A5A5A] hover:bg-[#DFDFDF]',
+          isActive && 'bg-[#DFDFDF] text-neutral-900 border-l-2 border-[#7B00D4]'
+        )}
+      >
+        <div className="flex items-center gap-3">
+          <span className={cn('text-[#5A5A5A]', isActive && 'text-[#7B00D4]')}>{item.icon}</span>
+          <span className="truncate text-[#5A5A5A] text-base">{item.label}</span>
+        </div>
+        <ChevronDown className={cn("h-4 w-4 transition-transform text-[#5A5A5A]", open && "rotate-180")} />
+
+        {isActive && (
+          <span className="absolute right-0 top-0 h-full w-[3px] rounded-l-sm bg-[#7B00D4]" />
+        )}
+      </button>
+
+      {open && (
+        <div className="mt-1 flex flex-col gap-1">
+          {item.subItems?.map((sub) => {
+            const isSubActive = pathname?.startsWith(sub.href);
+            return (
+              <Link
+                key={sub.href}
+                href={sub.href}
+                className={cn(
+                  'group relative flex items-center pl-[44px] pr-3 py-2 text-sm text-[#5A5A5A] hover:bg-[#DFDFDF]',
+                  isSubActive && 'bg-[#DFDFDF] text-neutral-900 font-medium'
+                )}
+              >
+                {sub.label}
+                {isSubActive && (
+                  <span className="absolute right-0 top-0 h-full w-[3px] rounded-l-sm bg-[#7B00D4]" />
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ArtistSelector() {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState('Label Overview');
+  const ref = useRef<HTMLDivElement>(null);
+  const artists = ['Diamond Platnumz', 'Sarkodie', 'Burna Boy', 'Yemi Alade'];
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) =>
+      !ref.current?.contains(e.target as Node) && setOpen(false);
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  return (
+    <div className="relative mt-3 w-full" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full inline-flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-[#5A5A5A] hover:bg-neutral-50"
+      >
+        <span>{selected}</span>
+        <ChevronDown className="h-4 w-4 text-neutral-500" />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 mt-2 w-full z-50 rounded-xl border border-neutral-200 bg-white shadow-xl overflow-hidden py-1">
+          <button
+            className="w-full text-left px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50 font-medium"
+            onClick={() => { setSelected('Label Overview'); setOpen(false); }}
+          >
+            Label Overview
+          </button>
+          <div className="h-px bg-neutral-100 mx-4" />
+          {artists.map((artist, idx) => (
+            <div key={artist}>
+              <button
+                className="w-full text-left px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50"
+                onClick={() => { setSelected(artist); setOpen(false); }}
+              >
+                {artist}
+              </button>
+              {idx < artists.length - 1 && <div className="h-px bg-neutral-100 mx-4" />}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -146,20 +262,28 @@ export default function Sidebar() {
           </span>
         </div>
 
-        {/* Period selector */}
-        <button
-          type="button"
-          className="mt-3 w-full inline-flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-[#5A5A5A] hover:bg-neutral-50"
-        >
-          Haudit Jan 2025 to July 2025
-          <ChevronDown className="h-4 w-4 text-neutral-500" />
-        </button>
+        {/* Period / Artist selector */}
+        {user?.user_type === 'record_label' ? (
+          <ArtistSelector />
+        ) : (
+          <button
+            type="button"
+            className="mt-3 w-full inline-flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-[#5A5A5A] hover:bg-neutral-50"
+          >
+            Haudit Jan 2025 to July 2025
+            <ChevronDown className="h-4 w-4 text-neutral-500" />
+          </button>
+        )}
       </div>
 
       {/* Nav */}
       <nav className="mt-3 flex-1 overflow-y-auto ">
         {NAV.map((item) => (
-          <SidebarLink key={item.href} {...item} />
+          item.subItems ? (
+            <SidebarCollapsibleLink key={item.label} item={item} />
+          ) : (
+            <SidebarLink key={item.label} {...item} />
+          )
         ))}
       </nav>
 

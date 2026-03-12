@@ -16,6 +16,7 @@ import {
   CartesianGrid,
   ComposedChart,
 } from "recharts";
+import { ReportInsightDropdown } from "@/components/report-insight/ReportInsightDropdown";
 
 type Row = {
   track: string;
@@ -106,10 +107,8 @@ export default function TrackRevenuePerDSPPanel() {
         {/* Header row */}
         <div className="flex flex-col items-start gap-3 lg:flex-row lg:items-center justify-between">
           <div>
-            <h1 className="text-2xl font-medium text-[#3C3C3C]">
-              Track revenue per DSP
-            </h1>
-            <p className="text-base text-[#777777]">
+            <ReportInsightDropdown currentLabel="Track revenue per DSP" />
+            <p className="text-base text-[#777777] mt-1">
               Dashboard / Royalty /{" "}
               <span className="text-[#7B00D4] font-bold">
                 Track revenue per DSP
@@ -135,11 +134,10 @@ export default function TrackRevenuePerDSPPanel() {
                           setSelectedYear(year);
                           setShowYearPicker(false);
                         }}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          year === selectedYear
-                            ? 'bg-[#7B00D4] text-white'
-                            : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100'
-                        }`}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${year === selectedYear
+                          ? 'bg-[#7B00D4] text-white'
+                          : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100'
+                          }`}
                       >
                         {year}
                       </button>
@@ -189,142 +187,142 @@ export default function TrackRevenuePerDSPPanel() {
           </div>
         ) : (
           <div className="mt-7 space-y-4">
-          {/* Chart without ChartCard wrapper */}
-          <div className="h-[400px] w-full bg-white rounded-xl">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart
-                data={chartData}
-                margin={{ left: 0, right: 10, top: 6, bottom: 24 }}
-              >
-                <defs>
-                  <linearGradient
-                    id="trackAGradient"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop offset="0%" stopColor="#7B00D4" stopOpacity={0.2} />
-                    <stop offset="100%" stopColor="#7B00D4" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient
-                    id="trackBGradient"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop offset="0%" stopColor="#00AA39" stopOpacity={0.2} />
-                    <stop offset="100%" stopColor="#00AA39" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient
-                    id="trackCGradient"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop offset="0%" stopColor="#F59E0B" stopOpacity={0.2} />
-                    <stop offset="100%" stopColor="#F59E0B" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  vertical={false}
-                  stroke="#E5E7EB"
-                  strokeDasharray="3 3"
-                />
-                <XAxis
-                  dataKey="x"
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: "#AAAAAA", fontSize: 14 }}
-                />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: "#AAAAAA", fontSize: 14 }}
-                  padding={{ bottom: 8 }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#1F2937",
-                    border: "none",
-                    borderRadius: "12px",
-                    color: "white",
-                  }}
-                />
-                {Array.from(selected).map((trackName) => (
-                  <Line
-                    key={trackName}
-                    type="linear"
-                    dataKey={trackName}
-                    stroke={colorFor(trackName)}
-                    strokeWidth={3}
-                    dot={{ r: 4 }}
-                    activeDot={{ r: 6 }}
-                    connectNulls
-                  />
-                ))}
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Table */}
-
-          <div className="overflow-x-auto mt-8">
-            <table className="w-full text-base">
-              <thead className="text-left text-neutral-500 bg-[#F4F4F4]">
-                <tr>
-                  <th className="py-3 pl-3 pr-4 whitespace-nowrap">
-                    <input
-                      type="checkbox"
-                      checked={allChecked}
-                      onChange={toggleAll}
-                      className="h-4 w-4 rounded accent-black"
-                    />
-                  </th>
-                  <th className="py-3 pr-4 whitespace-nowrap">Track</th>
-                  {dspLabels.map((d) => (
-                    <th
-                      key={d}
-                      className="py-3 pr-4 whitespace-nowrap text-center"
+            {/* Chart without ChartCard wrapper */}
+            <div className="h-[400px] w-full bg-white rounded-xl">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart
+                  data={chartData}
+                  margin={{ left: 0, right: 10, top: 6, bottom: 24 }}
+                >
+                  <defs>
+                    <linearGradient
+                      id="trackAGradient"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
                     >
-                      {d}
-                    </th>
+                      <stop offset="0%" stopColor="#7B00D4" stopOpacity={0.2} />
+                      <stop offset="100%" stopColor="#7B00D4" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient
+                      id="trackBGradient"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop offset="0%" stopColor="#00AA39" stopOpacity={0.2} />
+                      <stop offset="100%" stopColor="#00AA39" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient
+                      id="trackCGradient"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop offset="0%" stopColor="#F59E0B" stopOpacity={0.2} />
+                      <stop offset="100%" stopColor="#F59E0B" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    vertical={false}
+                    stroke="#E5E7EB"
+                    strokeDasharray="3 3"
+                  />
+                  <XAxis
+                    dataKey="x"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: "#AAAAAA", fontSize: 14 }}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: "#AAAAAA", fontSize: 14 }}
+                    padding={{ bottom: 8 }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#1F2937",
+                      border: "none",
+                      borderRadius: "12px",
+                      color: "white",
+                    }}
+                  />
+                  {Array.from(selected).map((trackName) => (
+                    <Line
+                      key={trackName}
+                      type="linear"
+                      dataKey={trackName}
+                      stroke={colorFor(trackName)}
+                      strokeWidth={3}
+                      dot={{ r: 4 }}
+                      activeDot={{ r: 6 }}
+                      connectNulls
+                    />
                   ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {rows.map((r) => {
-                  const checked = selected.has(r.track);
-                  return (
-                    <tr key={r.track} className="text-neutral-800">
-                      <td className="py-3 pl-3 pr-4 whitespace-nowrap">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggle(r.track)}
-                          className="h-4 w-4 rounded accent-black"
-                        />
-                      </td>
-                      <td className="py-3 pr-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">{r.track}</div>
-                      </td>
-                      {r.values.map((v, i) => (
-                        <td
-                          key={i}
-                          className="py-3 pr-4 whitespace-nowrap text-center tabular-nums"
-                        >
-                          ${v.toLocaleString()}
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Table */}
+
+            <div className="overflow-x-auto mt-8">
+              <table className="w-full text-base">
+                <thead className="text-left text-neutral-500 bg-[#F4F4F4]">
+                  <tr>
+                    <th className="py-3 pl-3 pr-4 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={allChecked}
+                        onChange={toggleAll}
+                        className="h-4 w-4 rounded accent-black"
+                      />
+                    </th>
+                    <th className="py-3 pr-4 whitespace-nowrap">Track</th>
+                    {dspLabels.map((d) => (
+                      <th
+                        key={d}
+                        className="py-3 pr-4 whitespace-nowrap text-center"
+                      >
+                        {d}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {rows.map((r) => {
+                    const checked = selected.has(r.track);
+                    return (
+                      <tr key={r.track} className="text-neutral-800">
+                        <td className="py-3 pl-3 pr-4 whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggle(r.track)}
+                            className="h-4 w-4 rounded accent-black"
+                          />
                         </td>
-                      ))}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        <td className="py-3 pr-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">{r.track}</div>
+                        </td>
+                        {r.values.map((v, i) => (
+                          <td
+                            key={i}
+                            className="py-3 pr-4 whitespace-nowrap text-center tabular-nums"
+                          >
+                            ${v.toLocaleString()}
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
         )}
       </div>
     </AppShell>

@@ -190,6 +190,8 @@ interface ChartCardProps {
   /** Optional footer action pill (e.g. "View all report insight") */
   footerActionLabel?: string;
   onFooterActionClick?: () => void;
+  /** Render standard donut or half-donut */
+  isHalfDonut?: boolean;
 }
 
 const HOVER_KEY = '__hoverArea__';
@@ -227,6 +229,7 @@ export function ChartCard({
   onHeaderFilterClick,
   footerActionLabel,
   onFooterActionClick,
+  isHalfDonut = false,
 }: ChartCardProps) {
   const stroke = color ?? (variant === 'line' ? '#7B00D4' : '#CA98EE');
 
@@ -382,12 +385,38 @@ export function ChartCard({
                 {/* Lines */}
                 {isMulti
                   ? (series as SeriesDef[]).map((s) => (
+                    <Line
+                      key={s.key}
+                      name={s.label ?? s.key}
+                      type={lineType}
+                      dataKey={s.key}
+                      stroke={s.color ?? colorFor(s.key)}
+                      strokeWidth={3}
+                      dot={showDots}
+                      activeDot={{ r: 4 }}
+                      connectNulls
+                      strokeLinecap="butt"
+                      strokeLinejoin="miter"
+                      isAnimationActive={false}
+                    />
+                  ))
+                  : yKey && (
+                    <>
+                      {/* Curved single-series wants always-on area under the line */}
+                      {isCurvedLine && (
+                        <Area
+                          type={lineType}
+                          dataKey={yKey}
+                          fill="url(#lineGradient)"
+                          stroke="none"
+                          connectNulls
+                          isAnimationActive={false}
+                        />
+                      )}
                       <Line
-                        key={s.key}
-                        name={s.label ?? s.key}
                         type={lineType}
-                        dataKey={s.key}
-                        stroke={s.color ?? colorFor(s.key)}
+                        dataKey={yKey}
+                        stroke={stroke}
                         strokeWidth={3}
                         dot={showDots}
                         activeDot={{ r: 4 }}
@@ -396,34 +425,8 @@ export function ChartCard({
                         strokeLinejoin="miter"
                         isAnimationActive={false}
                       />
-                    ))
-                  : yKey && (
-                      <>
-                        {/* Curved single-series wants always-on area under the line */}
-                        {isCurvedLine && (
-                          <Area
-                            type={lineType}
-                            dataKey={yKey}
-                            fill="url(#lineGradient)"
-                            stroke="none"
-                            connectNulls
-                            isAnimationActive={false}
-                          />
-                        )}
-                        <Line
-                          type={lineType}
-                          dataKey={yKey}
-                          stroke={stroke}
-                          strokeWidth={3}
-                          dot={showDots}
-                          activeDot={{ r: 4 }}
-                          connectNulls
-                          strokeLinecap="butt"
-                          strokeLinejoin="miter"
-                          isAnimationActive={false}
-                        />
-                      </>
-                    )}
+                    </>
+                  )}
               </ComposedChart>
             ) : variant === 'bar' && yKey && xKey ? (
               <BarChart
@@ -457,12 +460,14 @@ export function ChartCard({
                   dataKey="value"
                   nameKey="name"
                   cx="50%"
-                  cy="50%"
+                  cy={isHalfDonut ? "70%" : "50%"}
+                  startAngle={isHalfDonut ? 180 : undefined}
+                  endAngle={isHalfDonut ? 0 : undefined}
                   innerRadius={70}
                   outerRadius={95}
                   cornerRadius={12}
                   labelLine={false}
-                  label={<CalloutLabel />}
+                  label={!isHalfDonut && <CalloutLabel />}
                   paddingAngle={3}
                 >
                   {(data as DonutSlice[]).map((s, i) => (
@@ -471,7 +476,7 @@ export function ChartCard({
                 </Pie>
                 <text
                   x="50%"
-                  y="46%"
+                  y={isHalfDonut ? "60%" : "46%"}
                   textAnchor="middle"
                   className="fill-neutral-900"
                   style={{ fontSize: 30, fontWeight: 600 }}
@@ -480,7 +485,7 @@ export function ChartCard({
                 </text>
                 <text
                   x="50%"
-                  y="58%"
+                  y={isHalfDonut ? "70%" : "58%"}
                   textAnchor="middle"
                   className="fill-neutral-500 whitespace-pre-line"
                   style={{ fontSize: 12 }}
