@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Formik, Form, Field, ErrorMessage } from "formik";
@@ -21,7 +21,7 @@ const ProfileSchema = Yup.object({
   }),
 });
 
-export default function CompleteProfilePage() {
+function CompleteProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { refreshUser } = useAuth();
@@ -125,7 +125,7 @@ export default function CompleteProfilePage() {
   }
 
   return (
-    <div className= "w-full  px-4 py-8">
+    <div className="w-full px-4 py-8">
       <div className="rounded-l grid place-items-center">
         <Image src="/haudit-logo.svg" alt="Haudit" width={48} height={48} />
       </div>
@@ -264,5 +264,13 @@ export default function CompleteProfilePage() {
         }}
       </Formik>
     </div>
+  );
+}
+
+export default function CompleteProfilePage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><p className="text-neutral-500">Loading...</p></div>}>
+      <CompleteProfileContent />
+    </Suspense>
   );
 }

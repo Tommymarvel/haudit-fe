@@ -298,7 +298,7 @@ export default function RecordLabelDashboard() {
                   <tbody className="divide-y divide-neutral-100">
                     {(activeTab === 'Track' ? topTracksData : topAlbumsData).map((item, idx) => (
                       <tr key={idx} className="hover:bg-neutral-50/50">
-                        <td className="px-6 py-4 text-neutral-900 font-medium">{activeTab === 'Track' ? (item as any).track : (item as any).album}</td>
+                        <td className="px-6 py-4 text-neutral-900 font-medium">{activeTab === 'Track' ? (item as { track: string }).track : (item as { album: string }).album}</td>
                         <td className="px-6 py-4 text-neutral-600">{item.artist}</td>
                         <td className="px-6 py-4 text-neutral-900">{item.revenue}</td>
                         <td className="px-6 py-4 text-neutral-600">{item.streams}</td>
@@ -365,7 +365,7 @@ export default function RecordLabelDashboard() {
                         <td className="px-6 py-4 text-neutral-900 font-medium">{advance.amount}</td>
                         <td className="px-6 py-4 text-neutral-600">{advance.type}</td>
                         <td className="px-6 py-4">
-                          <StatusPill label={advance.status as any} />
+                          <StatusPill label={advance.status as 'Repaid' | 'Outstanding' | 'Pending' | 'Approved'} />
                         </td>
                         <td className="px-6 py-4 text-neutral-600 truncate max-w-[200px]">{advance.purpose}</td>
                         <td className="px-6 py-4">
@@ -445,7 +445,7 @@ export default function RecordLabelDashboard() {
                         <td className="px-6 py-4 text-neutral-600">{expense.artist}</td>
                         <td className="px-6 py-4 text-neutral-600">{expense.category}</td>
                         <td className="px-6 py-4">
-                          <StatusPill label={expense.status as any} />
+                          <StatusPill label={expense.status as 'Repaid' | 'Outstanding' | 'Pending' | 'Approved'} />
                         </td>
                         <td className="px-6 py-4 text-neutral-900 font-medium">{expense.amount}</td>
                       </tr>

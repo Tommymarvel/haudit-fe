@@ -202,14 +202,14 @@ export default function VerifyEmailPage() {
           <div className="mt-3 text-sm text-neutral-500">
             {resendCooldown > 0 ? (
               <p>
-                Didn't receive the code?{' '}
+                Didn&apos;t receive the code?{' '}
                 <span className="text-neutral-600 font-medium">
                   Resend available in {formatTime(resendCooldown)}
                 </span>
               </p>
             ) : (
               <p>
-                Didn't receive the code?{' '}
+                Didn&apos;t receive the code?{' '}
                 <button
                   onClick={resend}
                   disabled={isResending}
