@@ -196,7 +196,7 @@ const RecordLabelAdvance = () => {
                     <td className="px-6 py-4 text-neutral-900 font-medium">{advance.amount}</td>
                     <td className="px-6 py-4 text-neutral-600">{advance.type}</td>
                     <td className="px-6 py-4">
-                      <StatusPill label={advance.status as any} />
+                      <StatusPill label={advance.status as 'Repaid' | 'Outstanding' | 'Pending' | 'Approved'} />
                     </td>
                     <td className="px-6 py-4 text-neutral-600">{advance.artist}</td>
                     <td className="px-6 py-4">

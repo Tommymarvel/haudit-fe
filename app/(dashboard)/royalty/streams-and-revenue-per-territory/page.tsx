@@ -5,6 +5,7 @@ import AppShell from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { Calendar } from 'lucide-react';
 import { BRAND } from '@/lib/brand';
+import { ReportInsightDropdown } from '@/components/report-insight/ReportInsightDropdown';
 
 // Mock Data
 const TERRITORY_DATA = [
