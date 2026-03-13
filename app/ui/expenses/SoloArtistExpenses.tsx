@@ -46,10 +46,10 @@ const SoloArtistExpenses = () => {
       <div className="flex flex-col items-start gap-3 lg:flex-row lg:items-center justify-between ">
         <div>
           <h1 className="text-2xl font-medium text-[#3C3C3C]">
-            Diamond Platnumz Expenses{' '}
+            My Expenses
           </h1>
           <p className="text-base text-[#777777]">
-            You are now on the page to manage Record Label artists.{' '}
+            Track and manage your music-related expenses.
           </p>
         </div>
         <div className="w-full lg:w-fit grid grid-cols-2 gap-2 lg:flex">

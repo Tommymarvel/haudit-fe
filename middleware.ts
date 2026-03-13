@@ -7,8 +7,10 @@ export function middleware(request: NextRequest) {
   const isAuthPage = request.nextUrl.pathname.startsWith('/login') ||
                      request.nextUrl.pathname.startsWith('/signup') ||
                      request.nextUrl.pathname.startsWith('/forgot-password') ||
-                     request.nextUrl.pathname.startsWith('/reset-password') ||
-                     request.nextUrl.pathname.startsWith('/whoareyou');
+                     request.nextUrl.pathname.startsWith('/reset-password');
+  
+  const isProfileSetupPage = request.nextUrl.pathname.startsWith('/whoareyou') ||
+                             request.nextUrl.pathname.startsWith('/complete-profile');
   
   const isDashboardPage = request.nextUrl.pathname.startsWith('/dashboard') ||
                           request.nextUrl.pathname.startsWith('/royalty') ||
@@ -18,11 +20,11 @@ export function middleware(request: NextRequest) {
                           request.nextUrl.pathname.startsWith('/faq');
 
   // Redirect unauthenticated users trying to access protected routes
-  if (isDashboardPage && !authToken) {
+  if ((isDashboardPage || isProfileSetupPage) && !authToken) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Redirect authenticated users trying to access auth pages
+  // Redirect authenticated users trying to access auth pages (but allow profile setup)
   if (isAuthPage && authToken) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }

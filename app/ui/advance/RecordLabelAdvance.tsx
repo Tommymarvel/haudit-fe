@@ -180,8 +180,12 @@ const RecordLabelAdvance = () => {
       {/* Header row */}
       <div className="flex flex-col items-start gap-3 lg:flex-row lg:items-center justify-between">
         <div>
-          <h1 className="text-2xl font-medium text-[#3C3C3C]">Advance-O-Meter</h1>
-          <p className="text-base text-[#777777]">Track and manage artist advances</p>
+          <h1 className="text-2xl font-medium text-[#3C3C3C]">
+            Welcome to Advance-O-Meter
+          </h1>
+          <p className="text-base text-[#777777]">
+            Track and get more info on your advance request
+          </p>
         </div>
         <div className="w-full lg:w-fit grid grid-cols-2 gap-2 lg:flex">
           <Button variant="outline" className="w-full bg-[#EAEAEA] rounded-2xl lg:w-auto">
@@ -272,207 +276,76 @@ const RecordLabelAdvance = () => {
         </div>
       </div>
 
-      {tab === 'analytics' ? (
-        <>
-          {/* Trends + donut */}
-          <div className="mt-8 grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <div className="lg:col-span-1">
-              <ChartCard
-                title="Marketing advance trend"
-                variant="line"
-                data={charts.marketing}
-                xKey="label"
-                yKey="value"
-                color={BRAND.purple}
-                bandFill="#F4F4F4"
-                lineType="monotone"
-              />
-            </div>
-            <div className="lg:col-span-1">
-              <ChartCard
-                title="Personal advance trend"
-                variant="line"
-                data={charts.personal}
-                xKey="label"
-                yKey="value"
-                color={BRAND.green}
-                bandFill="#F4F4F4"
-                lineType="monotone"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mt-6">
-            {/* Table */}
-            <Card className="xl:col-span-2 h-[420px] flex flex-col">
-              <CardBody className="p-0! flex flex-col h-full">
-                <div className="flex flex-wrap items-center p-3 gap-3">
-                  <div className="text-sm font-semibold text-[#3C3C3C]">Advance request</div>
-                  <div className="lg:ml-auto flex lg:items-center lg:flex-row flex-col items-start gap-2">
-                    <input
-                      placeholder="Search advance"
-                      value={q}
-                      onChange={(e) => setQ(e.target.value)}
-                      className="h-10 w-60 rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-neutral-100"
-                    />
-                    <select
-                      value={status}
-                      onChange={(e) => setStatus(e.target.value)}
-                      className="h-10 rounded-xl border border-neutral-200 bg-white px-3 text-sm"
-                    >
-                      <option>All</option>
-                      <option>Repaid</option>
-                      <option>Outstanding</option>
-                      <option>Pending</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-x-auto overflow-y-auto">
-                  <table className="w-full text-base">
-                    <thead className="sticky top-0 z-10 text-left text-neutral-500 bg-[#F4F4F4]">
-                      <tr>
-                        <th className="py-3 pl-3 pr-4 whitespace-nowrap">Date</th>
-                        <th className="py-3 pr-4 whitespace-nowrap">Amount</th>
-                        <th className="py-3 pr-4 whitespace-nowrap">Advance type</th>
-                        <th className="py-3 pr-4 whitespace-nowrap">Status</th>
-                        <th className="py-3 pr-4 whitespace-nowrap">Advance source</th>
-                        <th className="py-3 pr-4 whitespace-nowrap"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-100">
-                      {filtered.map((r, i) => (
-                        <tr key={i} className="text-neutral-800">
-                          <td className="py-3 pl-3 pr-4 whitespace-nowrap">{r.date}</td>
-                          <td className="py-3 pr-4 whitespace-nowrap">${r.amount.toLocaleString()}</td>
-                          <td className="py-3 pr-4 whitespace-nowrap">{r.type}</td>
-                          <td className="py-3 pr-4 whitespace-nowrap">
-                            <StatusPill label={r.status} />
-                          </td>
-                          <td className="py-3 pr-4 whitespace-nowrap">{r.source}</td>
-                          <td className="py-3 pr-4 text-right whitespace-nowrap">
-                            <AdvanceRowActions
-                              onRepay={() => handleRepayClick(r)}
-                              onViewDetails={() => openDetailsFor(r)}
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardBody>
-            </Card>
-            <div className="xl:col-span-1">
-              <ChartCard
-                title="Advance type"
-                variant="donut"
-                data={charts.donut}
-                donutInnerText={'Total\nAdvance'}
-                bandFill="#F4F4F4"
-              />
-            </div>
-          </div>
-        </>
-      ) : (
-        <Card className="flex-1 mt-8 h-[420px] flex flex-col">
-          <CardBody className="p-0! flex flex-col h-full">
-            <div className="flex flex-wrap items-center justify-between p-3 gap-3">
-              <div className="text-sm font-semibold text-[#3C3C3C]">All advance source</div>
-              <div className="lg:ml-auto flex lg:items-center lg:flex-row flex-col items-start gap-2">
+      {/* Content */}
+      {tab === 'request' && (
+        <div className="mt-8 bg-white rounded-3xl border border-neutral-200 overflow-hidden">
+          <div className="p-5 border-b border-neutral-200 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#F4F4F4] lg:bg-white">
+            <h3 className="text-sm font-medium text-neutral-700">Advance request</h3>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                 <input
-                  placeholder="Search advance source"
+                  type="text"
+                  placeholder="Search advance"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  className="h-10 w-60 rounded-xl border border-neutral-200 bg-[#F4F4F4] px-3 text-sm outline-none focus:ring-2 focus:ring-neutral-100"
+                  className="pl-10 pr-4 py-2.5 w-full sm:w-64 rounded-xl border border-neutral-200 bg-[#F4F4F4] text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
                 />
               </div>
+              <div className="relative">
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="appearance-none flex items-center gap-2 px-10 pl-4 py-2.5 rounded-xl border border-neutral-200 bg-white text-sm text-neutral-700 hover:bg-neutral-50"
+                  style={{ minWidth: "120px" }}
+                >
+                  <option>All status</option>
+                  <option>Approved</option>
+                  <option>Pending</option>
+                  <option>Rejected</option>
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 pointer-events-none" />
+              </div>
             </div>
+          </div>
 
-            <div className="flex-1 overflow-x-auto overflow-y-auto">
-              <table className="w-full text-base">
-                <thead className="sticky top-0 z-10 text-left text-neutral-500 bg-[#F4F4F4]">
-                  <tr>
-                    <th className="py-3 pl-3 pr-4 whitespace-nowrap">Advance source</th>
-                    <th className="py-3 pr-4 whitespace-nowrap">Total advance</th>
-                    <th className="py-3 pr-4 whitespace-nowrap">Repaid advance</th>
-                    <th className="py-3 pr-4 whitespace-nowrap">Advance balance</th>
-                    <th className="py-3 pr-4 whitespace-nowrap">Contact</th>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-neutral-500 font-medium bg-[#F4F4F4]">
+                <tr>
+                  <th className="px-6 py-4 font-medium">ID</th>
+                  <th className="px-6 py-4 font-medium flex items-center gap-1 cursor-pointer">Date <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 15 5 5 5-5" /><path d="m7 9 5-5 5 5" /></svg></th>
+                  <th className="px-6 py-4 font-medium">Amount</th>
+                  <th className="px-6 py-4 font-medium">Advance type</th>
+                  <th className="px-6 py-4 font-medium">Status</th>
+                  <th className="px-6 py-4 font-medium">Artist</th>
+                  <th className="px-6 py-4 font-medium text-right">Activity</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {filtered.map((advance, idx) => (
+                  <tr key={idx} className="hover:bg-neutral-50/50">
+                    <td className="px-6 py-4 text-neutral-900 font-medium">{advance.id}</td>
+                    <td className="px-6 py-4 text-neutral-500">{advance.date}</td>
+                    <td className="px-6 py-4 text-neutral-900 font-medium">{advance.amount}</td>
+                    <td className="px-6 py-4 text-neutral-600">{advance.type}</td>
+                    <td className="px-6 py-4">
+                      <StatusPill label={advance.status as 'Repaid' | 'Outstanding' | 'Pending' | 'Approved'} />
+                    </td>
+                    <td className="px-6 py-4 text-neutral-600">{advance.artist}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex gap-2 text-neutral-400 justify-end">
+                        <button className="hover:text-[#7B00D4]"><MessageSquare className="h-4 w-4" /></button>
+                        <button className="hover:text-[#7B00D4]"><MoreVertical className="h-4 w-4" /></button>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100">
-                  {filtered.map((r, i) => (
-                    <tr key={i} className="text-neutral-800">
-                      <td className="py-3 pl-3 pr-4 whitespace-nowrap">{r.source}</td>
-                      <td className="py-3 pr-4 whitespace-nowrap">${r.totalAdvance?.toLocaleString() ?? 0}</td>
-                      <td className="py-3 pr-4 whitespace-nowrap">${r.repaidAdvance?.toLocaleString() ?? 0}</td>
-                      <td className="py-3 pr-4 whitespace-nowrap">${r.advanceBalance?.toLocaleString() ?? 0}</td>
-                      <td className="py-3 pr-4 whitespace-nowrap">
-                        <div className="flex flex-col">
-                          <span className="text-xs text-neutral-500">{r.email}</span>
-                          <span className="text-xs text-neutral-500">{r.phone}</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardBody>
-        </Card>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
-
-      {/* Modals */}
-      <AdvanceDetailsModal
-        open={openDetails}
-        onClose={() => setOpenDetails(false)}
-        data={detailsData}
-      />
-      <RepaymentModal
-        open={openRepay}
-        onClose={() => {
-          setOpenRepay(false);
-          setSelectedAdvance(null);
-        }}
-        advances={outstandingAdvances}
-        preselectedAdvanceId={selectedAdvance?.id}
-        onSubmit={async ({ advanceId, amount, files }) => {
-          const targetAdvanceId = advanceId || selectedAdvance?.id;
-          if (!targetAdvanceId) return;
-          try {
-            let proofUrl = '';
-            if (files.length > 0) {
-              proofUrl = await uploadFile(files[0], 'repayment');
-            }
-            await createRepayment({ advance_id: targetAdvanceId, amount, proof_of_payment: proofUrl });
-            setOpenRepay(false);
-            setSelectedAdvance(null);
-          } catch (error) {
-            console.error('Repayment failed', error);
-          }
-        }}
-      />
-      <AddAdvanceModal
-        open={openAdd}
-        onClose={() => setOpenAdd(false)}
-        onSubmit={async (data: NewAdvancePayload) => {
-          let proofUrl = '';
-          if (data.proofs && data.proofs.length > 0) {
-            proofUrl = await uploadFile(data.proofs[0], 'advance');
-          }
-          await createAdvance({
-            amount: data.amount,
-            currency: 'USD',
-            advance_source_name: data.sourceName,
-            advance_source_phn: data.phone,
-            advance_source_email: data.email,
-            advance_type: data.advanceType,
-            repayment_status: data.repaymentStatus,
-            proof_of_payment: proofUrl,
-            purpose: data.purpose || '',
-          });
-          setOpenAdd(false);
-        }}
-      />
     </div>
   );
 };

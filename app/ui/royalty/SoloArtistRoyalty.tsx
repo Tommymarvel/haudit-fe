@@ -120,9 +120,9 @@ export default function SoloArtistRoyalty() {
     setIsUploadModalOpen(true);
   };
 
-  const handleUpload = async (file: File, organization: string) => {
-    try {
-      await uploadRoyaltyFile(file, organization);
+const handleUpload = async (file: File, organization: string, onProgress: (msg: string) => void) => {
+  try {
+    await uploadRoyaltyFile(file, organization, onProgress);
       setIsUploadModalOpen(false);
     } catch (error) {
       console.error("Upload failed", error);

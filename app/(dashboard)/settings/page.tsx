@@ -12,12 +12,14 @@ import axiosInstance from '@/lib/axiosinstance';
 import { toast } from 'react-toastify';
 import { auth } from '@/lib/auth/firebase';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import { TagInput } from '@/components/ui/TagInput';
 
 const BRAND_PURPLE = '#7B00D4';
 
 const ProfileSchema = Yup.object({
     firstName: Yup.string().required('First name is required'),
     lastName: Yup.string().required('Last name is required'),
+    other_names: Yup.array().of(Yup.string()),
 });
 
 function AvatarDropzone({
@@ -166,6 +168,7 @@ export default function SettingsPage() {
     const initialValues = {
         firstName: user?.first_name || '',
         lastName: user?.last_name || '',
+        other_names: (user?.other_names || []) as string[],
         avatar: null as File | null,
     };
 
@@ -201,6 +204,7 @@ export default function SettingsPage() {
                             const payload = {
                                 first_name: vals.firstName.trim(),
                                 last_name: vals.lastName.trim(),
+                                other_names: vals.other_names,
                                 ...(avatarUrl && { avatar: avatarUrl }),
                             };
 
@@ -252,6 +256,31 @@ export default function SettingsPage() {
                                     {/* Last name */}
                                     <FormRow label="Last name" required>
                                         <InputWithIcon name="lastName" placeholder="Enter your last name" />
+                                    </FormRow>
+
+                                    {/* Other Names */}
+                                    <FormRow 
+                                        label="Other Names" 
+                                        required
+                                        helpText="This will be displayed on your profile."
+                                    >
+                                        <div className="space-y-2">
+                                            <TagInput
+                                                value={values.other_names}
+                                                onChange={(newValue) => setFieldValue('other_names', newValue)}
+                                                placeholder="Type artist name and press Enter"
+                                            />
+                                            <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 flex gap-2">
+                                                <span className="text-yellow-600 flex-shrink-0 mt-0.5">
+                                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                        <path d="M7.99992 5.33301V7.99967M7.99992 10.6663H8.00659M14.6666 7.99967C14.6666 11.6816 11.6818 14.6663 7.99992 14.6663C4.31802 14.6663 1.33325 11.6816 1.33325 7.99967C1.33325 4.31778 4.31802 1.33301 7.99992 1.33301C11.6818 1.33301 14.6666 4.31778 14.6666 7.99967Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                                    </svg>
+                                                </span>
+                                                <p className="text-sm text-yellow-800">
+                                                    Manage your alternate names, including stage names and aliases used in reporting files.
+                                                </p>
+                                            </div>
+                                        </div>
                                     </FormRow>
                                 </div>
                             </div>

@@ -22,10 +22,30 @@ export function useRoyalty() {
 
   const { data: tracksStreams, error: tracksStreamsError, isLoading: isTracksStreamsLoading } = useSWR<{ collectiveTotalStreams: number; tracks: Array<{ title: string; totalStreams: number }> }>('/royalties/tracks-streams', fetcher);
 
-  const uploadRoyaltyFile = async (file: File, source: string) => {
+  const uploadRoyaltyFile = async (
+    file: File,
+    source: string,
+    onProgress?: (message: string) => void,
+  ) => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('source', source);
+
+    const sseUrl = `${process.env.NEXT_PUBLIC_API_URL}royalties/upload-progress`;
+    const eventSource = new EventSource(sseUrl, { withCredentials: true });
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        onProgress?.(typeof data === 'string' ? data : JSON.stringify(data));
+      } catch {
+        onProgress?.(event.data);
+      }
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+    };
 
     try {
       await axiosInstance.post('/royalties/upload', formData, {
@@ -38,6 +58,8 @@ export function useRoyalty() {
       const error = err as { response?: { data?: { message?: string } } };
       toast.error(error.response?.data?.message || 'Failed to upload royalty file');
       throw err;
+    } finally {
+      eventSource.close();
     }
   };
 

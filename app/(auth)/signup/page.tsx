@@ -1,56 +1,89 @@
-'use client';
+"use client";
 
-import { useState, Suspense } from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Formik, Form, Field, ErrorMessage } from 'formik';
-import * as Yup from 'yup';
-import { Eye, EyeOff, Check } from 'lucide-react';
-import clsx from 'clsx';
-import { useSignupFlow, useGoogleLogin } from '../hooks/useAuth';
-import { useSearchParams } from 'next/navigation';
-import VerifyOTPModal from '../components/auth/VerifyOTPModal';
-import { useAuth } from '@/contexts/AuthContext';
+import { useState, Suspense } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Formik, Form, Field, ErrorMessage } from "formik";
+import * as Yup from "yup";
+import { Eye, EyeOff, Check } from "lucide-react";
+import clsx from "clsx";
+import { useSignupFlow, useGoogleSignup } from "../hooks/useAuth";
+import VerifyOTPModal from "../components/auth/VerifyOTPModal";
+import { useAuth } from "@/contexts/AuthContext";
+import { auth } from "@/lib/auth/firebase";
+import axiosInstance from "@/lib/axiosinstance";
+import { createAuthCookie } from "@/actions/auth";
+import { toast } from "react-toastify";
 
 const PasswordSchema = Yup.object({
-  firstName: Yup.string().required('Required'),
-  lastName: Yup.string().required('Required'),
-  email: Yup.string().email('Invalid email').required('Required'),
+  email: Yup.string().email("Invalid email").required("Required"),
   password: Yup.string()
-    .min(8, 'At least 8 characters')
-    .matches(/[!@#$%^&*(),.?":{}|<>]/, 'Add a special character')
-    .matches(/\d/, 'Add a number')
-    .required('Required'),
+    .min(8, "At least 8 characters")
+    .matches(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/, "Add a special character")
+    .matches(/\d/, "Add a number")
+    .required("Required"),
 });
 
 function SignupContent() {
   const [show, setShow] = useState(false);
   const [showOTPModal, setShowOTPModal] = useState(false);
-  const [registeredEmail, setRegisteredEmail] = useState('');
-  const searchParams = useSearchParams();
+  const [registeredEmail, setRegisteredEmail] = useState("");
+  const [registeredPassword, setRegisteredPassword] = useState("");
   const router = useRouter();
   const { refreshUser } = useAuth();
-  const userType = searchParams.get('user') || 'artist'; // Default to 'artist' if not provided
-  
+
   const handleSignupSuccess = (email: string) => {
     setRegisteredEmail(email);
     setShowOTPModal(true);
   };
-  
+
   const { signup, submitting } = useSignupFlow(handleSignupSuccess);
-  const { loginWithGoogle } = useGoogleLogin();
+  const { signupWithGoogle, submitting: googleSubmitting } = useGoogleSignup((email) => {
+    setRegisteredEmail(email);
+    setShowOTPModal(true);
+  });
 
-  const handleVerifyOTP = async () => {
-    // Refresh user data and navigate to dashboard after successful verification
-    await refreshUser();
+  const handleVerifyOTPSuccess = async () => {
     setShowOTPModal(false);
-    router.push('/dashboard');
-  };
-
-  const handleResendOTP = () => {
-    // The resend is now handled inside the modal
-    console.log('OTP resent to:', registeredEmail);
+    
+    try {
+      // Auto-login after successful verification
+      let idToken: string;
+      
+      // Try to use existing Firebase session first (for Google auth)
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        idToken = await currentUser.getIdToken(true);
+      } else if (registeredEmail && registeredPassword) {
+        // For email/password auth, auto-login with stored credentials
+        const { signInWithEmailAndPassword } = await import('firebase/auth');
+        const cred = await signInWithEmailAndPassword(auth, registeredEmail, registeredPassword);
+        idToken = await cred.user.getIdToken();
+      } else {
+        throw new Error('No authentication credentials available');
+      }
+      
+      const res = await axiosInstance.post('/auth/login', {
+        idToken,
+      });
+      
+      toast.success('Account verified successfully!');
+      await createAuthCookie();
+      await refreshUser();
+      
+      // Redirect to profile completion
+      const user = res.data.user;
+      if (!user.user_type) {
+        router.push('/whoareyou');
+      } else {
+        router.push('/dashboard');
+      }
+    } catch (error) {
+      toast.error('Failed to complete signup. Please try logging in.');
+      console.error('Post-verification login error:', error);
+      router.push('/login');
+    }
   };
 
   return (
@@ -59,87 +92,46 @@ function SignupContent() {
         <Image src="/haudit-logo.svg" alt="Haudit" width={48} height={48} />
       </div>
       <h1 className="mt-6 text-2xl text-center font-medium text-[#1F1F1F]">
-        Create Haudit account{' '}
+        Create Haudit account{" "}
       </h1>
       <p className="mt-1 text-sm text-center text-neutral-500">
-        Analyse and visualise your royalty report with few clicks.{' '}
+        Analyse and visualise your royalty report with few clicks.{" "}
       </p>
 
       <Formik
         initialValues={{
-          firstName: '',
-          lastName: '',
-          email: '',
-          password: '',
+          email: "",
+          password: "",
         }}
         validationSchema={PasswordSchema}
         onSubmit={(values) => {
+          // Store credentials for auto-login after verification
+          setRegisteredEmail(values.email);
+          setRegisteredPassword(values.password);
+          
           signup(
             values.email,
-            values.password,
-            values.firstName,
-            values.lastName,
-            userType
+            values.password
           );
         }}
       >
         {({ values }) => {
-          const pass = values.password ?? '';
+          const pass = values.password ?? "";
           const rules = {
             len: pass.length >= 8,
-            special: /[!@#$%^&*(),.?":{}|<>]/.test(pass),
+            special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(pass),
             number: /\d/.test(pass),
           };
 
           // Check if all fields are filled and password rules are met
           const allRulesPassed = rules.len && rules.special && rules.number;
           const allFieldsFilled =
-            values.firstName.trim() !== '' &&
-            values.lastName.trim() !== '' &&
-            values.email.trim() !== '' &&
-            values.password.trim() !== '';
+            values.email.trim() !== "" &&
+            values.password.trim() !== "";
           const isFormValid = allFieldsFilled && allRulesPassed;
 
           return (
             <Form className="space-y-5 mt-6 max-w-[550px] w-full mx-auto">
-              {/* Name */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-2 block text-sm text-neutral-700">
-                    Firstname
-                  </label>
-                  <div className="relative">
-                    <Field
-                      name="firstName"
-                      placeholder="Enter your firstname"
-                      className="w-full rounded-2xl border border-neutral-200 px-3 py-2.5 text-black outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                    />
-                  </div>
-                  <ErrorMessage
-                    name="firstName"
-                    component="p"
-                    className="mt-1 text-xs text-rose-600"
-                  />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm text-neutral-700">
-                    Lastname
-                  </label>
-                  <div className="relative">
-                    <Field
-                      name="lastName"
-                      placeholder="Enter your lastname"
-                      className="w-full rounded-2xl border border-neutral-200 px-3 py-2.5 text-black  outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                    />
-                  </div>
-                  <ErrorMessage
-                    name="lastName"
-                    component="p"
-                    className="mt-1 text-xs text-rose-600"
-                  />
-                </div>
-              </div>
-
               {/* Email */}
               <div>
                 <label className="mb-2 block text-sm text-neutral-700">
@@ -168,7 +160,7 @@ function SignupContent() {
                 <div className="relative">
                   <Field
                     name="password"
-                    type={show ? 'text' : 'password'}
+                    type={show ? "text" : "password"}
                     placeholder="Enter your password"
                     className="w-full rounded-2xl border border-neutral-200  pr-10 px-3 py-2.5 text-black outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
                   />
@@ -176,7 +168,7 @@ function SignupContent() {
                     type="button"
                     onClick={() => setShow((s) => !s)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-                    aria-label={show ? 'Hide password' : 'Show password'}
+                    aria-label={show ? "Hide password" : "Show password"}
                   >
                     {show ? (
                       <EyeOff className="h-5 w-5" />
@@ -216,34 +208,35 @@ function SignupContent() {
                 disabled={!isFormValid || submitting}
                 className="w-full rounded-2xl text-white py-3 font-medium transition-colors disabled:bg-[#959595] enabled:bg-[#7B00D4] enabled:hover:bg-[#6A00B8]"
               >
-                {submitting ? 'Creating account...' : 'Create account'}
+                {submitting ? "Creating account..." : "Create account"}
               </button>
 
               {/* Google OAuth placeholder */}
               <button
                 type="button"
-                className="w-full rounded-2xl border border-neutral-300 px-3 text-black  bg-white py-2.5 font-medium"
-                onClick={() => loginWithGoogle(refreshUser)}
+                className="w-full rounded-2xl border border-neutral-300 px-3 text-black  bg-white py-2.5 font-medium disabled:opacity-50"
+                onClick={signupWithGoogle}
+                disabled={googleSubmitting}
               >
                 <span className="inline-flex items-center gap-2.5">
                   <GoogleIcon />
-                  Sign up with Google
+                  {googleSubmitting ? 'Creating account...' : 'Sign up with Google'}
                 </span>
               </button>
 
               <p className="text-center text-sm text-neutral-500">
-                Already have an account?{' '}
+                Already have an account?{" "}
                 <Link href="/login" className="text-[#7B00D4] hover:underline">
                   Sign in
                 </Link>
               </p>
 
               <p className="text-center  text-sm text-[#5A5A5A]">
-                By clicking “create account”, I agree to your{' '}
+                By clicking “create account”, I agree to your{" "}
                 <Link href="/terms" className="underline text-[#7B00D4]">
                   Terms of service
-                </Link>{' '}
-                and{' '}
+                </Link>{" "}
+                and{" "}
                 <Link href="/privacy" className="underline text-[#7B00D4]">
                   Privacy Policy
                 </Link>
@@ -258,8 +251,7 @@ function SignupContent() {
         isOpen={showOTPModal}
         onClose={() => setShowOTPModal(false)}
         email={registeredEmail}
-        onVerify={handleVerifyOTP}
-        onResend={handleResendOTP}
+        onSuccess={handleVerifyOTPSuccess}
       />
     </>
   );
@@ -269,12 +261,12 @@ function Rule({ ok, label }: { ok: boolean; label: string }) {
   return (
     <li
       className={clsx(
-        'flex items-center gap-2',
-        ok ? 'text-green-600' : 'text-neutral-400'
+        "flex items-center gap-2",
+        ok ? "text-green-600" : "text-neutral-400",
       )}
     >
       <Check
-        className={clsx('h-4 w-4', ok ? 'text-green-600' : 'text-neutral-300')}
+        className={clsx("h-4 w-4", ok ? "text-green-600" : "text-neutral-300")}
       />
       {label}
     </li>

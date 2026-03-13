@@ -1,14 +1,41 @@
 'use client';
+import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
 import Image from 'next/image';
+import { toast } from 'react-toastify';
+import { AxiosError } from 'axios';
+import axiosInstance from '@/lib/axiosinstance';
 
 const Schema = Yup.object({
   email: Yup.string().email('Invalid').required('Required'),
 });
 
 export default function ForgotPasswordPage() {
+  const router = useRouter();
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleForgotPassword = async (email: string) => {
+    setSubmitting(true);
+    try {
+      await axiosInstance.post('/auth/forgot-password', { email });
+      toast.success('Password reset link sent! Check your email.');
+      // Navigate to reset-password page with email
+      router.push(`/reset-password?email=${encodeURIComponent(email)}`);
+    } catch (error) {
+      if (error instanceof AxiosError) {
+        const errorMessage = error.response?.data?.message || error.message;
+        toast.error(Array.isArray(errorMessage) ? errorMessage[0] : errorMessage);
+      } else {
+        toast.error('Failed to send reset link. Please try again.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <>
       <div className=" grid place-items-center ">
@@ -25,9 +52,7 @@ export default function ForgotPasswordPage() {
         initialValues={{ email: '' }}
         validationSchema={Schema}
         onSubmit={async ({ email }) => {
-          // TODO: await api.post('/auth/password/forgot', { email })
-          // Navigate to /reset-password?email=...
-          console.log('forgot', email);
+          await handleForgotPassword(email);
         }}
       >
         {({ values, isSubmitting }) => {
@@ -55,10 +80,10 @@ export default function ForgotPasswordPage() {
 
               <button
                 type="submit"
-                disabled={!isFormValid || isSubmitting}
+                disabled={!isFormValid || isSubmitting || submitting}
                 className="w-full rounded-xl text-white py-2.5 text-sm font-medium transition-colors disabled:bg-[#959595] enabled:bg-[#7B00D4] enabled:hover:bg-[#6A00B8]"
               >
-                Continue
+                {submitting ? 'Sending...' : 'Continue'}
               </button>
               <Link
                 href="/login"

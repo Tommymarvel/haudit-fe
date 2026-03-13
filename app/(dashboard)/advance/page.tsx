@@ -42,3 +42,4 @@ export default function AdvancePage() {
     </AppShell>
   );
 }
+

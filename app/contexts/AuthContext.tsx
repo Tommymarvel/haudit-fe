@@ -5,16 +5,25 @@ import { useRouter, usePathname } from 'next/navigation';
 import axiosInstance from '@/lib/axiosinstance';
 import { clearAuthCookie } from '@/actions/auth';
 
+interface NameEntry {
+  _id: string;
+  name: string;
+  normalized_name: string;
+  name_type: 'first_name' | 'last_name' | 'other_names';
+}
+
 interface User {
   id: string;
   email: string;
   first_name: string;
   last_name: string;
-  user_type: string;
+  user_type?: string;
   avatar?: string;
   bvn?: string;
   business_document?: string;
   email_verified?: boolean;
+  other_names?: string[];
+  names?: NameEntry[];
 }
 
 interface AuthContextType {
@@ -37,8 +46,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await axiosInstance.get('/auth/whoami');
       // The API returns { message, data: { ...user } }
-      // So we need to access response.data.data
-      const userData = response.data.data; 
+      const raw = response.data.data;
+
+      // Derive first_name / last_name from the names array
+      const names: NameEntry[] = raw.names ?? [];
+      const first_name =
+        names.find((n) => n.name_type === 'first_name')?.name ??
+        raw.first_name ??
+        '';
+      const last_name =
+        names.find((n) => n.name_type === 'last_name')?.name ??
+        raw.last_name ??
+        '';
+
+      const userData: User = {
+        ...raw,
+        id: raw._id ?? raw.id,
+        first_name,
+        last_name,
+        names,
+      };
+
       setUser(userData);
       return userData;
     } catch (error) {
@@ -74,7 +102,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                            pathname?.startsWith('/signup') ||
                            pathname?.startsWith('/forgot-password') ||
                            pathname?.startsWith('/reset-password') ||
-                           pathname?.startsWith('/whoareyou');
+                           pathname?.startsWith('/whoareyou') ||
+                           pathname?.startsWith('/complete-profile');
 
         if (!isAuthPage) {
           router.push('/login');

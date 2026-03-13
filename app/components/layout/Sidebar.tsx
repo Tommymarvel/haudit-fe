@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -8,16 +9,18 @@ import {
   HelpCircle,
   ChevronDown,
   Bell,
+  BarChart2,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
 
 type NavItem = {
-  href: string;
+  href?: string;
   label: string;
   icon: React.ReactNode;
   badge?: boolean;
+  subItems?: { href: string; label: string }[];
 };
 
 const NAV: NavItem[] = [
@@ -27,8 +30,17 @@ const NAV: NavItem[] = [
     icon: <Home className="h-5 w-5" />,
   },
   {
+    label: 'Analytics',
+    icon: <BarChart2 className="h-5 w-5" />,
+    subItems: [
+      { href: '/royalty/report-insight', label: 'Report Insight' },
+      { href: '/catalog', label: 'Catalog' },
+      { href: '/split', label: 'Split' },
+    ],
+  },
+  {
     href: '/advance',
-    label: 'Advance-O-Meter',
+    label: 'Advance',
     icon: (
       <svg
         width="20"
@@ -58,7 +70,7 @@ const NAV: NavItem[] = [
       >
         <path
           fillRule="evenodd"
-          clip-rule="evenodd"
+          clipRule="evenodd"
           d="M0 2.5C0 1.83696 0.263392 1.20107 0.732233 0.732233C1.20107 0.263392 1.83696 0 2.5 0H15C15.7956 0 16.5587 0.316071 17.1213 0.87868C17.6839 1.44129 18 2.20435 18 3V17C18 17.1779 17.9526 17.3526 17.8626 17.5061C17.7726 17.6596 17.6433 17.7863 17.488 17.8731C17.3327 17.96 17.157 18.0038 16.9791 18.0001C16.8012 17.9963 16.6275 17.9452 16.476 17.852L13.75 16.174L11.024 17.852C10.8664 17.9489 10.685 18.0003 10.5 18.0003C10.315 18.0003 10.1336 17.9489 9.976 17.852L7.25 16.174L4.524 17.852C4.37245 17.9452 4.19878 17.9963 4.02088 18.0001C3.84299 18.0038 3.66733 17.96 3.51202 17.8731C3.35672 17.7863 3.22739 17.6596 3.13738 17.5061C3.04737 17.3526 2.99995 17.1779 3 17V11H1C0.734784 11 0.48043 10.8946 0.292893 10.7071C0.105357 10.5196 0 10.2652 0 10V2.5ZM5 15.21L6.726 14.148C6.88359 14.0511 7.06498 13.9997 7.25 13.9997C7.43502 13.9997 7.61641 14.0511 7.774 14.148L10.5 15.826L13.226 14.148C13.3836 14.0511 13.565 13.9997 13.75 13.9997C13.935 13.9997 14.1164 14.0511 14.274 14.148L16 15.21V3C16 2.73478 15.8946 2.48043 15.7071 2.29289C15.5196 2.10536 15.2652 2 15 2H4.95C4.983 2.162 5 2.329 5 2.5V15.21ZM2.5 2C2.36739 2 2.24021 2.05268 2.14645 2.14645C2.05268 2.24021 2 2.36739 2 2.5V9H3V2.5C3 2.36739 2.94732 2.24021 2.85355 2.14645C2.75979 2.05268 2.63261 2 2.5 2ZM7 6C7 5.73478 7.10536 5.48043 7.29289 5.29289C7.48043 5.10536 7.73478 5 8 5H13C13.2652 5 13.5196 5.10536 13.7071 5.29289C13.8946 5.48043 14 5.73478 14 6C14 6.26522 13.8946 6.51957 13.7071 6.70711C13.5196 6.89464 13.2652 7 13 7H8C7.73478 7 7.48043 6.89464 7.29289 6.70711C7.10536 6.51957 7 6.26522 7 6ZM7 10C7 9.73478 7.10536 9.48043 7.29289 9.29289C7.48043 9.10536 7.73478 9 8 9H12C12.2652 9 12.5196 9.10536 12.7071 9.29289C12.8946 9.48043 13 9.73478 13 10C13 10.2652 12.8946 10.5196 12.7071 10.7071C12.5196 10.8946 12.2652 11 12 11H8C7.73478 11 7.48043 10.8946 7.29289 10.7071C7.10536 10.5196 7 10.2652 7 10Z"
           fill="#5A5A5A"
         />
@@ -78,7 +90,7 @@ const NAV: NavItem[] = [
       >
         <path
           fillRule="evenodd"
-          clip-rule="evenodd"
+          clipRule="evenodd"
           d="M18 1.00268e-07C18.5046 -0.000159579 18.9906 0.190406 19.3605 0.533497C19.7305 0.876587 19.9572 1.34684 19.995 1.85L20 2V12C20.0002 12.5046 19.8096 12.9906 19.4665 13.3605C19.1234 13.7305 18.6532 13.9572 18.15 13.995L18 14H2C1.49542 14.0002 1.00943 13.8096 0.639452 13.4665C0.269471 13.1234 0.0428434 12.6532 0.00500022 12.15L1.00268e-07 12V2C-0.000159579 1.49542 0.190407 1.00943 0.533497 0.639452C0.876588 0.269471 1.34684 0.0428434 1.85 0.00500021L2 1.00268e-07H18ZM15.003 2H4.997L5 2.125C5 2.50255 4.92564 2.8764 4.78115 3.22521C4.63667 3.57403 4.4249 3.89096 4.15793 4.15793C3.89096 4.4249 3.57403 4.63667 3.22522 4.78115C2.8764 4.92564 2.50255 5 2.125 5L2 4.997V9.003L2.125 9C2.8875 9 3.61877 9.3029 4.15793 9.84207C4.6971 10.3812 5 11.1125 5 11.875L4.997 12H15.003L15 11.875C15 11.1418 15.2802 10.4362 15.7832 9.90274C16.2862 9.36925 16.974 9.0481 17.706 9.005L17.938 9.001L18 9.003V4.997L17.875 5C17.1418 4.99999 16.4362 4.71983 15.9027 4.21682C15.3692 3.71381 15.0481 3.02597 15.005 2.294L15 2.062L15.003 2ZM17.875 11C17.7495 11 17.6255 11.027 17.5114 11.0791C17.3973 11.1313 17.2957 11.2073 17.2136 11.3022C17.1314 11.397 17.0707 11.5084 17.0354 11.6288C17.0001 11.7492 16.9911 11.8758 17.009 12H18V11.009C17.9586 11.0031 17.9168 11.0001 17.875 11ZM2.125 11C2.08317 11.0001 2.0414 11.0031 2 11.009V12H2.991C3.00892 11.8758 2.99993 11.7492 2.96463 11.6288C2.92934 11.5084 2.86856 11.397 2.78642 11.3022C2.70428 11.2073 2.60271 11.1313 2.48859 11.0791C2.37447 11.027 2.25047 11 2.125 11ZM10 3C11.0609 3 12.0783 3.42143 12.8284 4.17157C13.5786 4.92172 14 5.93913 14 7C14 8.06087 13.5786 9.07828 12.8284 9.82843C12.0783 10.5786 11.0609 11 10 11C8.93913 11 7.92172 10.5786 7.17157 9.82843C6.42143 9.07828 6 8.06087 6 7C6 5.93913 6.42143 4.92172 7.17157 4.17157C7.92172 3.42143 8.93913 3 10 3ZM10 5C9.46957 5 8.96086 5.21071 8.58579 5.58579C8.21072 5.96086 8 6.46957 8 7C8 7.53043 8.21072 8.03914 8.58579 8.41421C8.96086 8.78929 9.46957 9 10 9C10.5304 9 11.0391 8.78929 11.4142 8.41421C11.7893 8.03914 12 7.53043 12 7C12 6.46957 11.7893 5.96086 11.4142 5.58579C11.0391 5.21071 10.5304 5 10 5ZM2.991 2H2V2.991C2.12418 3.00892 2.25076 2.99993 2.37117 2.96463C2.49157 2.92934 2.60297 2.86856 2.69781 2.78642C2.79266 2.70428 2.86873 2.60271 2.92087 2.48859C2.97301 2.37447 3 2.25047 3 2.125L2.998 2.062L2.991 2ZM18 2H17.009C16.9911 2.12418 17.0001 2.25076 17.0354 2.37116C17.0707 2.49156 17.1314 2.60297 17.2136 2.69781C17.2957 2.79266 17.3973 2.86873 17.5114 2.92087C17.6255 2.97301 17.7495 3 17.875 3L17.938 2.998L18 2.99V2Z"
           fill="#5A5A5A"
         />
@@ -94,17 +106,19 @@ const NAV: NavItem[] = [
 ];
 
 
-function SidebarLink({ href, label, icon, badge }: { href: string; label: string; icon: React.ReactNode; badge?: boolean }) {
+function SidebarLink({ href, label, icon, badge }: { href?: string; label: string; icon: React.ReactNode; badge?: boolean }) {
   const pathname = usePathname();
-  const active = pathname?.startsWith(href);
+  const active = href ? pathname?.startsWith(href) : false;
   const { unreadCount } = useNotifications();
+
+  if (!href) return null; // Fallback for safety, collapsible links shouldn't use this component
 
   return (
     <Link
       href={href}
       className={cn(
         'group relative mb-1 flex items-center gap-3  px-3 py-2 text-sm text-[#5A5A5A] hover:bg-[#DFDFDF]',
-        active && 'bg-[#DFDFDF] text-neutral-900'
+        active && 'bg-[#DFDFDF] text-neutral-900 border-l-2 border-[#7B00D4]'
       )}
     >
       <span
@@ -123,11 +137,113 @@ function SidebarLink({ href, label, icon, badge }: { href: string; label: string
       {/* Purple active strip */}
       <span
         className={cn(
-          'absolute right-0 top-0 h-full w-[3px] rounded-r-sm bg-[#7B00D4] transition-opacity',
+          'absolute right-0 top-0 h-full w-[3px] rounded-l-sm bg-[#7B00D4] transition-opacity',
           active ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'
         )}
       />
     </Link>
+  );
+}
+
+function SidebarCollapsibleLink({ item }: { item: NavItem }) {
+  const pathname = usePathname();
+  const isActive = item.subItems?.some(sub => pathname?.startsWith(sub.href));
+  const [open, setOpen] = useState(isActive || false);
+
+  return (
+    <div className="mb-1">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={cn(
+          'w-full group relative flex items-center justify-between px-3 py-2 text-sm text-[#5A5A5A] hover:bg-[#DFDFDF]',
+          isActive && 'bg-[#DFDFDF] text-neutral-900 border-l-2 border-[#7B00D4]'
+        )}
+      >
+        <div className="flex items-center gap-3">
+          <span className={cn('text-[#5A5A5A]', isActive && 'text-[#7B00D4]')}>{item.icon}</span>
+          <span className="truncate text-[#5A5A5A] text-base">{item.label}</span>
+        </div>
+        <ChevronDown className={cn("h-4 w-4 transition-transform text-[#5A5A5A]", open && "rotate-180")} />
+
+        {isActive && (
+          <span className="absolute right-0 top-0 h-full w-[3px] rounded-l-sm bg-[#7B00D4]" />
+        )}
+      </button>
+
+      {open && (
+        <div className="mt-1 flex flex-col gap-1">
+          {item.subItems?.map((sub) => {
+            const isSubActive = pathname?.startsWith(sub.href);
+            return (
+              <Link
+                key={sub.href}
+                href={sub.href}
+                className={cn(
+                  'group relative flex items-center pl-[44px] pr-3 py-2 text-sm text-[#5A5A5A] hover:bg-[#DFDFDF]',
+                  isSubActive && 'bg-[#DFDFDF] text-neutral-900 font-medium'
+                )}
+              >
+                {sub.label}
+                {isSubActive && (
+                  <span className="absolute right-0 top-0 h-full w-[3px] rounded-l-sm bg-[#7B00D4]" />
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ArtistSelector() {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState('Label Overview');
+  const ref = useRef<HTMLDivElement>(null);
+  const artists = ['Diamond Platnumz', 'Sarkodie', 'Burna Boy', 'Yemi Alade'];
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) =>
+      !ref.current?.contains(e.target as Node) && setOpen(false);
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  return (
+    <div className="relative mt-3 w-full" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full inline-flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-[#5A5A5A] hover:bg-neutral-50"
+      >
+        <span>{selected}</span>
+        <ChevronDown className="h-4 w-4 text-neutral-500" />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 mt-2 w-full z-50 rounded-xl border border-neutral-200 bg-white shadow-xl overflow-hidden py-1">
+          <button
+            className="w-full text-left px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50 font-medium"
+            onClick={() => { setSelected('Label Overview'); setOpen(false); }}
+          >
+            Label Overview
+          </button>
+          <div className="h-px bg-neutral-100 mx-4" />
+          {artists.map((artist, idx) => (
+            <div key={artist}>
+              <button
+                className="w-full text-left px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50"
+                onClick={() => { setSelected(artist); setOpen(false); }}
+              >
+                {artist}
+              </button>
+              {idx < artists.length - 1 && <div className="h-px bg-neutral-100 mx-4" />}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -146,20 +262,28 @@ export default function Sidebar() {
           </span>
         </div>
 
-        {/* Period selector */}
-        <button
-          type="button"
-          className="mt-3 w-full inline-flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-[#5A5A5A] hover:bg-neutral-50"
-        >
-          Haudit Jan 2025 to July 2025
-          <ChevronDown className="h-4 w-4 text-neutral-500" />
-        </button>
+        {/* Period / Artist selector */}
+        {user?.user_type === 'record_label' ? (
+          <ArtistSelector />
+        ) : (
+          <button
+            type="button"
+            className="mt-3 w-full inline-flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-[#5A5A5A] hover:bg-neutral-50"
+          >
+            Haudit Jan 2025 to July 2025
+            <ChevronDown className="h-4 w-4 text-neutral-500" />
+          </button>
+        )}
       </div>
 
       {/* Nav */}
       <nav className="mt-3 flex-1 overflow-y-auto ">
         {NAV.map((item) => (
-          <SidebarLink key={item.href} {...item} />
+          item.subItems ? (
+            <SidebarCollapsibleLink key={item.label} item={item} />
+          ) : (
+            <SidebarLink key={item.label} {...item} />
+          )
         ))}
       </nav>
 

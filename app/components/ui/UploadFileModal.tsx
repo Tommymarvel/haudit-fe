@@ -7,7 +7,24 @@ import Modal from './Modal';
 interface UploadFileModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onUpload?: (file: File, organization: string) => Promise<void>;
+  onUpload?: (
+    file: File,
+    organization: string,
+    onProgress: (message: string) => void,
+  ) => Promise<void>;
+}
+
+function parseProgressMessage(raw: string): string {
+  // processed:1000  →  Processing… 1,000 rows
+  // done:5000:4800  →  Done! 4,800 / 5,000 rows processed
+  const processed = raw.match(/^processed:(\d+)$/);
+  if (processed) return `Processing… ${Number(processed[1]).toLocaleString()} rows processed`;
+
+  const done = raw.match(/^done:(\d+):(\d+)$/);
+  if (done)
+    return `Done! ${Number(done[2]).toLocaleString()} / ${Number(done[1]).toLocaleString()} rows processed`;
+
+  return raw;
 }
 
 const ORGANIZATIONS = ['FUGA', 'DITTO'];
@@ -22,6 +39,8 @@ export default function UploadFileModal({
   const [isDragging, setIsDragging] = useState(false);
   const [showOrgDropdown, setShowOrgDropdown] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [progressMessages, setProgressMessages] = useState<string[]>([]);
+  const [latestProgress, setLatestProgress] = useState<string>('');
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -65,8 +84,15 @@ export default function UploadFileModal({
   const handleNext = async () => {
     if (selectedFile && selectedOrganization && onUpload) {
       setIsUploading(true);
+      setProgressMessages([]);
+      setLatestProgress('');
+      const handleProgress = (message: string) => {
+        const parsed = parseProgressMessage(message);
+        setLatestProgress(parsed);
+        setProgressMessages((prev) => [...prev, parsed]);
+      };
       try {
-        await onUpload(selectedFile, selectedOrganization);
+        await onUpload(selectedFile, selectedOrganization, handleProgress);
         handleClose();
       } catch (error) {
         console.error('Upload failed:', error);
@@ -82,6 +108,8 @@ export default function UploadFileModal({
     setSelectedOrganization('');
     setShowOrgDropdown(false);
     setIsUploading(false);
+    setProgressMessages([]);
+    setLatestProgress('');
     onClose();
   };
 
@@ -239,6 +267,43 @@ export default function UploadFileModal({
               )}
             </div>
           </div>
+
+          {/* SSE progress */}
+          {isUploading && (
+            <div className="mt-5 rounded-xl border border-[#7B00D4]/20 bg-[#F5ECFF] px-4 py-3 space-y-1">
+              <p className="text-xs font-semibold text-[#7B00D4] uppercase tracking-wide">Upload progress</p>
+              <div className="max-h-28 overflow-y-auto space-y-0.5 pr-1">
+                {progressMessages.length === 0 ? (
+                  <p className="text-xs text-neutral-500 animate-pulse">Connecting…</p>
+                ) : (
+                  progressMessages.map((msg, i) => (
+                    <p
+                      key={i}
+                      className={`text-xs ${
+                        i === progressMessages.length - 1
+                          ? 'text-[#3c3c3c] font-medium'
+                          : 'text-neutral-400'
+                      }`}
+                    >
+                      {msg}
+                    </p>
+                  ))
+                )}
+              </div>
+              {latestProgress && (
+                <div className="mt-2">
+                  <div className="h-1.5 w-full rounded-full bg-[#7B00D4]/20 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-[#7B00D4] transition-all duration-500"
+                      style={{
+                        width: latestProgress.startsWith('Done') ? '100%' : '60%',
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Action buttons */}
           <div className="mt-6 flex gap-3">
