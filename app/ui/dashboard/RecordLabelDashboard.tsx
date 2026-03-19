@@ -1,8 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
-import Image from 'next/image';
 import Topbar from '@/components/layout/Topbar';
-import { StatCard } from '@/components/dashboard/StatCard';
 import { ChartCard, DonutSlice } from '@/components/dashboard/ChartCard';
 import { useRoyalty } from '@/hooks/useRoyalty';
 import { useAdvance } from '@/hooks/useAdvance';
@@ -14,7 +12,6 @@ import { Button } from '@/components/ui/Button';
 import { Menu } from '@/components/ui/Menu';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { ChevronRight, FileText, Search, ChevronDown, Download, Grid, MessageSquare, MoreVertical, Table2 } from 'lucide-react';
-import QuickActionsBar from '@/components/dashboard/QuickActionsBar';
 import UploadFileModal from '@/components/ui/UploadFileModal';
 import AddAdvanceModal, { NewAdvancePayload } from '@/ui/advance/AddAdvanceModal';
 import AddExpensesModal, { NewExpensesPayload } from '@/ui/expenses/AddExpensesModal';
@@ -25,7 +22,7 @@ import { useAuth } from '@/contexts/AuthContext';
 type Tab = 'Track' | 'Album' | 'Advance' | 'Expenses';
 
 export default function RecordLabelDashboard() {
-  const { dashboardMetrics, albumPerformance, albumRevenue, albumInteractions, uploadRoyaltyFile } = useRoyalty();
+  const { uploadRoyaltyFile } = useRoyalty();
   const { user } = useAuth();
   const { createAdvance } = useAdvance();
   const { createExpense } = useExpenses();
@@ -126,18 +123,6 @@ export default function RecordLabelDashboard() {
     { name: 'Download', value: 244, color: BRAND.green },
     { name: 'Stream', value: 500, color: BRAND.purple },
   ];
-
-  const totalRevenueValue = useMemo(
-    () => `$${Math.floor((dashboardMetrics?.totalRevenue ?? 0) * 1000) / 1000}`,
-    [dashboardMetrics]
-  );
-
-  const totalStreamsValue = useMemo(
-    () => (dashboardMetrics?.totalStreams ?? 0).toLocaleString(),
-    [dashboardMetrics]
-  );
-
-  const topTrackTitle = dashboardMetrics?.topTrack?.title ?? '-';
 
   // Shared Interaction Performance Mock Data (Track & Album)
   const interactionPerformanceData = [

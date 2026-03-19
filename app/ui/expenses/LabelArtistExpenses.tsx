@@ -3,7 +3,7 @@
 import { ChartCard } from '@/components/dashboard/ChartCard';
 import { Card, CardBody } from '@/components/ui/Card';
 import { BRAND } from '@/lib/brand';
-import { ChevronDown, Table2 } from 'lucide-react';
+import { Table2 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { useExpenses } from '@/hooks/useExpenses';
 import { Select } from '@/components/ui/Select';

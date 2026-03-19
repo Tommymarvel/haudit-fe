@@ -37,13 +37,8 @@ const ROLES: {
   },
 ];
 
-type Props = {
-  defaultValue?: RoleKey;
-  onChange?: (role: RoleKey) => void;
-};
-
-const Page = ({ defaultValue = 'solo', onChange }: Props) => {
-  const [value, setValue] = useState<RoleKey>(defaultValue as RoleKey);
+const Page = () => {
+  const [value, setValue] = useState<RoleKey>('solo');
   const router = useRouter();
 
   const handleContinue = () => {
@@ -94,7 +89,6 @@ const Page = ({ defaultValue = 'solo', onChange }: Props) => {
                     checked={checked}
                     onChange={() => {
                       setValue(r.key);
-                      onChange?.(r.key);
                     }}
                     className="sr-only peer"
                   />

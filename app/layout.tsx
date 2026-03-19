@@ -1,14 +1,8 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import 'react-toastify/dist/ReactToastify.css';
 import './globals.css';
 import { AuthProvider } from './contexts/AuthContext';
 import ToastViewport from './components/ui/ToastViewport';
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-});
 
 export const metadata: Metadata = {
   title: {
@@ -50,7 +44,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body className="font-sans antialiased">
         <AuthProvider>
           {children}
         </AuthProvider>

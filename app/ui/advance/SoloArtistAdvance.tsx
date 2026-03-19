@@ -4,7 +4,6 @@ import { Card, CardBody } from "@/components/ui/Card";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { ChartCard } from "@/components/dashboard/ChartCard";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { Switch } from "@/components/ui/Switch";
 import { Calendar, Plus, ChevronDown, Table2 } from "lucide-react";
 import { Menu } from "@/components/ui/Menu";
 import { useState, useMemo } from "react";

@@ -2,21 +2,14 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/Button';
-import { Card, CardBody } from '@/components/ui/Card';
 import { StatCard } from '@/components/dashboard/StatCard';
-import { ChartCard } from '@/components/dashboard/ChartCard';
 import { StatusPill } from '@/components/ui/StatusPill';
-import { Calendar, Plus, ChevronDown, Table2 } from 'lucide-react';
+import { Calendar, Plus, ChevronDown, Table2, MessageSquare, MoreVertical } from 'lucide-react';
 import { Menu } from '@/components/ui/Menu';
 import { useState, useMemo } from 'react';
 import Image from 'next/image';
-import AdvanceRowActions from './AdvanceRowActions';
-import AdvanceDetailsModal, { AdvanceDetails } from './AdvanceDetailsModal';
-import RepaymentModal from './RepaymentModal';
-import AddAdvanceModal, { NewAdvancePayload } from './AddAdvanceModal';
 import { BRAND } from '@/lib/brand';
 import { useAdvance } from '@/hooks/useAdvance';
-import { uploadFile } from '@/lib/utils/upload';
 import { Select } from '@/components/ui/Select';
 
 type Row = {
@@ -26,6 +19,7 @@ type Row = {
   type: 'Personal' | 'Marketing';
   status: 'Repaid' | 'Outstanding' | 'Pending';
   source: string;
+  artist?: string;
   totalAdvance?: number;
   repaidAdvance?: number;
   advanceBalance?: number;
@@ -37,21 +31,12 @@ const RecordLabelAdvance = () => {
   const {
     advances,
     overview,
-    marketingTrend,
-    personalTrend,
-    typePercentage,
-    createAdvance,
-    createRepayment,
-    getRepayments,
   } = useAdvance();
   const [tab, setTab] = useState<'analytics' | 'source'>('analytics');
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('All');
-  const [openDetails, setOpenDetails] = useState(false);
-  const [detailsData, setDetailsData] = useState<AdvanceDetails | null>(null);
-  const [openRepay, setOpenRepay] = useState(false);
-  const [openAdd, setOpenAdd] = useState(false);
-  const [selectedAdvance, setSelectedAdvance] = useState<Row | null>(null);
+  const [, setOpenRepay] = useState(false);
+  const [, setOpenAdd] = useState(false);
 
   const rows: Row[] = useMemo(() => {
     if (!advances) return [];
@@ -83,29 +68,6 @@ const RecordLabelAdvance = () => {
     };
   }, [overview]);
 
-  const charts = useMemo(() => {
-    const marketingTrendData = (marketingTrend || []).map((item) => ({
-      label: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      value: item.totalUSD,
-    }));
-
-    const personalTrendData = (personalTrend || []).map((item) => ({
-      label: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      value: item.totalUSD,
-    }));
-
-    const realDonut = [
-      { name: 'Marketing', value: typePercentage?.marketting?.totalUSD || 0, color: BRAND.purple },
-      { name: 'Personal', value: typePercentage?.personal?.totalUSD || 0, color: BRAND.green },
-    ];
-
-    return {
-      marketing: marketingTrendData,
-      personal: personalTrendData,
-      donut: realDonut,
-    };
-  }, [marketingTrend, personalTrend, typePercentage]);
-
   const filtered = useMemo(
     () =>
       rows.filter(
@@ -114,66 +76,6 @@ const RecordLabelAdvance = () => {
           (q === '' || r.source.toLowerCase().includes(q.toLowerCase()))
       ),
     [q, status, rows]
-  );
-
-  const openDetailsFor = async (r: Row) => {
-    try {
-      const repayments = await getRepayments(r.id);
-      const repaidAmount = repayments.reduce((sum, rep) => sum + rep.amount, 0);
-      const fullAdvance = advances?.find((a) => a._id === r.id);
-
-      let remainingBalance = r.amount;
-      const historyWithBalance = repayments
-        .map((rep) => {
-          const repaidAmt = rep.amount;
-          remainingBalance -= repaidAmt;
-          const dateObj = new Date(rep.createdAt);
-          return {
-            date: dateObj.toLocaleDateString(),
-            time: dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-            repaidAmount: repaidAmt,
-            balanceAmount: Math.max(0, remainingBalance),
-            proofs: rep.proof_of_payment ? [rep.proof_of_payment] : [],
-          };
-        })
-        .reverse();
-
-      setDetailsData({
-        id: r.id,
-        date: r.date,
-        status: r.status,
-        amount: r.amount,
-        repaidAmount,
-        type: r.type,
-        source: r.source,
-        phone: r.phone || '',
-        email: r.email || '',
-        proofs: fullAdvance?.proof_of_payment ? [fullAdvance.proof_of_payment] : [],
-        purpose: fullAdvance?.purpose || '',
-        history: historyWithBalance,
-      });
-      setOpenDetails(true);
-    } catch (error) {
-      console.error('Failed to fetch details', error);
-    }
-  };
-
-  const handleRepayClick = (r: Row) => {
-    setSelectedAdvance(r);
-    setOpenRepay(true);
-  };
-
-  const outstandingAdvances = useMemo(
-    () =>
-      rows
-        .filter((r) => r.status === 'Outstanding')
-        .map((r) => ({
-          id: r.id,
-          source: r.source,
-          amount: r.amount,
-          balance: r.advanceBalance || r.amount,
-        })),
-    [rows]
   );
 
   return (
@@ -278,7 +180,7 @@ const RecordLabelAdvance = () => {
       </div>
 
       {/* Content */}
-      {tab === 'request' && (
+      {tab === 'source' && (
         <div className="mt-8 bg-white rounded-3xl border border-neutral-200 overflow-hidden">
           <div className="p-5 border-b border-neutral-200 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#F4F4F4] lg:bg-white">
             <h3 className="text-sm font-medium text-neutral-700">Advance request</h3>
