@@ -99,7 +99,7 @@ export default function AddAdvanceModal({
         >
           {({ isSubmitting, setFieldValue, values }) => (
             <Form className="mx-auto mt-6 w-full max-w-xl space-y-4">
-              <div className="space-y-4 max-h-[calc(100vh-250px)] overflow-y-auto">
+              <div className="space-y-4">
                 {/* Amount */}
                 <div>
                   <label className="mb-3 block text-sm font-medium text-neutral-700">

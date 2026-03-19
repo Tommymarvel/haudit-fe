@@ -5,36 +5,101 @@ import { Button } from '@/components/ui/Button';
 import { ChevronDown } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { ChartCard, DonutSlice } from '@/components/dashboard/ChartCard';
+import UploadFileModal from '@/components/ui/UploadFileModal';
+import AddAdvanceModal, { NewAdvancePayload } from '@/ui/advance/AddAdvanceModal';
+import AddExpensesModal, { NewExpensesPayload } from '@/ui/expenses/AddExpensesModal';
+import SoloUnrecognizedArtistsModal from '@/components/ui/SoloUnrecognizedArtistsModal';
+import IgnoreUnrecognizedConfirmModal from '@/components/ui/IgnoreUnrecognizedConfirmModal';
 
 import Image from 'next/image';
 import Topbar from '@/components/layout/Topbar';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useRoyalty } from '@/hooks/useRoyalty';
+import { useAdvance } from '@/hooks/useAdvance';
+import { useExpenses } from '@/hooks/useExpenses';
+import { useUnrecognizedArtists } from '@/hooks/useUnrecognizedArtists';
+import { useAuth } from '@/contexts/AuthContext';
+import { uploadFile } from '@/lib/utils/upload';
 
 export default function SoloArtistDashboard() {
-  const { dashboardMetrics, albumPerformance, albumRevenue, albumInteractions } = useRoyalty();
+  const { user } = useAuth();
+  const { dashboardMetrics, albumPerformance, albumRevenue, albumInteractions, uploadRoyaltyFile } = useRoyalty();
+  const { createAdvance } = useAdvance();
+  const { createExpense } = useExpenses();
+  const { assignPendingArtists, refreshPendingArtists } = useUnrecognizedArtists();
+  const [openUpload, setOpenUpload] = useState(false);
+  const [openAdvance, setOpenAdvance] = useState(false);
+  const [openExpense, setOpenExpense] = useState(false);
+  const [openUnrecognizedModal, setOpenUnrecognizedModal] = useState(false);
+  const [openIgnoreConfirm, setOpenIgnoreConfirm] = useState(false);
+  const [pendingUnmatchedArtists, setPendingUnmatchedArtists] = useState<string[]>([]);
 
-  const sparkUp = [
-    { v: 20 },
-    { v: 35 },
-    { v: 30 },
-    { v: 55 },
-    { v: 52 },
-    { v: 70 },
-  ];
-  const sparkDown = [
-    { v: 65 },
-    { v: 40 },
-    { v: 45 },
-    { v: 38 },
-    { v: 42 },
-    { v: 35 },
-  ];
+  const handleUpload = async (file: File, organization: string, onProgress: (msg: string) => void) => {
+    try {
+      const result = await uploadRoyaltyFile(file, organization, onProgress);
+      setOpenUpload(false);
+      if (result.unmatchedArtists && result.unmatchedArtists.length > 0) {
+        setPendingUnmatchedArtists(result.unmatchedArtists);
+        setOpenUnrecognizedModal(true);
+      }
+    } catch (error) {
+      console.error('Upload failed', error);
+    }
+  };
 
-  const interactionData: DonutSlice[] = [
-    { name: 'Download', value: 244, color: '#00D447' }, // emerald
-    { name: 'Stream', value: 500, color: '#7B00D4' }, // violet
-  ];
+  const handleResolveUnrecognizedArtists = async (mappings: Record<string, string>) => {
+    if (Object.keys(mappings).length === 0) return;
+    await assignPendingArtists(mappings);
+    setOpenUnrecognizedModal(false);
+    setPendingUnmatchedArtists([]);
+    await refreshPendingArtists();
+  };
+
+  const handleAddAdvance = async (payload: NewAdvancePayload) => {
+    try {
+      let proofUrl = '';
+      if (payload.proofs && payload.proofs.length > 0) {
+        proofUrl = await uploadFile(payload.proofs[0], 'advance');
+      }
+      await createAdvance({
+        amount: payload.amount,
+        currency: 'NGN',
+        advance_source_name: payload.sourceName,
+        advance_source_phn: payload.phone,
+        advance_source_email: payload.email,
+        advance_type: payload.advanceType,
+        repayment_status: payload.repaymentStatus,
+        proof_of_payment: proofUrl,
+        purpose: payload.purpose || '',
+      });
+      setOpenAdvance(false);
+    } catch (error) {
+      console.error('Create advance failed', error);
+    }
+  };
+
+  const handleAddExpense = async (payload: NewExpensesPayload) => {
+    try {
+      let receiptUrl = '';
+      if (payload.proofs && payload.proofs.length > 0) {
+        receiptUrl = await uploadFile(payload.proofs[0], 'expense');
+      }
+      await createExpense({
+        expense_date: payload.expense_date,
+        category: payload.category,
+        currency: payload.currency,
+        amount: payload.amount,
+        description: payload.description,
+        receipt_url: receiptUrl,
+      });
+      setOpenExpense(false);
+    } catch (error) {
+      console.error('Create expense failed', error);
+    }
+  };
+
+  // API endpoint for track interaction type is not connected yet.
+  const interactionData: DonutSlice[] = [];
 
   const totalRevenueValue = useMemo(
     () => `$${Math.floor((dashboardMetrics?.totalRevenue ?? 0) * 1000) / 1000}`,
@@ -47,6 +112,20 @@ export default function SoloArtistDashboard() {
   );
 
   const topTrackTitle = dashboardMetrics?.topTrack?.title ?? '-';
+  const revenueSpark = useMemo(
+    () =>
+      (dashboardMetrics?.revenueByMonth ?? []).map((m) => ({
+        v: m.revenue ?? 0,
+      })),
+    [dashboardMetrics]
+  );
+  const streamsSpark = useMemo(
+    () =>
+      (dashboardMetrics?.streamsByMonth ?? []).map((m) => ({
+        v: m.streams ?? 0,
+      })),
+    [dashboardMetrics]
+  );
 
   const revenueByTrackData = useMemo(
     () =>
@@ -108,8 +187,9 @@ export default function SoloArtistDashboard() {
         
         <div className="hidden lg:block">
           <QuickActionsBar
-            onAddFile={() => {}}
-            onAddAdvance={() => {}}
+            onAddFile={() => setOpenUpload(true)}
+            onAddAdvance={() => setOpenAdvance(true)}
+            onAddExpense={() => setOpenExpense(true)}
             onMore={() => {}}
           />
         </div>
@@ -122,9 +202,9 @@ export default function SoloArtistDashboard() {
               </Button>
             }
             items={[
-              { label: 'Add new royalty record', onClick: () => {} },
-              { label: 'Add Advance', onClick: () => {} },
-              { label: 'Add Expense', onClick: () => {} },
+              { label: 'Add new royalty record', onClick: () => setOpenUpload(true) },
+              { label: 'Add Advance', onClick: () => setOpenAdvance(true) },
+              { label: 'Add Expense', onClick: () => setOpenExpense(true) },
               { label: 'Export Table', onClick: () => {} },
               { label: 'Export Analytics', onClick: () => {} },
             ]}
@@ -146,7 +226,7 @@ export default function SoloArtistDashboard() {
               alt="haudit"
             />
           }
-          spark={{ data: sparkUp }}
+          spark={{ data: revenueSpark }}
         />
         <StatCard
           className="min-w-[280px] xl:min-w-0 flex-shrink-0"
@@ -155,7 +235,7 @@ export default function SoloArtistDashboard() {
           icon={
             <Image src="/svgs/users.svg" width={48} height={48} alt="haudit" />
           }
-          spark={{ data: sparkDown }}
+          spark={{ data: streamsSpark }}
         />
         <StatCard
           className="min-w-[280px] xl:min-w-0 flex-shrink-0"
@@ -164,7 +244,6 @@ export default function SoloArtistDashboard() {
           icon={
             <Image src="/svgs/music.svg" width={48} height={48} alt="haudit" />
           }
-          spark={{ data: sparkUp }}
         />
       </div>
 
@@ -219,6 +298,8 @@ export default function SoloArtistDashboard() {
             variant="donut"
             data={interactionData}
             donutInnerText={'Total\nInteraction'}
+            emptyStateTitle="No track interaction data"
+            emptyStateDescription="This graph is not connected to an API endpoint yet."
           />
         </div>
         <div className="w-full xl:flex-1">
@@ -230,6 +311,40 @@ export default function SoloArtistDashboard() {
           />
         </div>
       </div>
+
+      <UploadFileModal
+        isOpen={openUpload}
+        onClose={() => setOpenUpload(false)}
+        onUpload={handleUpload}
+      />
+      <AddAdvanceModal
+        open={openAdvance}
+        onClose={() => setOpenAdvance(false)}
+        onSubmit={handleAddAdvance}
+      />
+      <AddExpensesModal
+        open={openExpense}
+        onClose={() => setOpenExpense(false)}
+        onSubmit={handleAddExpense}
+      />
+      <SoloUnrecognizedArtistsModal
+        isOpen={openUnrecognizedModal}
+        onClose={() => setOpenUnrecognizedModal(false)}
+        unrecognizedNames={pendingUnmatchedArtists}
+        currentArtistId={user?.id || ''}
+        onFinish={handleResolveUnrecognizedArtists}
+        onIgnore={() => setOpenIgnoreConfirm(true)}
+      />
+      <IgnoreUnrecognizedConfirmModal
+        open={openIgnoreConfirm}
+        onClose={() => setOpenIgnoreConfirm(false)}
+        onConfirm={async () => {
+          setOpenIgnoreConfirm(false);
+          setOpenUnrecognizedModal(false);
+          setPendingUnmatchedArtists([]);
+          await refreshPendingArtists();
+        }}
+      />
     </div>
   );
 }

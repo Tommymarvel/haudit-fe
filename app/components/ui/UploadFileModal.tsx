@@ -11,7 +11,7 @@ interface UploadFileModalProps {
     file: File,
     organization: string,
     onProgress: (message: string) => void,
-  ) => Promise<void>;
+  ) => Promise<{ unmatchedArtists?: string[] } | void>;
 }
 
 function parseProgressMessage(raw: string): string {

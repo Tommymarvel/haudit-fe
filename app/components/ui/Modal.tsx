@@ -18,6 +18,7 @@ type ModalProps = {
   closeVariant?: 'inline' | 'island' | 'none';
 
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  maxWidthClassName?: string;
   children: React.ReactNode;
 };
 
@@ -35,6 +36,7 @@ export default function Modal({
   title,
   closeVariant = 'inline',
   size = 'xl',
+  maxWidthClassName,
   children,
 }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -75,7 +77,7 @@ export default function Modal({
           - This outer wrapper is `overflow-visible` so the floating close button can sit OUTSIDE the rounded panel.
           - The inner panel keeps `overflow-hidden` for rounded corners.
         */}
-        <div className={`relative w-full ${SIZES[size]} overflow-visible`}>
+        <div className={`relative w-full ${maxWidthClassName ?? SIZES[size]} overflow-visible`}>
           {/* Outside floating close (matches your reference screenshot) */}
           {closeVariant === 'island' && (
             <button
@@ -95,9 +97,9 @@ export default function Modal({
           )}
 
           {/* Actual modal panel */}
-          <div className="overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-black/5">
+          <div className="flex flex-col overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-black/5 max-h-[calc(100vh-2rem)]">
             {headerVariant === 'bar' && (
-              <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50/70 px-4 py-3">
+              <div className="flex flex-none items-center justify-between border-b border-neutral-200 bg-neutral-50/70 px-4 py-3">
                 <p className="text-sm font-medium text-neutral-700">{title}</p>
 
                 {closeVariant === 'inline' && (
@@ -112,7 +114,7 @@ export default function Modal({
               </div>
             )}
 
-            <div>{children}</div>
+            <div className="overflow-y-auto">{children}</div>
           </div>
         </div>
       </div>

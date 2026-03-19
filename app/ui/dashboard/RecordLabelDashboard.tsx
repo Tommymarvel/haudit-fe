@@ -5,18 +5,122 @@ import Topbar from '@/components/layout/Topbar';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { ChartCard, DonutSlice } from '@/components/dashboard/ChartCard';
 import { useRoyalty } from '@/hooks/useRoyalty';
+import { useAdvance } from '@/hooks/useAdvance';
+import { useExpenses } from '@/hooks/useExpenses';
+import { useUnrecognizedArtists } from '@/hooks/useUnrecognizedArtists';
+import { uploadFile } from '@/lib/utils/upload';
 import { BRAND } from '@/lib/brand';
 import { Button } from '@/components/ui/Button';
 import { Menu } from '@/components/ui/Menu';
 import { StatusPill } from '@/components/ui/StatusPill';
-import { ChevronRight, FileText, Search, ChevronDown, Download, Grid, MessageSquare, MoreVertical } from 'lucide-react';
+import { ChevronRight, FileText, Search, ChevronDown, Download, Grid, MessageSquare, MoreVertical, Table2 } from 'lucide-react';
 import QuickActionsBar from '@/components/dashboard/QuickActionsBar';
+import UploadFileModal from '@/components/ui/UploadFileModal';
+import AddAdvanceModal, { NewAdvancePayload } from '@/ui/advance/AddAdvanceModal';
+import AddExpensesModal, { NewExpensesPayload } from '@/ui/expenses/AddExpensesModal';
+import UnrecognizedArtistsModal from '@/components/ui/UnrecognizedArtistsModal';
+import IgnoreUnrecognizedConfirmModal from '@/components/ui/IgnoreUnrecognizedConfirmModal';
+import { useAuth } from '@/contexts/AuthContext';
 
 type Tab = 'Track' | 'Album' | 'Advance' | 'Expenses';
 
 export default function RecordLabelDashboard() {
-  const { dashboardMetrics, albumPerformance, albumRevenue, albumInteractions } = useRoyalty();
-  const [activeTab, setActiveTab] = useState<Tab>('Track'); // Set Track as default
+  const { dashboardMetrics, albumPerformance, albumRevenue, albumInteractions, uploadRoyaltyFile } = useRoyalty();
+  const { user } = useAuth();
+  const { createAdvance } = useAdvance();
+  const { createExpense } = useExpenses();
+  const { assignPendingArtists, refreshPendingArtists } = useUnrecognizedArtists();
+  const [activeTab, setActiveTab] = useState<Tab>('Track');
+  const [openUpload, setOpenUpload] = useState(false);
+  const [openAdvance, setOpenAdvance] = useState(false);
+  const [openExpense, setOpenExpense] = useState(false);
+  const [pendingUnmatchedArtists, setPendingUnmatchedArtists] = useState<string[]>([]);
+  const [openUnrecognizedModal, setOpenUnrecognizedModal] = useState(false);
+  const [openIgnoreConfirm, setOpenIgnoreConfirm] = useState(false);
+
+  const handleUpload = async (file: File, organization: string, onProgress: (msg: string) => void) => {
+    try {
+      const result = await uploadRoyaltyFile(file, organization, onProgress);
+      setOpenUpload(false);
+
+      if (result.unmatchedArtists && result.unmatchedArtists.length > 0) {
+        setPendingUnmatchedArtists(result.unmatchedArtists);
+        setOpenUnrecognizedModal(true);
+      }
+    } catch (error) {
+      console.error('Upload failed', error);
+    }
+  };
+
+  const recordLabelArtists = useMemo(
+    () =>
+      (user?.names ?? [])
+        .filter((n) => n.name_type === 'other_names')
+        .map((n) => ({ id: n._id, name: n.name })),
+    [user]
+  );
+
+  const handleResolveUnrecognizedArtists = async (mappings: Record<string, string>) => {
+    if (Object.keys(mappings).length === 0) return;
+    await assignPendingArtists(mappings);
+    setOpenUnrecognizedModal(false);
+    setPendingUnmatchedArtists([]);
+    await refreshPendingArtists();
+  };
+
+  const handleIgnoreFromModal = () => {
+    setOpenIgnoreConfirm(true);
+  };
+
+  const handleConfirmIgnore = async () => {
+    setOpenIgnoreConfirm(false);
+    setOpenUnrecognizedModal(false);
+    setPendingUnmatchedArtists([]);
+    await refreshPendingArtists();
+  };
+
+  const handleAddAdvance = async (payload: NewAdvancePayload) => {
+    try {
+      let proofUrl = '';
+      if (payload.proofs && payload.proofs.length > 0) {
+        proofUrl = await uploadFile(payload.proofs[0], 'advance');
+      }
+      await createAdvance({
+        amount: payload.amount,
+        currency: 'NGN',
+        advance_source_name: payload.sourceName,
+        advance_source_phn: payload.phone,
+        advance_source_email: payload.email,
+        advance_type: payload.advanceType,
+        repayment_status: payload.repaymentStatus,
+        proof_of_payment: proofUrl,
+        purpose: payload.purpose || '',
+      });
+      setOpenAdvance(false);
+    } catch (error) {
+      console.error('Create advance failed', error);
+    }
+  };
+
+  const handleAddExpense = async (payload: NewExpensesPayload) => {
+    try {
+      let receiptUrl = '';
+      if (payload.proofs && payload.proofs.length > 0) {
+        receiptUrl = await uploadFile(payload.proofs[0], 'expense');
+      }
+      await createExpense({
+        expense_date: payload.expense_date,
+        category: payload.category,
+        currency: payload.currency,
+        amount: payload.amount,
+        description: payload.description,
+        receipt_url: receiptUrl,
+      });
+      setOpenExpense(false);
+    } catch (error) {
+      console.error('Create expense failed', error);
+    }
+  };
 
   const interactionData: DonutSlice[] = [
     { name: 'Download', value: 244, color: BRAND.green },
@@ -131,10 +235,10 @@ export default function RecordLabelDashboard() {
 
         <div className="hidden lg:block">
           <div className="flex items-center gap-3">
-            <Button variant="primary" className="py-3 w-full whitespace-nowrap bg-[#7B00D4] hover:bg-[#6A00B8] border-none">
+            <Button variant="primary" className="py-3 w-full whitespace-nowrap bg-[#7B00D4] hover:bg-[#6A00B8] border-none" onClick={() => setOpenUpload(true)}>
               <Download className="h-4 w-4 rotate-180" /> Add Royalty File
             </Button>
-            <Button className="bg-[#00D447] px-10 py-3 w-full inline-flex items-center gap-2 whitespace-nowrap hover:bg-emerald-700 text-white border-none">
+            <Button className="bg-[#00D447] px-10 py-3 w-full inline-flex items-center gap-2 whitespace-nowrap hover:bg-emerald-700 text-white border-none" onClick={() => setOpenExpense(true)}>
               <Grid className="h-4 w-4" /> Add Expenses
             </Button>
             <Menu
@@ -144,9 +248,9 @@ export default function RecordLabelDashboard() {
                 </Button>
               }
               items={[
-                { label: 'Add new file', onClick: () => { } },
-                { label: 'Add new advance', onClick: () => { } },
-                { label: 'Add new expense', onClick: () => { } },
+                { label: 'Add new file', onClick: () => setOpenUpload(true) },
+                { label: 'Add new advance', onClick: () => setOpenAdvance(true) },
+                { label: 'Add new expense', onClick: () => setOpenExpense(true) },
                 { label: 'Export table', onClick: () => { } },
                 { label: 'Export analytics', onClick: () => { } },
               ]}
@@ -162,8 +266,8 @@ export default function RecordLabelDashboard() {
               </Button>
             }
             items={[
-              { label: 'Add Royalty File', onClick: () => { } },
-              { label: 'Add Expenses', onClick: () => { } },
+              { label: 'Add Royalty File', onClick: () => setOpenUpload(true) },
+              { label: 'Add Expenses', onClick: () => setOpenExpense(true) },
               { label: 'More', onClick: () => { } },
             ]}
           />
@@ -296,15 +400,29 @@ export default function RecordLabelDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-100">
-                    {(activeTab === 'Track' ? topTracksData : topAlbumsData).map((item, idx) => (
-                      <tr key={idx} className="hover:bg-neutral-50/50">
-                        <td className="px-6 py-4 text-neutral-900 font-medium">{activeTab === 'Track' ? (item as { track: string }).track : (item as { album: string }).album}</td>
-                        <td className="px-6 py-4 text-neutral-600">{item.artist}</td>
-                        <td className="px-6 py-4 text-neutral-900">{item.revenue}</td>
-                        <td className="px-6 py-4 text-neutral-600">{item.streams}</td>
-                        <td className="px-6 py-4 text-neutral-600">{item.download}</td>
+                    {(activeTab === 'Track' ? topTracksData : topAlbumsData).length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-20">
+                          <div className="flex flex-col items-center justify-center text-center">
+                            <Table2 className="h-5 w-5 text-[#7B00D4]" />
+                            <p className="mt-2 text-sm font-medium text-neutral-700">No records yet</p>
+                            <p className="mt-1 max-w-xs text-xs text-neutral-500">
+                              Entries will appear here once financial data is added by your label.
+                            </p>
+                          </div>
+                        </td>
                       </tr>
-                    ))}
+                    ) : (
+                      (activeTab === 'Track' ? topTracksData : topAlbumsData).map((item, idx) => (
+                        <tr key={idx} className="hover:bg-neutral-50/50">
+                          <td className="px-6 py-4 text-neutral-900 font-medium">{activeTab === 'Track' ? (item as { track: string }).track : (item as { album: string }).album}</td>
+                          <td className="px-6 py-4 text-neutral-600">{item.artist}</td>
+                          <td className="px-6 py-4 text-neutral-900">{item.revenue}</td>
+                          <td className="px-6 py-4 text-neutral-600">{item.streams}</td>
+                          <td className="px-6 py-4 text-neutral-600">{item.download}</td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -358,24 +476,38 @@ export default function RecordLabelDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-100">
-                    {topAdvanceData.map((advance, idx) => (
-                      <tr key={idx} className="hover:bg-neutral-50/50">
-                        <td className="px-6 py-4 text-neutral-900 font-medium">{advance.id}</td>
-                        <td className="px-6 py-4 text-neutral-500">{advance.date}</td>
-                        <td className="px-6 py-4 text-neutral-900 font-medium">{advance.amount}</td>
-                        <td className="px-6 py-4 text-neutral-600">{advance.type}</td>
-                        <td className="px-6 py-4">
-                          <StatusPill label={advance.status as 'Repaid' | 'Outstanding' | 'Pending' | 'Approved'} />
-                        </td>
-                        <td className="px-6 py-4 text-neutral-600 truncate max-w-[200px]">{advance.purpose}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex gap-2 text-neutral-400">
-                            <button className="hover:text-[#7B00D4]"><MessageSquare className="h-4 w-4" /></button>
-                            <button className="hover:text-[#7B00D4]"><MoreVertical className="h-4 w-4" /></button>
+                    {topAdvanceData.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-20">
+                          <div className="flex flex-col items-center justify-center text-center">
+                            <Table2 className="h-5 w-5 text-[#7B00D4]" />
+                            <p className="mt-2 text-sm font-medium text-neutral-700">No records yet</p>
+                            <p className="mt-1 max-w-xs text-xs text-neutral-500">
+                              Entries will appear here once financial data is added by your label.
+                            </p>
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      topAdvanceData.map((advance, idx) => (
+                        <tr key={idx} className="hover:bg-neutral-50/50">
+                          <td className="px-6 py-4 text-neutral-900 font-medium">{advance.id}</td>
+                          <td className="px-6 py-4 text-neutral-500">{advance.date}</td>
+                          <td className="px-6 py-4 text-neutral-900 font-medium">{advance.amount}</td>
+                          <td className="px-6 py-4 text-neutral-600">{advance.type}</td>
+                          <td className="px-6 py-4">
+                            <StatusPill label={advance.status as 'Repaid' | 'Outstanding' | 'Pending' | 'Approved'} />
+                          </td>
+                          <td className="px-6 py-4 text-neutral-600 truncate max-w-[200px]">{advance.purpose}</td>
+                          <td className="px-6 py-4">
+                            <div className="flex gap-2 text-neutral-400">
+                              <button className="hover:text-[#7B00D4]"><MessageSquare className="h-4 w-4" /></button>
+                              <button className="hover:text-[#7B00D4]"><MoreVertical className="h-4 w-4" /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -438,18 +570,32 @@ export default function RecordLabelDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-100">
-                    {topExpensesData.map((expense, idx) => (
-                      <tr key={idx} className="hover:bg-neutral-50/50">
-                        <td className="px-6 py-4 text-neutral-900 font-medium">{expense.id}</td>
-                        <td className="px-6 py-4 text-neutral-500">{expense.date}</td>
-                        <td className="px-6 py-4 text-neutral-600">{expense.artist}</td>
-                        <td className="px-6 py-4 text-neutral-600">{expense.category}</td>
-                        <td className="px-6 py-4">
-                          <StatusPill label={expense.status as 'Repaid' | 'Outstanding' | 'Pending' | 'Approved'} />
+                    {topExpensesData.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-20">
+                          <div className="flex flex-col items-center justify-center text-center">
+                            <Table2 className="h-5 w-5 text-[#7B00D4]" />
+                            <p className="mt-2 text-sm font-medium text-neutral-700">No records yet</p>
+                            <p className="mt-1 max-w-xs text-xs text-neutral-500">
+                              Entries will appear here once financial data is added by your label.
+                            </p>
+                          </div>
                         </td>
-                        <td className="px-6 py-4 text-neutral-900 font-medium">{expense.amount}</td>
                       </tr>
-                    ))}
+                    ) : (
+                      topExpensesData.map((expense, idx) => (
+                        <tr key={idx} className="hover:bg-neutral-50/50">
+                          <td className="px-6 py-4 text-neutral-900 font-medium">{expense.id}</td>
+                          <td className="px-6 py-4 text-neutral-500">{expense.date}</td>
+                          <td className="px-6 py-4 text-neutral-600">{expense.artist}</td>
+                          <td className="px-6 py-4 text-neutral-600">{expense.category}</td>
+                          <td className="px-6 py-4">
+                            <StatusPill label={expense.status as 'Repaid' | 'Outstanding' | 'Pending' | 'Approved'} />
+                          </td>
+                          <td className="px-6 py-4 text-neutral-900 font-medium">{expense.amount}</td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -457,6 +603,35 @@ export default function RecordLabelDashboard() {
           </div>
         )}
       </div>
+
+      <UploadFileModal
+        isOpen={openUpload}
+        onClose={() => setOpenUpload(false)}
+        onUpload={handleUpload}
+      />
+      <AddAdvanceModal
+        open={openAdvance}
+        onClose={() => setOpenAdvance(false)}
+        onSubmit={handleAddAdvance}
+      />
+      <AddExpensesModal
+        open={openExpense}
+        onClose={() => setOpenExpense(false)}
+        onSubmit={handleAddExpense}
+      />
+      <UnrecognizedArtistsModal
+        isOpen={openUnrecognizedModal}
+        onClose={() => setOpenUnrecognizedModal(false)}
+        unrecognizedNames={pendingUnmatchedArtists}
+        systemArtists={recordLabelArtists}
+        onFinish={handleResolveUnrecognizedArtists}
+        onIgnore={handleIgnoreFromModal}
+      />
+      <IgnoreUnrecognizedConfirmModal
+        open={openIgnoreConfirm}
+        onClose={() => setOpenIgnoreConfirm(false)}
+        onConfirm={handleConfirmIgnore}
+      />
     </div>
   );
 }

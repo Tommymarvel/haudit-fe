@@ -14,6 +14,14 @@ export interface RoyaltyUploadsResponse {
   data: UploadedFile[];
 }
 
+export interface RoyaltyUploadResponse {
+  message: string;
+  rowsUpserted: number;
+  rowsProcessed: number;
+  fileUrl: string;
+  unmatchedArtists?: string[];
+}
+
 export interface Metric {
   current: number;
   percentageChange: number | null;

@@ -58,12 +58,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         names.find((n) => n.name_type === 'last_name')?.name ??
         raw.last_name ??
         '';
+      const namesFromEntries = names
+        .filter((n) => n.name_type === 'other_names')
+        .map((n) => n.name);
+      const other_names = namesFromEntries.length > 0 ? namesFromEntries : raw.other_names ?? [];
 
       const userData: User = {
         ...raw,
         id: raw._id ?? raw.id,
         first_name,
         last_name,
+        other_names,
         names,
       };
 

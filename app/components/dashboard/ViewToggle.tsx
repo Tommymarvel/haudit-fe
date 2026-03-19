@@ -1,7 +1,5 @@
 'use client';
 
-import { motion } from 'framer-motion';
-
 type ViewMode = 'streams' | 'revenue';
 
 interface ViewToggleProps {
@@ -13,19 +11,10 @@ export function ViewToggle({ view, onChange }: ViewToggleProps) {
     return (
         <div className="relative flex items-center rounded-full bg-[#F4F4F4] p-1 w-fit">
             {/* Sliding background */}
-            <motion.div
-                className="absolute h-[calc(100%-8px)] rounded-full bg-white shadow-sm"
-                layoutId="toggle-pill"
-                initial={false}
-                animate={{
-                    x: view === 'streams' ? 0 : '100%',
-                    width: '50%',
-                }}
-                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                style={{
-                    left: 4,
-                    top: 4,
-                }}
+            <span
+                className={`absolute left-1 top-1 h-[calc(100%-8px)] w-[calc(50%-4px)] rounded-full bg-white shadow-sm transition-transform duration-200 ease-out ${
+                    view === 'revenue' ? 'translate-x-full' : 'translate-x-0'
+                }`}
             />
 
             <button

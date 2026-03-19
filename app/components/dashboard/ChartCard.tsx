@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Card } from '@/components/ui/Card';
+import { ChartEmptyState } from '@/components/dashboard/ChartEmptyState';
 import {
   Line,
   XAxis,
@@ -192,6 +193,8 @@ interface ChartCardProps {
   onFooterActionClick?: () => void;
   /** Render standard donut or half-donut */
   isHalfDonut?: boolean;
+  emptyStateTitle?: string;
+  emptyStateDescription?: string;
 }
 
 const HOVER_KEY = '__hoverArea__';
@@ -211,6 +214,8 @@ const colorFor = (name: string) => {
     hash = (hash * 31 + name.charCodeAt(i)) | 0;
   return PALETTE[Math.abs(hash) % PALETTE.length];
 };
+const hasNumericValue = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) && value !== 0;
 
 /** ── Component ───────────────────────────────────────────────────── */
 export function ChartCard({
@@ -230,6 +235,8 @@ export function ChartCard({
   footerActionLabel,
   onFooterActionClick,
   isHalfDonut = false,
+  emptyStateTitle,
+  emptyStateDescription,
 }: ChartCardProps) {
   const stroke = color ?? (variant === 'line' ? '#7B00D4' : '#CA98EE');
 
@@ -281,6 +288,34 @@ export function ChartCard({
       ? (data as DonutSlice[]).reduce((s, d) => s + (Number(d.value) || 0), 0)
       : undefined;
 
+  const hasData = useMemo(() => {
+    if (variant === 'donut') {
+      return (data as DonutSlice[]).some((slice) => hasNumericValue(slice.value));
+    }
+
+    if (variant === 'bar') {
+      if (!yKey) return false;
+      const barData = data as Array<Record<string, unknown>>;
+      return barData.some((point) => hasNumericValue(point[yKey]));
+    }
+
+    if (!isLineVariant) return false;
+
+    const lineData = data as Array<Record<string, unknown>>;
+    if (!lineData.length) return false;
+
+    if (isMulti) {
+      const keys = (series ?? []).map((s) => s.key);
+      if (!keys.length) return false;
+      return lineData.some((point) =>
+        keys.some((key) => hasNumericValue(point[key]))
+      );
+    }
+
+    if (!yKey) return false;
+    return lineData.some((point) => hasNumericValue(point[yKey]));
+  }, [data, isLineVariant, isMulti, series, variant, yKey]);
+
   return (
     <Card className="overflow-hidden">
       <div
@@ -305,118 +340,93 @@ export function ChartCard({
 
         {/* Chart body */}
         <div className="relative h-[350px] rounded-xl bg-white pt-6">
-          <ResponsiveContainer width="100%" height="100%">
-            {isLineVariant ? (
-              <ComposedChart
-                data={chartData}
-                margin={{ left: 8, right: 16, top: 6, bottom: 24 }}
-                onMouseMove={(state) => {
-                  if (
-                    state?.isTooltipActive &&
-                    typeof state.activeTooltipIndex === 'number'
-                  ) {
-                    setActiveIndex(state.activeTooltipIndex);
-                  } else {
-                    setActiveIndex(null);
-                  }
-                }}
-                onMouseLeave={() => setActiveIndex(null)}
-              >
-                <defs>
-                  <linearGradient id="lineGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={stroke} stopOpacity={0.2} />
-                    <stop offset="100%" stopColor={stroke} stopOpacity={0} />
-                  </linearGradient>
-                  {/* neutral hover band for multi-series */}
-                  <linearGradient id="hoverBand" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#000" stopOpacity={0.1} />
-                    <stop offset="100%" stopColor="#000" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
+          {hasData ? (
+            <ResponsiveContainer width="100%" height="100%">
+              {isLineVariant ? (
+                <ComposedChart
+                  data={chartData}
+                  margin={{ left: 8, right: 16, top: 6, bottom: 24 }}
+                  onMouseMove={(state) => {
+                    if (
+                      state?.isTooltipActive &&
+                      typeof state.activeTooltipIndex === 'number'
+                    ) {
+                      setActiveIndex(state.activeTooltipIndex);
+                    } else {
+                      setActiveIndex(null);
+                    }
+                  }}
+                  onMouseLeave={() => setActiveIndex(null)}
+                >
+                  <defs>
+                    <linearGradient id="lineGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={stroke} stopOpacity={0.2} />
+                      <stop offset="100%" stopColor={stroke} stopOpacity={0} />
+                    </linearGradient>
+                    {/* neutral hover band for multi-series */}
+                    <linearGradient id="hoverBand" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#000" stopOpacity={0.1} />
+                      <stop offset="100%" stopColor="#000" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
 
-                <CartesianGrid
-                  vertical={false}
-                  stroke="#E5E7EB"
-                  strokeDasharray="3 3"
-                />
-                <XAxis
-                  dataKey={xKey}
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: '#AAAAAA', fontSize: 14 }}
-                />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: '#AAAAAA', fontSize: 14 }}
-                  padding={{ bottom: 8 }}
-                />
-                <Tooltip
-                  content={<BlackTooltip />}
-                  cursor={{ stroke: '#E5E7EB' }}
-                />
-
-                {/* Hover band:
-                    - single straight line: use Area + HOVER_KEY
-                    - multi-series OR curved lines: show a neutral ReferenceArea on hover */}
-                {isMulti || isCurvedLine ? (
-                  activeIndex != null && xLabels.length > 0 ? (
-                    <ReferenceArea
-                      x1={xLabels[Math.max(0, activeIndex - 1)]}
-                      x2={xLabels[activeIndex]}
-                      y1="dataMin"
-                      y2="dataMax"
-                      fill="url(#hoverBand)"
-                      strokeOpacity={0}
-                      ifOverflow="hidden"
-                    />
-                  ) : null
-                ) : (
-                  <Area
-                    type={lineType}
-                    dataKey={HOVER_KEY}
-                    fill="url(#lineGradient)"
-                    stroke="none"
-                    connectNulls
-                    isAnimationActive={false}
+                  <CartesianGrid
+                    vertical={false}
+                    stroke="#E5E7EB"
+                    strokeDasharray="3 3"
                   />
-                )}
+                  <XAxis
+                    dataKey={xKey}
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: '#AAAAAA', fontSize: 14 }}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: '#AAAAAA', fontSize: 14 }}
+                    padding={{ bottom: 8 }}
+                  />
+                  <Tooltip
+                    content={<BlackTooltip />}
+                    cursor={{ stroke: '#E5E7EB' }}
+                  />
 
-                {/* Lines */}
-                {isMulti
-                  ? (series as SeriesDef[]).map((s) => (
-                    <Line
-                      key={s.key}
-                      name={s.label ?? s.key}
+                  {/* Hover band:
+                      - single straight line: use Area + HOVER_KEY
+                      - multi-series OR curved lines: show a neutral ReferenceArea on hover */}
+                  {isMulti || isCurvedLine ? (
+                    activeIndex != null && xLabels.length > 0 ? (
+                      <ReferenceArea
+                        x1={xLabels[Math.max(0, activeIndex - 1)]}
+                        x2={xLabels[activeIndex]}
+                        y1="dataMin"
+                        y2="dataMax"
+                        fill="url(#hoverBand)"
+                        strokeOpacity={0}
+                        ifOverflow="hidden"
+                      />
+                    ) : null
+                  ) : (
+                    <Area
                       type={lineType}
-                      dataKey={s.key}
-                      stroke={s.color ?? colorFor(s.key)}
-                      strokeWidth={3}
-                      dot={showDots}
-                      activeDot={{ r: 4 }}
+                      dataKey={HOVER_KEY}
+                      fill="url(#lineGradient)"
+                      stroke="none"
                       connectNulls
-                      strokeLinecap="butt"
-                      strokeLinejoin="miter"
                       isAnimationActive={false}
                     />
-                  ))
-                  : yKey && (
-                    <>
-                      {/* Curved single-series wants always-on area under the line */}
-                      {isCurvedLine && (
-                        <Area
-                          type={lineType}
-                          dataKey={yKey}
-                          fill="url(#lineGradient)"
-                          stroke="none"
-                          connectNulls
-                          isAnimationActive={false}
-                        />
-                      )}
+                  )}
+
+                  {/* Lines */}
+                  {isMulti
+                    ? (series as SeriesDef[]).map((s) => (
                       <Line
+                        key={s.key}
+                        name={s.label ?? s.key}
                         type={lineType}
-                        dataKey={yKey}
-                        stroke={stroke}
+                        dataKey={s.key}
+                        stroke={s.color ?? colorFor(s.key)}
                         strokeWidth={3}
                         dot={showDots}
                         activeDot={{ r: 4 }}
@@ -425,76 +435,108 @@ export function ChartCard({
                         strokeLinejoin="miter"
                         isAnimationActive={false}
                       />
-                    </>
-                  )}
-              </ComposedChart>
-            ) : variant === 'bar' && yKey && xKey ? (
-              <BarChart
-                data={data as Array<Record<string, unknown>>}
-                margin={{ left: 8, right: 16, top: 6, bottom: 24 }}
-              >
-                <CartesianGrid vertical={false} stroke="#E5E7EB" />
-                <XAxis
-                  dataKey={xKey}
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: '#AAAAAA', fontSize: 14 }}
-                />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: '#AAAAAA', fontSize: 14 }}
-                  padding={{ bottom: 8 }}
-                />
-                <Tooltip
-                  content={<BlackTooltip />}
-                  cursor={{ fill: 'transparent' }}
-                />
-                <Bar dataKey={yKey} fill={stroke} radius={[10, 10, 0, 0]} />
-              </BarChart>
-            ) : (
-              <PieChart>
-                <Tooltip content={<BlackTooltip />} />
-                <Pie
-                  data={data as DonutSlice[]}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy={isHalfDonut ? "70%" : "50%"}
-                  startAngle={isHalfDonut ? 180 : undefined}
-                  endAngle={isHalfDonut ? 0 : undefined}
-                  innerRadius={70}
-                  outerRadius={95}
-                  cornerRadius={12}
-                  labelLine={false}
-                  label={!isHalfDonut && <CalloutLabel />}
-                  paddingAngle={3}
+                    ))
+                    : yKey && (
+                      <>
+                        {/* Curved single-series wants always-on area under the line */}
+                        {isCurvedLine && (
+                          <Area
+                            type={lineType}
+                            dataKey={yKey}
+                            fill="url(#lineGradient)"
+                            stroke="none"
+                            connectNulls
+                            isAnimationActive={false}
+                          />
+                        )}
+                        <Line
+                          type={lineType}
+                          dataKey={yKey}
+                          stroke={stroke}
+                          strokeWidth={3}
+                          dot={showDots}
+                          activeDot={{ r: 4 }}
+                          connectNulls
+                          strokeLinecap="butt"
+                          strokeLinejoin="miter"
+                          isAnimationActive={false}
+                        />
+                      </>
+                    )}
+                </ComposedChart>
+              ) : variant === 'bar' && yKey && xKey ? (
+                <BarChart
+                  data={data as Array<Record<string, unknown>>}
+                  margin={{ left: 8, right: 16, top: 6, bottom: 24 }}
                 >
-                  {(data as DonutSlice[]).map((s, i) => (
-                    <Cell key={i} fill={s.color} />
-                  ))}
-                </Pie>
-                <text
-                  x="50%"
-                  y={isHalfDonut ? "60%" : "46%"}
-                  textAnchor="middle"
-                  className="fill-neutral-900"
-                  style={{ fontSize: 30, fontWeight: 600 }}
-                >
-                  {Number(total).toLocaleString()}
-                </text>
-                <text
-                  x="50%"
-                  y={isHalfDonut ? "70%" : "58%"}
-                  textAnchor="middle"
-                  className="fill-neutral-500 whitespace-pre-line"
-                  style={{ fontSize: 12 }}
-                >
-                  {donutInnerText}
-                </text>
-              </PieChart>
-            )}
-          </ResponsiveContainer>
+                  <CartesianGrid vertical={false} stroke="#E5E7EB" />
+                  <XAxis
+                    dataKey={xKey}
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: '#AAAAAA', fontSize: 14 }}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: '#AAAAAA', fontSize: 14 }}
+                    padding={{ bottom: 8 }}
+                  />
+                  <Tooltip
+                    content={<BlackTooltip />}
+                    cursor={{ fill: 'transparent' }}
+                  />
+                  <Bar dataKey={yKey} fill={stroke} radius={[10, 10, 0, 0]} />
+                </BarChart>
+              ) : (
+                <PieChart>
+                  <Tooltip content={<BlackTooltip />} />
+                  <Pie
+                    data={data as DonutSlice[]}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy={isHalfDonut ? "70%" : "50%"}
+                    startAngle={isHalfDonut ? 180 : undefined}
+                    endAngle={isHalfDonut ? 0 : undefined}
+                    innerRadius={70}
+                    outerRadius={95}
+                    cornerRadius={12}
+                    labelLine={false}
+                    label={!isHalfDonut && <CalloutLabel />}
+                    paddingAngle={3}
+                  >
+                    {(data as DonutSlice[]).map((s, i) => (
+                      <Cell key={i} fill={s.color} />
+                    ))}
+                  </Pie>
+                  <text
+                    x="50%"
+                    y={isHalfDonut ? "60%" : "46%"}
+                    textAnchor="middle"
+                    className="fill-neutral-900"
+                    style={{ fontSize: 30, fontWeight: 600 }}
+                  >
+                    {Number(total).toLocaleString()}
+                  </text>
+                  <text
+                    x="50%"
+                    y={isHalfDonut ? "70%" : "58%"}
+                    textAnchor="middle"
+                    className="fill-neutral-500 whitespace-pre-line"
+                    style={{ fontSize: 12 }}
+                  >
+                    {donutInnerText}
+                  </text>
+                </PieChart>
+              )}
+            </ResponsiveContainer>
+          ) : (
+            <ChartEmptyState
+              title={emptyStateTitle}
+              description={emptyStateDescription}
+            />
+          )}
 
           {/* Footer pill – shows for ANY variant if you pass footerActionLabel */}
           {footerActionLabel && (

@@ -1,11 +1,18 @@
 "use client";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useNotifications } from "@/hooks/useNotifications";
 import { Button } from "@/components/ui/Button";
 import { X, Calendar, Search } from "lucide-react";
 import { cn } from "@/lib/cn";
 import AppShell from "@/components/layout/AppShell";
 import { toast } from "react-toastify";
+import { useAuth } from "@/contexts/AuthContext";
+import { useUnrecognizedArtists } from "@/hooks/useUnrecognizedArtists";
+import UnrecognizedArtistsModal from "@/components/ui/UnrecognizedArtistsModal";
+import IgnoreUnrecognizedConfirmModal from "@/components/ui/IgnoreUnrecognizedConfirmModal";
+import SoloUnrecognizedArtistsModal from "@/components/ui/SoloUnrecognizedArtistsModal";
+
+type NotificationTab = "all" | "file_upload";
 
 const NotificationIcon = ({ type }: { type: string }) => {
   const icons = {
@@ -86,30 +93,77 @@ const NotificationIcon = ({ type }: { type: string }) => {
       </svg>
     ),
     upload: (
-   <svg width="38" height="38" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g opacity="0.3">
-<rect x="6" y="6" width="26" height="26" rx="13" stroke="#535862" strokeWidth="2"/>
-</g>
-<g opacity="0.1">
-<rect x="1" y="1" width="36" height="36" rx="18" stroke="#535862" strokeWidth="2"/>
-</g>
-<path d="M12.3346 22.5352C11.3296 21.8625 10.668 20.7168 10.668 19.4167C10.668 17.4637 12.1609 15.8594 14.0678 15.6828C14.4578 13.3101 16.5182 11.5 19.0013 11.5C21.4844 11.5 23.5448 13.3101 23.9348 15.6828C25.8417 15.8594 27.3346 17.4637 27.3346 19.4167C27.3346 20.7168 26.673 21.8625 25.668 22.5352M15.668 22.3333L19.0013 19M19.0013 19L22.3346 22.3333M19.0013 19V26.5" stroke="#535862" strokeWidth="1.66667" strokeLinecap="round" strokeLinejoin="round"/>
-</svg>
-
+      <svg
+        width="38"
+        height="38"
+        viewBox="0 0 38 38"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <g opacity="0.3">
+          <rect
+            x="6"
+            y="6"
+            width="26"
+            height="26"
+            rx="13"
+            stroke="#535862"
+            strokeWidth="2"
+          />
+        </g>
+        <g opacity="0.1">
+          <rect
+            x="1"
+            y="1"
+            width="36"
+            height="36"
+            rx="18"
+            stroke="#535862"
+            strokeWidth="2"
+          />
+        </g>
+        <path
+          d="M12.3346 22.5352C11.3296 21.8625 10.668 20.7168 10.668 19.4167C10.668 17.4637 12.1609 15.8594 14.0678 15.6828C14.4578 13.3101 16.5182 11.5 19.0013 11.5C21.4844 11.5 23.5448 13.3101 23.9348 15.6828C25.8417 15.8594 27.3346 17.4637 27.3346 19.4167C27.3346 20.7168 26.673 21.8625 25.668 22.5352M15.668 22.3333L19.0013 19M19.0013 19L22.3346 22.3333M19.0013 19V26.5"
+          stroke="#535862"
+          strokeWidth="1.66667"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
     ),
   };
   return icons[type as keyof typeof icons] || icons.expense;
 };
 
 export default function NotificationsPage() {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<NotificationTab>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [showDatePicker, setShowDatePicker] = useState(false);
-  
+  const [showResolveModal, setShowResolveModal] = useState(false);
+  const [showIgnoreConfirm, setShowIgnoreConfirm] = useState(false);
+  const [selectedPendingArtist, setSelectedPendingArtist] = useState<string | null>(null);
+  const [ignoredPendingArtists, setIgnoredPendingArtists] = useState<string[]>([]);
+
   const { notifications, meta, unreadCount, markAsRead, markAllAsRead } =
     useNotifications(currentPage, 10, startDate, endDate);
+  const {
+    pendingArtistEntries,
+    isPendingArtistsLoading,
+    assignPendingArtists,
+    refreshPendingArtists,
+  } = useUnrecognizedArtists();
+
+  const systemArtists = useMemo(
+    () =>
+      (user?.names ?? [])
+        .filter((n) => n.name_type === "other_names")
+        .map((n) => ({ id: n._id, name: n.name })),
+    [user],
+  );
 
   const handleApplyDates = () => {
     setCurrentPage(1);
@@ -126,7 +180,7 @@ export default function NotificationsPage() {
   const filteredNotifications = notifications.filter(
     (n) =>
       n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      n.description.toLowerCase().includes(searchQuery.toLowerCase())
+      n.description.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const handleDismiss = async (id: string) => {
@@ -138,6 +192,34 @@ export default function NotificationsPage() {
 
   const showToastPreview = (type: "success" | "warning" | "info" | "error") => {
     toast[type](previewToastMessage);
+  };
+
+  const handleResolvePendingArtists = async (
+    mappings: Record<string, string>,
+  ) => {
+    if (Object.keys(mappings).length === 0) return;
+    await assignPendingArtists(mappings);
+    setShowResolveModal(false);
+    setSelectedPendingArtist(null);
+    await refreshPendingArtists();
+  };
+
+  const visiblePendingArtists = pendingArtistEntries.filter(
+    (entry) => !ignoredPendingArtists.includes(entry.name),
+  );
+
+  const getTimeLeftLabel = (willBeDeletedAt?: string) => {
+    if (!willBeDeletedAt) return "48:00";
+
+    const ms = new Date(willBeDeletedAt).getTime() - Date.now();
+    if (ms <= 0) return "00:00";
+
+    const totalMinutes = Math.floor(ms / (1000 * 60));
+    const hours = Math.floor(totalMinutes / 60)
+      .toString()
+      .padStart(2, "0");
+    const minutes = (totalMinutes % 60).toString().padStart(2, "0");
+    return `${hours}:${minutes}`;
   };
 
   return (
@@ -175,13 +257,13 @@ export default function NotificationsPage() {
                 onClick={() => setShowDatePicker(!showDatePicker)}
                 className={cn(
                   "rounded-lg border-neutral-200 bg-white",
-                  (startDate || endDate) ? "text-purple-600" : "text-neutral-400"
+                  startDate || endDate ? "text-purple-600" : "text-neutral-400",
                 )}
               >
                 <Calendar className="h-4 w-4" />
-                {(startDate || endDate) ? "Filtered" : "Select dates"}
+                {startDate || endDate ? "Filtered" : "Select dates"}
               </Button>
-              
+
               {/* Date Picker Dropdown */}
               {showDatePicker && (
                 <div className="absolute right-0 top-12 z-50 w-80 rounded-lg border border-neutral-200 bg-white p-4 shadow-lg">
@@ -230,6 +312,33 @@ export default function NotificationsPage() {
           </div>
         </div>
 
+        <div className="mb-6 border-b border-neutral-200">
+          <div className="flex items-center gap-6">
+            <button
+              onClick={() => setActiveTab("all")}
+              className={cn(
+                "relative py-2 text-sm font-medium",
+                activeTab === "all"
+                  ? "text-black after:absolute after:-bottom-px after:left-0 after:h-[2px] after:w-full after:bg-[#7B00D4]"
+                  : "text-neutral-500",
+              )}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setActiveTab("file_upload")}
+              className={cn(
+                "relative py-2 text-sm font-medium",
+                activeTab === "file_upload"
+                  ? "text-black after:absolute after:-bottom-px after:left-0 after:h-[2px] after:w-full after:bg-[#7B00D4]"
+                  : "text-neutral-500",
+              )}
+            >
+              File Upload
+            </button>
+          </div>
+        </div>
+
         {/* Toast Preview */}
         <div className="mb-6 rounded-2xl border border-neutral-200 bg-white p-4">
           <p className="text-sm font-semibold text-neutral-900 mb-3">
@@ -267,118 +376,224 @@ export default function NotificationsPage() {
           </div>
         </div>
 
-        {/* Notifications List */}
-        <div className="space-y-3">
-          {filteredNotifications.map((notification) => (
-            <div
-              key={notification._id}
-              className={cn(
-                "relative flex items-start gap-4 rounded-2xl border border-neutral-200 bg-white p-4 transition-colors",
-                !notification.is_read && "bg-purple-50/50"
-              )}
-            >
-              {/* Icon */}
-              <div className="flex-shrink-0 mt-1">
-                <NotificationIcon type={notification.type} />
-              </div>
+        {activeTab === "all" && (
+          <>
+            {/* Notifications List */}
+            <div className="space-y-3">
+              {filteredNotifications.map((notification) => (
+                <div
+                  key={notification._id}
+                  className={cn(
+                    "relative flex items-start gap-4 rounded-2xl border border-neutral-200 bg-white p-4 transition-colors",
+                    !notification.is_read && "bg-purple-50/50",
+                  )}
+                >
+                  {/* Icon */}
+                  <div className="flex-shrink-0 mt-1">
+                    <NotificationIcon type={notification.type} />
+                  </div>
 
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-semibold text-neutral-900 mb-1">
-                  {notification.title}
-                </h3>
-                <p className="text-sm text-neutral-600 mb-3">
-                  {notification.description}
-                </p>
-                <div className="flex items-center gap-4">
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold text-neutral-900 mb-1">
+                      {notification.title}
+                    </h3>
+                    <p className="text-sm text-neutral-600 mb-3">
+                      {notification.description}
+                    </p>
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={() => handleDismiss(notification._id)}
+                        className="text-sm text-neutral-600 hover:text-neutral-900 font-medium"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Close button */}
                   <button
                     onClick={() => handleDismiss(notification._id)}
-                    className="text-sm text-neutral-600 hover:text-neutral-900 font-medium"
+                    className="flex-shrink-0 text-neutral-400 hover:text-neutral-600 transition-colors"
                   >
-                    Dismiss
+                    <X className="h-5 w-5" />
                   </button>
-                  {/* <button className="text-sm text-purple-600 hover:text-purple-700 font-medium">
-                  View changes
-                </button> */}
+                </div>
+              ))}
+
+              {filteredNotifications.length === 0 && (
+                <div className="text-center py-12 text-neutral-500">
+                  {searchQuery
+                    ? "No notifications found"
+                    : "No notifications yet"}
+                </div>
+              )}
+            </div>
+
+            {/* Mark all as read button */}
+            {unreadCount > 0 && (
+              <div className="mt-6 flex justify-center">
+                <Button
+                  variant="outline"
+                  onClick={markAllAsRead}
+                  className="rounded-lg border-neutral-200"
+                >
+                  Mark all as read ({unreadCount})
+                </Button>
+              </div>
+            )}
+
+            {/* Pagination */}
+            {meta && meta.totalPages > 1 && (
+              <div className="mt-6 flex items-center justify-between border-t border-neutral-200 pt-4">
+                <p className="text-sm text-neutral-600">
+                  Showing {(meta.page - 1) * meta.limit + 1} to{" "}
+                  {Math.min(meta.page * meta.limit, meta.total)} of {meta.total}{" "}
+                  notifications
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.max(1, prev - 1))
+                    }
+                    disabled={meta.page === 1}
+                    className="rounded-lg border-neutral-200"
+                  >
+                    Previous
+                  </Button>
+
+                  {/* Page numbers */}
+                  <div className="flex gap-1">
+                    {Array.from(
+                      { length: meta.totalPages },
+                      (_, i) => i + 1,
+                    ).map((page) => (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={cn(
+                          "h-10 w-10 rounded-lg text-sm font-medium transition-colors",
+                          page === meta.page
+                            ? "bg-purple-600 text-white"
+                            : "bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50",
+                        )}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      setCurrentPage((prev) =>
+                        Math.min(meta.totalPages, prev + 1),
+                      )
+                    }
+                    disabled={meta.page === meta.totalPages}
+                    className="rounded-lg border-neutral-200"
+                  >
+                    Next
+                  </Button>
                 </div>
               </div>
-
-              {/* Close button */}
-              <button
-                onClick={() => handleDismiss(notification._id)}
-                className="flex-shrink-0 text-neutral-400 hover:text-neutral-600 transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-          ))}
-
-          {filteredNotifications.length === 0 && (
-            <div className="text-center py-12 text-neutral-500">
-              {searchQuery ? "No notifications found" : "No notifications yet"}
-            </div>
-          )}
-        </div>
-
-        {/* Mark all as read button */}
-        {unreadCount > 0 && (
-          <div className="mt-6 flex justify-center">
-            <Button
-              variant="outline"
-              onClick={markAllAsRead}
-              className="rounded-lg border-neutral-200"
-            >
-              Mark all as read ({unreadCount})
-            </Button>
-          </div>
+            )}
+          </>
         )}
 
-        {/* Pagination */}
-        {meta && meta.totalPages > 1 && (
-          <div className="mt-6 flex items-center justify-between border-t border-neutral-200 pt-4">
-            <p className="text-sm text-neutral-600">
-              Showing {((meta.page - 1) * meta.limit) + 1} to {Math.min(meta.page * meta.limit, meta.total)} of {meta.total} notifications
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={meta.page === 1}
-                className="rounded-lg border-neutral-200"
-              >
-                Previous
-              </Button>
-              
-              {/* Page numbers */}
-              <div className="flex gap-1">
-                {Array.from({ length: meta.totalPages }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={cn(
-                      "h-10 w-10 rounded-lg text-sm font-medium transition-colors",
-                      page === meta.page
-                        ? "bg-purple-600 text-white"
-                        : "bg-white border border-neutral-200 text-neutral-600 hover:bg-neutral-50"
-                    )}
+        {activeTab === "file_upload" && (
+          <div className="space-y-4">
+            <div className="space-y-3">
+              {isPendingArtistsLoading ? (
+                <div className="text-center py-12 text-neutral-500">
+                  Loading pending names...
+                </div>
+              ) : visiblePendingArtists.length === 0 ? (
+                <div className="text-center py-12 text-neutral-500">
+                  No pending file upload names
+                </div>
+              ) : (
+                visiblePendingArtists.map((entry) => (
+                  <div
+                    key={`${entry.name}-${entry.willBeDeletedAt || ''}`}
+                    className="rounded-2xl border border-neutral-200 bg-white p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
                   >
-                    {page}
-                  </button>
-                ))}
-              </div>
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-full bg-[#FEF3F2] text-[#F04438]">
+                        <X className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xl leading-none font-semibold text-neutral-900 mb-2">
+                          Name mismatch
+                        </p>
+                        <p className="text-sm text-neutral-600">
+                          Unrecognized artist name found in file upload: <span className="font-semibold text-neutral-900">{entry.name}</span>
+                        </p>
+                        <p className="text-lg leading-none font-semibold text-neutral-700 mt-2">
+                          Time left: {getTimeLeftLabel(entry.willBeDeletedAt)}
+                        </p>
+                      </div>
+                    </div>
 
-              <Button
-                variant="outline"
-                onClick={() => setCurrentPage(prev => Math.min(meta.totalPages, prev + 1))}
-                disabled={meta.page === meta.totalPages}
-                className="rounded-lg border-neutral-200"
-              >
-                Next
-              </Button>
+                    <div className="flex gap-3">
+                      <Button
+                        variant="outline"
+                        className="rounded-full border-[#7B00D4] text-[#7B00D4] hover:bg-[#7B00D4]/5 px-8"
+                        onClick={() => {
+                          setSelectedPendingArtist(entry.name);
+                          setShowIgnoreConfirm(true);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        className="rounded-full bg-[#7B00D4] text-white hover:bg-[#6A00B8] px-8"
+                        onClick={() => {
+                          setSelectedPendingArtist(entry.name);
+                          setShowResolveModal(true);
+                        }}
+                      >
+                        Resolve
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
       </div>
+
+      <UnrecognizedArtistsModal
+        isOpen={showResolveModal && user?.user_type === "record_label"}
+        onClose={() => setShowResolveModal(false)}
+        unrecognizedNames={selectedPendingArtist ? [selectedPendingArtist] : []}
+        systemArtists={systemArtists}
+        onFinish={handleResolvePendingArtists}
+        onIgnore={() => setShowIgnoreConfirm(true)}
+      />
+      <SoloUnrecognizedArtistsModal
+        isOpen={showResolveModal && user?.user_type !== "record_label"}
+        onClose={() => setShowResolveModal(false)}
+        unrecognizedNames={selectedPendingArtist ? [selectedPendingArtist] : []}
+        currentArtistId={user?.id || ""}
+        onFinish={handleResolvePendingArtists}
+        onIgnore={() => setShowIgnoreConfirm(true)}
+      />
+      <IgnoreUnrecognizedConfirmModal
+        open={showIgnoreConfirm}
+        onClose={() => setShowIgnoreConfirm(false)}
+        onConfirm={async () => {
+          setShowIgnoreConfirm(false);
+          setShowResolveModal(false);
+          if (selectedPendingArtist) {
+            setIgnoredPendingArtists((prev) => [...prev, selectedPendingArtist]);
+          }
+          setSelectedPendingArtist(null);
+          await refreshPendingArtists();
+        }}
+      />
     </AppShell>
   );
 }

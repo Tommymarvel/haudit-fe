@@ -3,9 +3,10 @@
 import { ChartCard } from '@/components/dashboard/ChartCard';
 import { Card, CardBody } from '@/components/ui/Card';
 import { BRAND } from '@/lib/brand';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Table2 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { useExpenses } from '@/hooks/useExpenses';
+import { Select } from '@/components/ui/Select';
 
 const CategoryDisplay: Record<string, string> = {
   marketting: 'Marketing',
@@ -19,7 +20,7 @@ const LabelArtistExpenses = () => {
   const [category, setCategory] = useState('All Categories');
 
   const trendData = useMemo(() => {
-    if (!trend || trend.length === 0) return [{ label: 'No data', value: 0 }];
+    if (!trend || trend.length === 0) return [];
     return trend.map((item) => ({
       label: new Date(item.day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       value: item.amount,
@@ -71,19 +72,17 @@ const LabelArtistExpenses = () => {
                 className="h-10 w-60 rounded-xl border border-neutral-200 bg-[#F4F4F4] px-3 text-sm outline-none focus:ring-2 focus:ring-neutral-100"
               />
             </div>
-            <div className="relative">
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="h-10 appearance-none rounded-xl border border-neutral-200 bg-white pl-3 pr-8 text-sm outline-none focus:ring-2 focus:ring-neutral-100"
-              >
-                <option>All Categories</option>
-                <option value="marketting">Marketing</option>
-                <option value="production">Production</option>
-                <option value="personal">Personal</option>
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black" />
-            </div>
+            <Select
+              value={category}
+              onChange={setCategory}
+              className="w-[170px]"
+              options={[
+                { label: 'All Categories', value: 'All Categories' },
+                { label: 'Marketing', value: 'marketting' },
+                { label: 'Production', value: 'production' },
+                { label: 'Personal', value: 'personal' },
+              ]}
+            />
           </div>
 
           <div className="overflow-x-auto">
@@ -130,8 +129,14 @@ const LabelArtistExpenses = () => {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-neutral-500">
-                      No expenses found
+                    <td colSpan={6} className="py-20">
+                      <div className="flex flex-col items-center justify-center text-center">
+                        <Table2 className="h-5 w-5 text-[#7B00D4]" />
+                        <p className="mt-2 text-sm font-medium text-neutral-700">No records yet</p>
+                        <p className="mt-1 max-w-xs text-xs text-neutral-500">
+                          Entries will appear here once financial data is added by your label.
+                        </p>
+                      </div>
                     </td>
                   </tr>
                 )}

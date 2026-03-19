@@ -1,19 +1,13 @@
-'use client';
+"use client";
 
-import { useState, useRef, useEffect } from 'react';
-import Link from 'next/link';
-import Image from 'next/image';
-import { usePathname } from 'next/navigation';
-import {
-  Home,
-  HelpCircle,
-  ChevronDown,
-  Bell,
-  BarChart2,
-} from 'lucide-react';
-import { cn } from '@/lib/cn';
-import { useAuth } from '@/contexts/AuthContext';
-import { useNotifications } from '@/hooks/useNotifications';
+import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import { usePathname } from "next/navigation";
+import { Home, HelpCircle, ChevronDown, Bell } from "lucide-react";
+import { cn } from "@/lib/cn";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNotifications } from "@/hooks/useNotifications";
 
 type NavItem = {
   href?: string;
@@ -25,22 +19,13 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   {
-    href: '/dashboard',
-    label: 'Dashboard',
+    href: "/dashboard",
+    label: "Dashboard",
     icon: <Home className="h-5 w-5" />,
   },
   {
-    label: 'Analytics',
-    icon: <BarChart2 className="h-5 w-5" />,
-    subItems: [
-      { href: '/royalty/report-insight', label: 'Report Insight' },
-      { href: '/catalog', label: 'Catalog' },
-      { href: '/split', label: 'Split' },
-    ],
-  },
-  {
-    href: '/advance',
-    label: 'Advance',
+    href: "/advance",
+    label: "Advance",
     icon: (
       <svg
         width="20"
@@ -58,8 +43,8 @@ const NAV: NavItem[] = [
     ),
   },
   {
-    href: '/expenses',
-    label: 'Expenses',
+    href: "/expenses",
+    label: "Expenses",
     icon: (
       <svg
         width="18"
@@ -78,8 +63,8 @@ const NAV: NavItem[] = [
     ),
   },
   {
-    href: '/royalty',
-    label: 'Royalty',
+    href: "/royalty",
+    label: "Royalty",
     icon: (
       <svg
         width="20"
@@ -98,15 +83,24 @@ const NAV: NavItem[] = [
     ),
   },
   {
-    href: '/notifications',
-    label: 'Notifications',
+    href: "/notifications",
+    label: "Notifications",
     icon: <Bell className="h-5 w-5" />,
     badge: true,
   },
 ];
 
-
-function SidebarLink({ href, label, icon, badge }: { href?: string; label: string; icon: React.ReactNode; badge?: boolean }) {
+function SidebarLink({
+  href,
+  label,
+  icon,
+  badge,
+}: {
+  href?: string;
+  label: string;
+  icon: React.ReactNode;
+  badge?: boolean;
+}) {
   const pathname = usePathname();
   const active = href ? pathname?.startsWith(href) : false;
   const { unreadCount } = useNotifications();
@@ -117,28 +111,24 @@ function SidebarLink({ href, label, icon, badge }: { href?: string; label: strin
     <Link
       href={href}
       className={cn(
-        'group relative mb-1 flex items-center gap-3  px-3 py-2 text-sm text-[#5A5A5A] hover:bg-[#DFDFDF]',
-        active && 'bg-[#DFDFDF] text-neutral-900 border-l-2 border-[#7B00D4]'
+        "group relative mb-1 flex items-center gap-3  px-3 py-2 text-sm text-[#5A5A5A] hover:bg-[#DFDFDF]",
+        active && "bg-[#DFDFDF] text-neutral-900 border-l-2 border-[#7B00D4]",
       )}
     >
-      <span
-        className={cn('text-[#5A5A5A]', active && 'text-[#7B00D4]')}
-      >
+      <span className={cn("text-[#5A5A5A]", active && "text-[#7B00D4]")}>
         {icon}
       </span>
-      <span className="truncate text-[#5A5A5A] text-base ">
-        {label}
-      </span>
+      <span className="truncate text-[#5A5A5A] text-base ">{label}</span>
       {badge && unreadCount > 0 && (
         <span className="flex h-5 w-5 items-center justify-center self-end rounded-full bg-red-500 text-[10px] font-semibold text-white">
-          {unreadCount > 9 ? '9+' : unreadCount}
+          {unreadCount > 9 ? "9+" : unreadCount}
         </span>
       )}
       {/* Purple active strip */}
       <span
         className={cn(
-          'absolute right-0 top-0 h-full w-[3px] rounded-l-sm bg-[#7B00D4] transition-opacity',
-          active ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'
+          "absolute right-0 top-0 h-full w-[3px] rounded-l-sm bg-[#7B00D4] transition-opacity",
+          active ? "opacity-100" : "opacity-0 group-hover:opacity-50",
         )}
       />
     </Link>
@@ -147,7 +137,7 @@ function SidebarLink({ href, label, icon, badge }: { href?: string; label: strin
 
 function SidebarCollapsibleLink({ item }: { item: NavItem }) {
   const pathname = usePathname();
-  const isActive = item.subItems?.some(sub => pathname?.startsWith(sub.href));
+  const isActive = item.subItems?.some((sub) => pathname?.startsWith(sub.href));
   const [open, setOpen] = useState(isActive || false);
 
   return (
@@ -156,15 +146,25 @@ function SidebarCollapsibleLink({ item }: { item: NavItem }) {
         type="button"
         onClick={() => setOpen(!open)}
         className={cn(
-          'w-full group relative flex items-center justify-between px-3 py-2 text-sm text-[#5A5A5A] hover:bg-[#DFDFDF]',
-          isActive && 'bg-[#DFDFDF] text-neutral-900 border-l-2 border-[#7B00D4]'
+          "w-full group relative flex items-center justify-between px-3 py-2 text-sm text-[#5A5A5A] hover:bg-[#DFDFDF]",
+          isActive &&
+            "bg-[#DFDFDF] text-neutral-900 border-l-2 border-[#7B00D4]",
         )}
       >
         <div className="flex items-center gap-3">
-          <span className={cn('text-[#5A5A5A]', isActive && 'text-[#7B00D4]')}>{item.icon}</span>
-          <span className="truncate text-[#5A5A5A] text-base">{item.label}</span>
+          <span className={cn("text-[#5A5A5A]", isActive && "text-[#7B00D4]")}>
+            {item.icon}
+          </span>
+          <span className="truncate text-[#5A5A5A] text-base">
+            {item.label}
+          </span>
         </div>
-        <ChevronDown className={cn("h-4 w-4 transition-transform text-[#5A5A5A]", open && "rotate-180")} />
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 transition-transform text-[#5A5A5A]",
+            open && "rotate-180",
+          )}
+        />
 
         {isActive && (
           <span className="absolute right-0 top-0 h-full w-[3px] rounded-l-sm bg-[#7B00D4]" />
@@ -180,8 +180,8 @@ function SidebarCollapsibleLink({ item }: { item: NavItem }) {
                 key={sub.href}
                 href={sub.href}
                 className={cn(
-                  'group relative flex items-center pl-[44px] pr-3 py-2 text-sm text-[#5A5A5A] hover:bg-[#DFDFDF]',
-                  isSubActive && 'bg-[#DFDFDF] text-neutral-900 font-medium'
+                  "group relative flex items-center pl-[44px] pr-3 py-2 text-sm text-[#5A5A5A] hover:bg-[#DFDFDF]",
+                  isSubActive && "bg-[#DFDFDF] text-neutral-900 font-medium",
                 )}
               >
                 {sub.label}
@@ -199,15 +199,15 @@ function SidebarCollapsibleLink({ item }: { item: NavItem }) {
 
 function ArtistSelector() {
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState('Label Overview');
+  const [selected, setSelected] = useState("Label Overview");
   const ref = useRef<HTMLDivElement>(null);
-  const artists = ['Diamond Platnumz', 'Sarkodie', 'Burna Boy', 'Yemi Alade'];
+  const artists = ["Diamond Platnumz", "Sarkodie", "Burna Boy", "Yemi Alade"];
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) =>
       !ref.current?.contains(e.target as Node) && setOpen(false);
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
   return (
@@ -225,7 +225,10 @@ function ArtistSelector() {
         <div className="absolute left-0 mt-2 w-full z-50 rounded-xl border border-neutral-200 bg-white shadow-xl overflow-hidden py-1">
           <button
             className="w-full text-left px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50 font-medium"
-            onClick={() => { setSelected('Label Overview'); setOpen(false); }}
+            onClick={() => {
+              setSelected("Label Overview");
+              setOpen(false);
+            }}
           >
             Label Overview
           </button>
@@ -234,11 +237,16 @@ function ArtistSelector() {
             <div key={artist}>
               <button
                 className="w-full text-left px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50"
-                onClick={() => { setSelected(artist); setOpen(false); }}
+                onClick={() => {
+                  setSelected(artist);
+                  setOpen(false);
+                }}
               >
                 {artist}
               </button>
-              {idx < artists.length - 1 && <div className="h-px bg-neutral-100 mx-4" />}
+              {idx < artists.length - 1 && (
+                <div className="h-px bg-neutral-100 mx-4" />
+              )}
             </div>
           ))}
         </div>
@@ -263,28 +271,18 @@ export default function Sidebar() {
         </div>
 
         {/* Period / Artist selector */}
-        {user?.user_type === 'record_label' ? (
-          <ArtistSelector />
-        ) : (
-          <button
-            type="button"
-            className="mt-3 w-full inline-flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-[#5A5A5A] hover:bg-neutral-50"
-          >
-            Haudit Jan 2025 to July 2025
-            <ChevronDown className="h-4 w-4 text-neutral-500" />
-          </button>
-        )}
+        {user?.user_type === "record_label" ? <ArtistSelector /> : null}
       </div>
 
       {/* Nav */}
       <nav className="mt-3 flex-1 overflow-y-auto ">
-        {NAV.map((item) => (
+        {NAV.map((item) =>
           item.subItems ? (
             <SidebarCollapsibleLink key={item.label} item={item} />
           ) : (
             <SidebarLink key={item.label} {...item} />
-          )
-        ))}
+          ),
+        )}
       </nav>
 
       {/* Bottom actions */}
@@ -339,11 +337,9 @@ export default function Sidebar() {
             )}
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-[#3C3C3C]">
-                {user ? `${user.first_name} ${user.last_name}` : 'Loading...'}
+                {user ? `${user.first_name} ${user.last_name}` : "Loading..."}
               </p>
-              <p className="truncate text-sm text-[#777777]">
-                {user?.email}
-              </p>
+              <p className="truncate text-sm text-[#777777]">{user?.email}</p>
             </div>
           </div>
           <button onClick={logout} className="hover:opacity-75" title="Logout">

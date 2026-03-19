@@ -5,11 +5,12 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { ChartCard } from '@/components/dashboard/ChartCard';
 import { StatusPill } from '@/components/ui/StatusPill';
-import { Calendar } from 'lucide-react';
+import { Calendar, Table2 } from 'lucide-react';
 import Image from 'next/image';
 import AdvanceDetailsModal, { AdvanceDetails } from './AdvanceDetailsModal';
 import { BRAND } from '@/lib/brand';
 import { useAdvance } from '@/hooks/useAdvance';
+import { Select } from '@/components/ui/Select';
 import { toast } from 'react-toastify';
 
 type Row = {
@@ -79,8 +80,8 @@ const LabelArtistAdvance = () => {
       { name: 'Personal', value: typePercentage?.personal?.totalUSD || 0, color: BRAND.green },
     ];
     return {
-      marketing: marketingTrendData.length > 0 ? marketingTrendData : [{ label: 'No data', value: 0 }],
-      personal: personalTrendData.length > 0 ? personalTrendData : [{ label: 'No data', value: 0 }],
+      marketing: marketingTrendData,
+      personal: personalTrendData,
       donut: realDonut,
     };
   }, [marketingTrend, personalTrend, typePercentage]);
@@ -229,16 +230,17 @@ const LabelArtistAdvance = () => {
                       onChange={(e) => setQ(e.target.value)}
                       className="h-10 w-60 rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-neutral-100"
                     />
-                    <select
+                    <Select
                       value={status}
-                      onChange={(e) => setStatus(e.target.value)}
-                      className="h-10 rounded-xl border border-neutral-200 bg-white px-3 text-sm"
-                    >
-                      <option>All</option>
-                      <option>Repaid</option>
-                      <option>Outstanding</option>
-                      <option>Pending</option>
-                    </select>
+                      onChange={setStatus}
+                      className="w-[150px]"
+                      options={[
+                        { label: 'All', value: 'All' },
+                        { label: 'Repaid', value: 'Repaid' },
+                        { label: 'Outstanding', value: 'Outstanding' },
+                        { label: 'Pending', value: 'Pending' },
+                      ]}
+                    />
                   </div>
                 </div>
                 <div className="flex-1 overflow-x-auto overflow-y-auto">
@@ -254,25 +256,39 @@ const LabelArtistAdvance = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-neutral-100">
-                      {filtered.map((r, i) => (
-                        <tr key={i} className="text-neutral-800">
-                          <td className="py-3 pl-3 pr-4 whitespace-nowrap">{r.date}</td>
-                          <td className="py-3 pr-4 whitespace-nowrap">${r.amount.toLocaleString()}</td>
-                          <td className="py-3 pr-4 whitespace-nowrap">{r.type}</td>
-                          <td className="py-3 pr-4 whitespace-nowrap">
-                            <StatusPill label={r.status} />
-                          </td>
-                          <td className="py-3 pr-4 whitespace-nowrap">{r.source}</td>
-                          <td className="py-3 pr-4 text-right whitespace-nowrap">
-                            <button
-                              onClick={() => openDetailsFor(r)}
-                              className="text-sm text-[#7B00D4] hover:underline"
-                            >
-                              View details
-                            </button>
+                      {filtered.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-20">
+                            <div className="flex flex-col items-center justify-center text-center">
+                              <Table2 className="h-5 w-5 text-[#7B00D4]" />
+                              <p className="mt-2 text-sm font-medium text-neutral-700">No records yet</p>
+                              <p className="mt-1 max-w-xs text-xs text-neutral-500">
+                                Entries will appear here once financial data is added by your label.
+                              </p>
+                            </div>
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        filtered.map((r, i) => (
+                          <tr key={i} className="text-neutral-800">
+                            <td className="py-3 pl-3 pr-4 whitespace-nowrap">{r.date}</td>
+                            <td className="py-3 pr-4 whitespace-nowrap">${r.amount.toLocaleString()}</td>
+                            <td className="py-3 pr-4 whitespace-nowrap">{r.type}</td>
+                            <td className="py-3 pr-4 whitespace-nowrap">
+                              <StatusPill label={r.status} />
+                            </td>
+                            <td className="py-3 pr-4 whitespace-nowrap">{r.source}</td>
+                            <td className="py-3 pr-4 text-right whitespace-nowrap">
+                              <button
+                                onClick={() => openDetailsFor(r)}
+                                className="text-sm text-[#7B00D4] hover:underline"
+                              >
+                                View details
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -314,16 +330,30 @@ const LabelArtistAdvance = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
-                  {filtered.map((r, i) => (
-                    <tr key={i} className="text-neutral-800">
-                      <td className="py-3 pl-3 pr-4 whitespace-nowrap">{r.source}</td>
-                      <td className="py-3 pr-4 whitespace-nowrap">${r.totalAdvance?.toLocaleString() || '0'}</td>
-                      <td className="py-3 pr-4 whitespace-nowrap">${r.repaidAdvance?.toLocaleString() || '0'}</td>
-                      <td className="py-3 pr-4 whitespace-nowrap">${r.advanceBalance?.toLocaleString() || '0'}</td>
-                      <td className="py-3 pr-4 whitespace-nowrap">{r.phone || 'N/A'}</td>
-                      <td className="py-3 pr-3 whitespace-nowrap">{r.email || 'N/A'}</td>
+                  {filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-20">
+                        <div className="flex flex-col items-center justify-center text-center">
+                          <Table2 className="h-5 w-5 text-[#7B00D4]" />
+                          <p className="mt-2 text-sm font-medium text-neutral-700">No records yet</p>
+                          <p className="mt-1 max-w-xs text-xs text-neutral-500">
+                            Entries will appear here once financial data is added by your label.
+                          </p>
+                        </div>
+                      </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filtered.map((r, i) => (
+                      <tr key={i} className="text-neutral-800">
+                        <td className="py-3 pl-3 pr-4 whitespace-nowrap">{r.source}</td>
+                        <td className="py-3 pr-4 whitespace-nowrap">${r.totalAdvance?.toLocaleString() || '0'}</td>
+                        <td className="py-3 pr-4 whitespace-nowrap">${r.repaidAdvance?.toLocaleString() || '0'}</td>
+                        <td className="py-3 pr-4 whitespace-nowrap">${r.advanceBalance?.toLocaleString() || '0'}</td>
+                        <td className="py-3 pr-4 whitespace-nowrap">{r.phone || 'N/A'}</td>
+                        <td className="py-3 pr-3 whitespace-nowrap">{r.email || 'N/A'}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

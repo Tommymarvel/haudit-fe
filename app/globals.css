@@ -64,3 +64,12 @@ body {
   font-family: var(--font-inter), sans-serif;
 }
 
+/* Use brand purple for dropdown option hover/selected states instead of browser default blue. */
+select option:hover,
+select option:focus,
+select option:checked,
+select option[selected] {
+  background: var(--color-brand-purple);
+  color: #ffffff;
+}
+

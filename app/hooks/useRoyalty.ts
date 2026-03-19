@@ -1,7 +1,23 @@
 import useSWR, { mutate } from 'swr';
 import axiosInstance from '@/lib/axiosinstance';
-import { RoyaltyDashboardMetrics, RoyaltyUploadsResponse, TrackStreamsDsp } from '@/lib/types/royalty';
+import { AxiosError } from 'axios';
+import { RoyaltyDashboardMetrics, RoyaltyUploadResponse, RoyaltyUploadsResponse, TrackStreamsDsp } from '@/lib/types/royalty';
 import { toast } from 'react-toastify';
+
+type UnmatchedArtistApiItem = {
+  name: string;
+  createdAt?: string;
+  willBeDeletedAt?: string;
+};
+
+const isUnmatchedArtistApiArray = (payload: unknown): payload is UnmatchedArtistApiItem[] =>
+  Array.isArray(payload) &&
+  payload.every(
+    (item) =>
+      typeof item === 'object' &&
+      item !== null &&
+      typeof (item as { name?: unknown }).name === 'string',
+  );
 
 const fetcher = (url: string) => axiosInstance.get(url).then((res) => res.data);
 
@@ -18,15 +34,13 @@ export function useRoyalty() {
 
   const { data: trackRevenueDsp, error: trackRevenueDspError, isLoading: isTrackRevenueDspLoading } = useSWR<Array<{ assetId: string; assetTitle: string; dsps: Array<{ dsp: string; revenue: number }> }>>('/royalties/track-revenue-dsp', fetcher);
 
-  const { data: trackStreamsDsp, error: trackStreamsDspError, isLoading: isTrackStreamsDspLoading } = useSWR<TrackStreamsDsp>('/royalties/track-streams-dsp', fetcher);
-
-  const { data: tracksStreams, error: tracksStreamsError, isLoading: isTracksStreamsLoading } = useSWR<{ collectiveTotalStreams: number; tracks: Array<{ title: string; totalStreams: number }> }>('/royalties/tracks-streams', fetcher);
+  const { data: trackStreamsDsp, error: trackStreamsDspError, isLoading: isTrackStreamsDspLoading } = useSWR<TrackStreamsDsp>('/royalties/track-streams-dsp?monthly=false', fetcher);
 
   const uploadRoyaltyFile = async (
     file: File,
     source: string,
     onProgress?: (message: string) => void,
-  ) => {
+  ): Promise<RoyaltyUploadResponse> => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('source', source);
@@ -48,15 +62,35 @@ export function useRoyalty() {
     };
 
     try {
-      await axiosInstance.post('/royalties/upload', formData, {
+      const response = await axiosInstance.post<RoyaltyUploadResponse>('/royalties/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       toast.success('Royalty file uploaded successfully');
       mutate('/royalties/uploads?limit=10&page=1'); // Revalidate uploads list
       mutate('/royalties/dashboard'); // Revalidate dashboard metrics
+      return response.data;
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message || 'Failed to upload royalty file');
+      const error = err as AxiosError<{ message?: string } | UnmatchedArtistApiItem[]>;
+      const payload = error.response?.data;
+
+      // Backend may now return 400 with unmatched artist objects requiring user resolution.
+      if (error.response?.status === 400 && isUnmatchedArtistApiArray(payload)) {
+        const unmatchedArtists = payload.map((item) => item.name);
+        toast.warning('Upload contains unrecognized artist names. Please resolve them.');
+        return {
+          message: 'Upload requires artist resolution',
+          rowsUpserted: 0,
+          rowsProcessed: 0,
+          fileUrl: '',
+          unmatchedArtists,
+        };
+      }
+
+      const message =
+        !Array.isArray(payload) && payload?.message
+          ? payload.message
+          : 'Failed to upload royalty file';
+      toast.error(message);
       throw err;
     } finally {
       eventSource.close();
@@ -85,9 +119,6 @@ export function useRoyalty() {
     trackStreamsDsp,
     isTrackStreamsDspLoading,
     trackStreamsDspError,
-    tracksStreams,
-    isTracksStreamsLoading,
-    tracksStreamsError,
     uploadRoyaltyFile,
   };
 }

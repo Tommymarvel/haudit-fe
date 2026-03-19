@@ -6,7 +6,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { ChartCard } from '@/components/dashboard/ChartCard';
 import { StatusPill } from '@/components/ui/StatusPill';
-import { Calendar, Plus, ChevronDown } from 'lucide-react';
+import { Calendar, Plus, ChevronDown, Table2 } from 'lucide-react';
 import { Menu } from '@/components/ui/Menu';
 import { useState, useMemo } from 'react';
 import Image from 'next/image';
@@ -17,6 +17,7 @@ import AddAdvanceModal, { NewAdvancePayload } from './AddAdvanceModal';
 import { BRAND } from '@/lib/brand';
 import { useAdvance } from '@/hooks/useAdvance';
 import { uploadFile } from '@/lib/utils/upload';
+import { Select } from '@/components/ui/Select';
 
 type Row = {
   id: string;
@@ -99,8 +100,8 @@ const RecordLabelAdvance = () => {
     ];
 
     return {
-      marketing: marketingTrendData.length > 0 ? marketingTrendData : [{ label: 'No data', value: 0 }],
-      personal: personalTrendData.length > 0 ? personalTrendData : [{ label: 'No data', value: 0 }],
+      marketing: marketingTrendData,
+      personal: personalTrendData,
       donut: realDonut,
     };
   }, [marketingTrend, personalTrend, typePercentage]);
@@ -292,20 +293,17 @@ const RecordLabelAdvance = () => {
                   className="pl-10 pr-4 py-2.5 w-full sm:w-64 rounded-xl border border-neutral-200 bg-[#F4F4F4] text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
                 />
               </div>
-              <div className="relative">
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  className="appearance-none flex items-center gap-2 px-10 pl-4 py-2.5 rounded-xl border border-neutral-200 bg-white text-sm text-neutral-700 hover:bg-neutral-50"
-                  style={{ minWidth: "120px" }}
-                >
-                  <option>All status</option>
-                  <option>Approved</option>
-                  <option>Pending</option>
-                  <option>Rejected</option>
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 pointer-events-none" />
-              </div>
+              <Select
+                value={status}
+                onChange={setStatus}
+                className="min-w-[120px] h-[42px] px-4"
+                options={[
+                  { label: 'All status', value: 'All status' },
+                  { label: 'Approved', value: 'Approved' },
+                  { label: 'Pending', value: 'Pending' },
+                  { label: 'Rejected', value: 'Rejected' },
+                ]}
+              />
             </div>
           </div>
 
@@ -323,24 +321,38 @@ const RecordLabelAdvance = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
-                {filtered.map((advance, idx) => (
-                  <tr key={idx} className="hover:bg-neutral-50/50">
-                    <td className="px-6 py-4 text-neutral-900 font-medium">{advance.id}</td>
-                    <td className="px-6 py-4 text-neutral-500">{advance.date}</td>
-                    <td className="px-6 py-4 text-neutral-900 font-medium">{advance.amount}</td>
-                    <td className="px-6 py-4 text-neutral-600">{advance.type}</td>
-                    <td className="px-6 py-4">
-                      <StatusPill label={advance.status as 'Repaid' | 'Outstanding' | 'Pending' | 'Approved'} />
-                    </td>
-                    <td className="px-6 py-4 text-neutral-600">{advance.artist}</td>
-                    <td className="px-6 py-4">
-                      <div className="flex gap-2 text-neutral-400 justify-end">
-                        <button className="hover:text-[#7B00D4]"><MessageSquare className="h-4 w-4" /></button>
-                        <button className="hover:text-[#7B00D4]"><MoreVertical className="h-4 w-4" /></button>
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-20">
+                      <div className="flex flex-col items-center justify-center text-center">
+                        <Table2 className="h-5 w-5 text-[#7B00D4]" />
+                        <p className="mt-2 text-sm font-medium text-neutral-700">No records yet</p>
+                        <p className="mt-1 max-w-xs text-xs text-neutral-500">
+                          Entries will appear here once financial data is added by your label.
+                        </p>
                       </div>
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filtered.map((advance, idx) => (
+                    <tr key={idx} className="hover:bg-neutral-50/50">
+                      <td className="px-6 py-4 text-neutral-900 font-medium">{advance.id}</td>
+                      <td className="px-6 py-4 text-neutral-500">{advance.date}</td>
+                      <td className="px-6 py-4 text-neutral-900 font-medium">{advance.amount}</td>
+                      <td className="px-6 py-4 text-neutral-600">{advance.type}</td>
+                      <td className="px-6 py-4">
+                        <StatusPill label={advance.status as 'Repaid' | 'Outstanding' | 'Pending' | 'Approved'} />
+                      </td>
+                      <td className="px-6 py-4 text-neutral-600">{advance.artist}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex gap-2 text-neutral-400 justify-end">
+                          <button className="hover:text-[#7B00D4]"><MessageSquare className="h-4 w-4" /></button>
+                          <button className="hover:text-[#7B00D4]"><MoreVertical className="h-4 w-4" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

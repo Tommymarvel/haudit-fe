@@ -22,6 +22,18 @@ const ProfileSchema = Yup.object({
     other_names: Yup.array().of(Yup.string()),
 });
 
+type ProfileFormValues = {
+    firstName: string;
+    lastName: string;
+    other_names: string[];
+};
+
+type PhotoFormValues = {
+    avatar: File | null;
+};
+
+const normalizeName = (name: string) => name.trim().toLowerCase();
+
 function AvatarDropzone({
     value,
     onChange,
@@ -163,13 +175,16 @@ function InputWithIcon({ name, placeholder, type = 'text' }: { name: string; pla
 }
 
 export default function SettingsPage() {
-    const { user } = useAuth();
+    const { user, refreshUser } = useAuth();
     
-    const initialValues = {
+    const profileInitialValues: ProfileFormValues = {
         firstName: user?.first_name || '',
         lastName: user?.last_name || '',
         other_names: (user?.other_names || []) as string[],
-        avatar: null as File | null,
+    };
+
+    const photoInitialValues: PhotoFormValues = {
+        avatar: null,
     };
 
     return (
@@ -180,132 +195,206 @@ export default function SettingsPage() {
                     Here you can update your personal information, password, and notification preferences.
                 </p>
 
-                <Formik
-                    initialValues={initialValues}
-                    enableReinitialize
-                    validationSchema={ProfileSchema}
-                    onSubmit={async (vals, helpers) => {
-                        try {
-                            let avatarUrl: string | undefined = undefined;
+                <div className="mt-[30px]">
+                    {/* Personal Info Section */}
+                    <div className="mb-8">
+                        <div className="flex items-center justify-between border-b border-neutral-200 pb-5 mb-5">
+                            <div>
+                                <h2 className="text-[18px] font-semibold text-[#181D27]">Personal Info</h2>
+                                <p className="text-sm text-[#535862] ">Update your profile photo and the names displayed on your account.</p>
+                            </div>
+                        </div>
 
-                            // Upload avatar file if selected
-                            if (vals.avatar) {
-                                try {
-                                    avatarUrl = await uploadFile(vals.avatar, 'profile');
-                                } catch (err) {
-                                    console.error('Upload error:', err);
-                                    toast.error('Failed to upload avatar');
+                        <Formik
+                            initialValues={photoInitialValues}
+                            enableReinitialize
+                            onSubmit={async (vals, helpers) => {
+                                if (!vals.avatar) {
+                                    toast.error('Select a photo to upload');
                                     helpers.setSubmitting(false);
                                     return;
                                 }
-                            }
 
-                            // Prepare payload for profile update
-                            const payload = {
-                                first_name: vals.firstName.trim(),
-                                last_name: vals.lastName.trim(),
-                                other_names: vals.other_names,
-                                ...(avatarUrl && { avatar: avatarUrl }),
-                            };
-
-                            // Send update to API
-                            await axiosInstance.patch('/auth/profile', payload);
-                            toast.success('Profile updated successfully');
-                            
-                            // Reset avatar field
-                            helpers.setFieldValue('avatar', null);
-                        } catch (err: unknown) {
-                            console.error('Update failed:', err);
-                            const error = err as { response?: { data?: { message?: string } } };
-                            toast.error(error.response?.data?.message || 'Failed to update profile');
-                        } finally {
-                            helpers.setSubmitting(false);
-                        }
-                    }}
-                >
-                    {({ isSubmitting, setFieldValue, values }) => (
-                        <Form className="mt-[30px]">
-                            {/* Personal Info Section */}
-                            <div className="mb-8">
-                                <div className="flex items-center justify-between border-b border-neutral-200 pb-5 mb-5">
-                                    <div>
-                                        <h2 className="text-[18px] font-semibold text-[#181D27]">Personal Info</h2>
-                                        <p className="text-sm text-[#535862] ">Please enter your current password to change your password.</p>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    {/* Avatar */}
-                                    <FormRow
-                                        label="Your photo"
-                                        required
-                                        helpText="This will be displayed on your profile."
-                                    >
-                                        <AvatarDropzone
-                                            value={values.avatar ?? null}
-                                            onChange={(file) => setFieldValue('avatar', file)}
-                                            currentAvatar={user?.avatar}
-                                        />
-                                    </FormRow>
-
-                                    {/* First name */}
-                                    <FormRow label="First name" required>
-                                        <InputWithIcon name="firstName" placeholder="Enter your first name" />
-                                    </FormRow>
-
-                                    {/* Last name */}
-                                    <FormRow label="Last name" required>
-                                        <InputWithIcon name="lastName" placeholder="Enter your last name" />
-                                    </FormRow>
-
-                                    {/* Other Names */}
-                                    <FormRow 
-                                        label="Other Names" 
-                                        required
-                                        helpText="This will be displayed on your profile."
-                                    >
-                                        <div className="space-y-2">
-                                            <TagInput
-                                                value={values.other_names}
-                                                onChange={(newValue) => setFieldValue('other_names', newValue)}
-                                                placeholder="Type artist name and press Enter"
+                                try {
+                                    const avatarUrl = await uploadFile(vals.avatar, 'profile');
+                                    await axiosInstance.patch('/auth/profile', { avatar: avatarUrl });
+                                    await refreshUser();
+                                    helpers.resetForm();
+                                    toast.success('Profile photo updated successfully');
+                                } catch (err: unknown) {
+                                    console.error('Photo update failed:', err);
+                                    const error = err as { response?: { data?: { message?: string } } };
+                                    toast.error(error.response?.data?.message || 'Failed to update photo');
+                                } finally {
+                                    helpers.setSubmitting(false);
+                                }
+                            }}
+                        >
+                            {({ isSubmitting, setFieldValue, values }) => (
+                                <Form>
+                                    <div className="space-y-2">
+                                        <FormRow
+                                            label="Your photo"
+                                            required
+                                            helpText="This will be displayed on your profile."
+                                        >
+                                            <AvatarDropzone
+                                                value={values.avatar ?? null}
+                                                onChange={(file) => setFieldValue('avatar', file)}
+                                                currentAvatar={user?.avatar}
                                             />
-                                            <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 flex gap-2">
-                                                <span className="text-yellow-600 flex-shrink-0 mt-0.5">
-                                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                        <path d="M7.99992 5.33301V7.99967M7.99992 10.6663H8.00659M14.6666 7.99967C14.6666 11.6816 11.6818 14.6663 7.99992 14.6663C4.31802 14.6663 1.33325 11.6816 1.33325 7.99967C1.33325 4.31778 4.31802 1.33301 7.99992 1.33301C11.6818 1.33301 14.6666 4.31778 14.6666 7.99967Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                                                    </svg>
-                                                </span>
-                                                <p className="text-sm text-yellow-800">
-                                                    Manage your alternate names, including stage names and aliases used in reporting files.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </FormRow>
-                                </div>
-                            </div>
+                                        </FormRow>
+                                    </div>
 
-                            {/* Actions (Cancel/Update) - Placed here as per design flow, or at bottom */}
-                            <div className="flex items-center justify-end gap-3 py-4">
-                                <button
-                                    type="button"
-                                    className="rounded-lg border border-neutral-300 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 shadow-sm"
-                                    onClick={() => window.history.back()}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={isSubmitting}
-                                    className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-60"
-                                    style={{ backgroundColor: BRAND_PURPLE }}
-                                >
-                                    Update details
-                                </button>
-                            </div>
-                        </Form>
-                    )}
-                </Formik>
+                                    <div className="flex items-center justify-end gap-3 py-4">
+                                        <button
+                                            type="submit"
+                                            disabled={isSubmitting}
+                                            className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-60"
+                                            style={{ backgroundColor: BRAND_PURPLE }}
+                                        >
+                                            Update photo
+                                        </button>
+                                    </div>
+                                </Form>
+                            )}
+                        </Formik>
+
+                        <Formik
+                            initialValues={profileInitialValues}
+                            enableReinitialize
+                            validationSchema={ProfileSchema}
+                            onSubmit={async (vals, helpers) => {
+                                try {
+                                    const payload = {
+                                        first_name: vals.firstName.trim(),
+                                        last_name: vals.lastName.trim(),
+                                    };
+
+                                    const desiredOtherNames = Array.from(
+                                        new Set(vals.other_names.map((name) => name.trim()).filter(Boolean))
+                                    );
+
+                                    const existingOtherNameEntries = (user?.names ?? []).filter(
+                                        (entry) => entry.name_type === 'other_names'
+                                    );
+
+                                    const existingByNormalized = new Map(
+                                        existingOtherNameEntries.map((entry) => [normalizeName(entry.name), entry])
+                                    );
+
+                                    const desiredByNormalized = new Map<string, string>();
+                                    desiredOtherNames.forEach((name) => {
+                                        const normalized = normalizeName(name);
+                                        if (!desiredByNormalized.has(normalized)) {
+                                            desiredByNormalized.set(normalized, name);
+                                        }
+                                    });
+
+                                    const otherNameRequests: Promise<unknown>[] = [];
+
+                                    existingOtherNameEntries.forEach((entry) => {
+                                        const normalized = normalizeName(entry.name);
+                                        if (!desiredByNormalized.has(normalized)) {
+                                            otherNameRequests.push(
+                                                axiosInstance.delete(`/auth/user-names/${entry._id}`)
+                                            );
+                                        }
+                                    });
+
+                                    desiredByNormalized.forEach((name, normalized) => {
+                                        const existing = existingByNormalized.get(normalized);
+                                        if (!existing) {
+                                            otherNameRequests.push(
+                                                axiosInstance.post('/auth/user-names', {
+                                                    name,
+                                                    name_type: 'other_names',
+                                                })
+                                            );
+                                            return;
+                                        }
+
+                                        if (existing.name !== name) {
+                                            otherNameRequests.push(
+                                                axiosInstance.patch(`/auth/user-names/${existing._id}`, {
+                                                    name,
+                                                    name_type: 'other_names',
+                                                })
+                                            );
+                                        }
+                                    });
+
+                                    await axiosInstance.patch('/auth/profile', payload);
+                                    await Promise.all(otherNameRequests);
+                                    await refreshUser();
+                                    toast.success('Profile updated successfully');
+                                } catch (err: unknown) {
+                                    console.error('Update failed:', err);
+                                    const error = err as { response?: { data?: { message?: string } } };
+                                    toast.error(error.response?.data?.message || 'Failed to update profile');
+                                } finally {
+                                    helpers.setSubmitting(false);
+                                }
+                            }}
+                        >
+                            {({ isSubmitting, setFieldValue, values }) => (
+                                <Form>
+                                    <div className="space-y-2">
+                                        <FormRow label="First name" required>
+                                            <InputWithIcon name="firstName" placeholder="Enter your first name" />
+                                        </FormRow>
+
+                                        <FormRow label="Last name" required>
+                                            <InputWithIcon name="lastName" placeholder="Enter your last name" />
+                                        </FormRow>
+
+                                        <FormRow 
+                                            label="Other Names" 
+                                            required
+                                            helpText="This will be displayed on your profile."
+                                        >
+                                            <div className="space-y-2">
+                                                <TagInput
+                                                    value={values.other_names}
+                                                    onChange={(newValue) => setFieldValue('other_names', newValue)}
+                                                    placeholder="Type artist name and press Enter"
+                                                />
+                                                <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 flex gap-2">
+                                                    <span className="text-yellow-600 flex-shrink-0 mt-0.5">
+                                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                            <path d="M7.99992 5.33301V7.99967M7.99992 10.6663H8.00659M14.6666 7.99967C14.6666 11.6816 11.6818 14.6663 7.99992 14.6663C4.31802 14.6663 1.33325 11.6816 1.33325 7.99967C1.33325 4.31778 4.31802 1.33301 7.99992 1.33301C11.6818 1.33301 14.6666 4.31778 14.6666 7.99967Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                                        </svg>
+                                                    </span>
+                                                    <p className="text-sm text-yellow-800">
+                                                        Manage your alternate names, including stage names and aliases used in reporting files.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </FormRow>
+                                    </div>
+
+                                    <div className="flex items-center justify-end gap-3 py-4">
+                                        <button
+                                            type="button"
+                                            className="rounded-lg border border-neutral-300 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 shadow-sm"
+                                            onClick={() => window.history.back()}
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={isSubmitting}
+                                            className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-60"
+                                            style={{ backgroundColor: BRAND_PURPLE }}
+                                        >
+                                            Update details
+                                        </button>
+                                    </div>
+                                </Form>
+                            )}
+                        </Formik>
+                    </div>
+                </div>
 
                 {/* Password Section - Separate Form */}
                 <Formik

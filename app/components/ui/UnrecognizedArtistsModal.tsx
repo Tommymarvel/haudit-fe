@@ -1,14 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import Modal from './Modal';
 import { Button } from './Button';
-
-interface UnrecognizedArtist {
-    originalName: string;
-    selectedArtistId?: string;
-}
+import { Select } from './Select';
 
 interface UnrecognizedArtistsModalProps {
     isOpen: boolean;
@@ -16,7 +12,7 @@ interface UnrecognizedArtistsModalProps {
     unrecognizedNames: string[];
     systemArtists: { id: string; name: string }[];
     onFinish: (mappings: Record<string, string>) => Promise<void>;
-    onAssignNewArtist?: () => void;
+    onIgnore?: () => void;
 }
 
 export default function UnrecognizedArtistsModal({
@@ -25,7 +21,7 @@ export default function UnrecognizedArtistsModal({
     unrecognizedNames,
     systemArtists,
     onFinish,
-    onAssignNewArtist,
+    onIgnore,
 }: UnrecognizedArtistsModalProps) {
     // Local state to keep track of checked status and selected mapping for each unrecognized name
     const [selections, setSelections] = useState<
@@ -39,6 +35,14 @@ export default function UnrecognizedArtistsModal({
     });
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        const initial: Record<string, { checked: boolean; artistId: string }> = {};
+        unrecognizedNames.forEach((name) => {
+            initial[name] = { checked: false, artistId: '' };
+        });
+        setSelections(initial);
+    }, [unrecognizedNames, isOpen]);
 
     // Handle individual checkbox toggle
     const toggleCheck = (name: string) => {
@@ -65,21 +69,6 @@ export default function UnrecognizedArtistsModal({
     // Master dropdown (bottom left) - applies chosen artist to ALL CHECKED names
     const [masterArtistId, setMasterArtistId] = useState('');
 
-    const handleApplyMasterArtist = () => {
-        if (!masterArtistId) return;
-
-        setSelections((prev) => {
-            const next = { ...prev };
-            Object.keys(next).forEach((name) => {
-                if (next[name].checked) {
-                    next[name].artistId = masterArtistId;
-                }
-            });
-            return next;
-        });
-        setMasterArtistId(''); // Reset after applying
-    };
-
     const handleFinish = async () => {
         setIsSubmitting(true);
         try {
@@ -101,7 +90,7 @@ export default function UnrecognizedArtistsModal({
         <Modal
             open={isOpen}
             onClose={onClose}
-            size="lg" // 3xl or lg depending on original Modal.tsx sizes. lg is max-w-3xl there.
+            maxWidthClassName="max-w-[600px]"
             headerVariant="none"
             closeVariant="island"
         >
@@ -161,33 +150,16 @@ export default function UnrecognizedArtistsModal({
 
                                 {/* Individual Dropdown */}
                                 <div className="w-2/3 pl-4">
-                                    <div className="relative">
-                                        <select
-                                            value={currentArtistId}
-                                            onChange={(e) => handleSelectArtist(name, e.target.value)}
-                                            className="w-full appearance-none rounded-2xl border border-neutral-300 bg-transparent px-4 py-2 text-sm text-neutral-700 outline-none focus:border-[#7B00D4] focus:ring-1 focus:ring-[#7B00D4]"
-                                        >
-                                            <option value="" disabled className="text-neutral-400">
-                                                Select artist to assign data to
-                                            </option>
-                                            {systemArtists.map((artist) => (
-                                                <option key={artist.id} value={artist.id}>
-                                                    {artist.name}
-                                                </option>
-                                            ))}
-                                        </select>
-                                        {/* Select Arrow Icon */}
-                                        <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
-                                            <svg
-                                                className="h-4 w-4 text-neutral-500"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                            </svg>
-                                        </div>
-                                    </div>
+                                    <Select
+                                        value={currentArtistId}
+                                        onChange={(value) => handleSelectArtist(name, value)}
+                                        className="w-full rounded-2xl border-neutral-300 bg-transparent"
+                                        placeholder="Select artist to assign data to"
+                                        options={systemArtists.map((artist) => ({
+                                            label: artist.name,
+                                            value: artist.id,
+                                        }))}
+                                    />
                                 </div>
                             </div>
                         );
@@ -201,48 +173,30 @@ export default function UnrecognizedArtistsModal({
                         <span className="text-base text-neutral-800">
                             Choose artist all selected name will be assigned to
                         </span>
-                        <div className="relative">
-                            <select
-                                value={masterArtistId}
-                                onChange={(e) => {
-                                    setMasterArtistId(e.target.value);
-                                    // Optionally auto-apply when selected, or wait for another action
-                                    // For now, let's auto-apply if we assume that's the UX
-                                    if (e.target.value) {
-                                        setSelections((prev) => {
-                                            const next = { ...prev };
-                                            Object.keys(next).forEach((n) => {
-                                                if (next[n].checked) {
-                                                    next[n].artistId = e.target.value;
-                                                }
-                                            });
-                                            return next;
+                        <Select
+                            value={masterArtistId}
+                            onChange={(value) => {
+                                setMasterArtistId(value);
+                                if (value) {
+                                    setSelections((prev) => {
+                                        const next = { ...prev };
+                                        Object.keys(next).forEach((n) => {
+                                            if (next[n].checked) {
+                                                next[n].artistId = value;
+                                            }
                                         });
-                                        setMasterArtistId(''); // reset dropdown after applying
-                                    }
-                                }}
-                                className="w-full appearance-none rounded-2xl border border-neutral-300 bg-transparent px-4 py-2 text-sm text-neutral-700 outline-none focus:border-[#7B00D4] focus:ring-1 focus:ring-[#7B00D4]"
-                            >
-                                <option value="" disabled className="text-neutral-400">
-                                    Select artist to assign data to
-                                </option>
-                                {systemArtists.map((artist) => (
-                                    <option key={artist.id} value={artist.id}>
-                                        {artist.name}
-                                    </option>
-                                ))}
-                            </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
-                                <svg
-                                    className="h-4 w-4 text-neutral-500"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                            </div>
-                        </div>
+                                        return next;
+                                    });
+                                    setMasterArtistId('');
+                                }
+                            }}
+                            className="w-full rounded-2xl border-neutral-300 bg-transparent"
+                            placeholder="Select artist to assign data to"
+                            options={systemArtists.map((artist) => ({
+                                label: artist.name,
+                                value: artist.id,
+                            }))}
+                        />
                     </div>
 
                     {/* Buttons */}
@@ -250,9 +204,9 @@ export default function UnrecognizedArtistsModal({
                         <Button
                             variant="outline"
                             className="flex-1 rounded-2xl border-[1.5px] border-[#7B00D4] text-[#7B00D4] hover:bg-[#7B00D4]/5 py-2.5"
-                            onClick={onAssignNewArtist}
+                            onClick={onIgnore}
                         >
-                            Assign new artist
+                            Ignore for now
                         </Button>
                         <Button
                             variant="primary"

@@ -8,7 +8,7 @@ import { cn } from '@/lib/cn';
 const OPTIONS = [
     { label: 'Track streams per DSP', path: '/royalty/track-streams-per-dsp' },
     { label: 'Track revenue per DSP', path: '/royalty/track-rev-per-dsp' },
-    { label: 'Streams per track', path: '/royalty/stream-per-track?view=streams' },
+    { label: 'Streams per Track', path: '/royalty/stream-per-track?view=streams' },
     { label: 'Revenue per Track', path: '/royalty/stream-per-track?view=revenue' },
     { label: 'Streams per DSP', path: '/royalty/stream-per-dsp?view=streams' },
     { label: 'Revenue per DSP', path: '/royalty/stream-per-dsp?view=revenue' },

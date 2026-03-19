@@ -1,16 +1,33 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { ChevronDown, Download, Calendar } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import useSWR from "swr";
+import axiosInstance from "@/lib/axiosinstance";
+import { RoyaltyDashboardMetrics, TrackStreamsDsp } from "@/lib/types/royalty";
+import generatePDF from "react-to-pdf";
 
 import { useRouter } from "next/navigation";
 
 import { ChartCard } from "@/components/dashboard/ChartCard";
+import { ChartEmptyState } from "@/components/dashboard/ChartEmptyState";
 import UploadFileModal from "@/components/ui/UploadFileModal";
 import { useRoyalty } from "@/hooks/useRoyalty";
+import { useUnrecognizedArtists } from "@/hooks/useUnrecognizedArtists";
+import { useAuth } from "@/contexts/AuthContext";
+import SoloUnrecognizedArtistsModal from "@/components/ui/SoloUnrecognizedArtistsModal";
+import IgnoreUnrecognizedConfirmModal from "@/components/ui/IgnoreUnrecognizedConfirmModal";
 
 const PURPLE = "#7B00D4";
+
+type TrackRevenueDspResponse = Array<{
+  assetId: string;
+  assetTitle: string;
+  dsps: Array<{ dsp: string; revenue: number }>;
+}>;
+
+type AlbumRevenueResponse = Array<{ revenue: number; day: string }>;
 
 const FILTER_OPTIONS = [
   { key: "all_months", label: "All months" },
@@ -21,6 +38,31 @@ const FILTER_OPTIONS = [
 /* ---------- Shared UI ---------- */
 
 type FilterKey = "all_months" | "last_30_days" | "this_year";
+
+const fetcher = (url: string) => axiosInstance.get(url).then((res) => res.data);
+
+function buildFilterQuery(filterKey: FilterKey, year: number, includeMonthly = false) {
+  const params = new URLSearchParams();
+  params.set("year", String(year));
+
+  if (includeMonthly) {
+    params.set("monthly", "false");
+  }
+
+  if (filterKey === "last_30_days") {
+    const to = new Date();
+    const from = new Date();
+    from.setDate(to.getDate() - 30);
+    params.set("from", from.toISOString().slice(0, 10));
+    params.set("to", to.toISOString().slice(0, 10));
+  }
+
+  if (filterKey !== "all_months") {
+    params.set("filter", filterKey);
+  }
+
+  return params.toString();
+}
 
 function SoftHeader({
   title,
@@ -47,6 +89,7 @@ function FilterPill({ label = "All months" }: { label?: string }) {
 
 const PRIMARY = "#000";
 const PRIMARY_SOFT = "#CA98EE";
+const MAX_PILL_SEGMENTS = 32;
 
 
 type Territory = {
@@ -55,44 +98,40 @@ type Territory = {
   revenue: number;
 };
 
+function getCappedSegmentCount(value: number, maxValue: number) {
+  if (!Number.isFinite(value) || value <= 0 || !Number.isFinite(maxValue) || maxValue <= 0) {
+    return 0;
+  }
+  const normalized = Math.round((value / maxValue) * MAX_PILL_SEGMENTS);
+  return Math.max(1, Math.min(MAX_PILL_SEGMENTS, normalized));
+}
+
 const TERRITORY_DATA: Record<FilterKey, Territory[]> = {
-  all_months: [
-    { name: "Denmark", streams: 1500, revenue: 300 },
-    { name: "United States", streams: 2460, revenue: 730 },
-    { name: "Japan", streams: 8320, revenue: 703 },
-    { name: "Brazil", streams: 11800, revenue: 740 },
-    { name: "Nigeria", streams: 950, revenue: 705 },
-  ],
-  last_30_days: [
-    { name: "Denmark", streams: 1200, revenue: 520 },
-    { name: "United States", streams: 18000, revenue: 610 },
-    { name: "Japan", streams: 7100, revenue: 460 },
-    { name: "Brazil", streams: 9300, revenue: 530 },
-    { name: "Nigeria", streams: 2200, revenue: 340 },
-  ],
-  this_year: [
-    { name: "Denmark", streams: 9800, revenue: 3100 },
-    { name: "United States", streams: 99000, revenue: 8120 },
-    { name: "Japan", streams: 4000, revenue: 5100 },
-    { name: "Brazil", streams: 6000, revenue: 4600 },
-    { name: "Nigeria", streams: 500, revenue: 2100 },
-  ],
+  all_months: [],
+  last_30_days: [],
+  this_year: [],
 };
 
 
 export default function SoloArtistRoyalty() {
+  const { user } = useAuth();
   const { 
     dashboardMetrics, 
     uploads, 
     isUploadsLoading, 
     uploadRoyaltyFile,
-    albumPerformance 
+    albumRevenue,
+    trackRevenueDsp,
+    trackStreamsDsp,
   } = useRoyalty();
+  const { assignPendingArtists, refreshPendingArtists } = useUnrecognizedArtists();
 
   const [activeTab, setActiveTab] = useState<"analytics" | "files">(
     "analytics"
   );
-  const [year] = useState(2024);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [showYearPicker, setShowYearPicker] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [filter1, setFilter1] = useState("all_months");
   const [filter2, setFilter2] = useState("all_months");
   const [filter3, setFilter3] = useState("all_months");
@@ -105,7 +144,58 @@ export default function SoloArtistRoyalty() {
   const [filter, setFilter] = useState<FilterKey>("all_months");
   const [menuOpen, setMenuOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [openUnrecognizedModal, setOpenUnrecognizedModal] = useState(false);
+  const [openIgnoreConfirm, setOpenIgnoreConfirm] = useState(false);
+  const [pendingUnmatchedArtists, setPendingUnmatchedArtists] = useState<string[]>([]);
+  const exportRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  const { data: trackRevenueDspFiltered } = useSWR<TrackRevenueDspResponse>(
+    `/royalties/track-revenue-dsp?${buildFilterQuery(filter1 as FilterKey, selectedYear, true)}`,
+    fetcher,
+  );
+
+  const { data: trackStreamsDspFiltered } = useSWR<TrackStreamsDsp>(
+    `/royalties/track-streams-dsp?${buildFilterQuery(filter2 as FilterKey, selectedYear, true)}`,
+    fetcher,
+  );
+
+  const { data: albumRevenueFiltered } = useSWR<AlbumRevenueResponse>(
+    `/royalties/album-revenue?${buildFilterQuery(filter3 as FilterKey, selectedYear)}`,
+    fetcher,
+  );
+
+  const { data: dashboardMetricsFiltered } = useSWR<RoyaltyDashboardMetrics>(
+    `/royalties/dashboard?${buildFilterQuery(filter4 as FilterKey, selectedYear)}`,
+    fetcher,
+  );
+
+  const handleExportPdf = async () => {
+    if (!exportRef.current) return;
+
+    try {
+      setIsExporting(true);
+      await generatePDF(exportRef, {
+        filename: `solo-royalty-${selectedYear}.pdf`,
+      });
+    } catch (error) {
+      console.error("Export PDF failed", error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const effectiveTrackRevenueDsp = trackRevenueDspFiltered ?? trackRevenueDsp;
+  const effectiveTrackStreamsDsp = trackStreamsDspFiltered ?? trackStreamsDsp;
+  const effectiveAlbumRevenue = albumRevenueFiltered ?? albumRevenue;
+  const effectiveDashboardMetrics = dashboardMetricsFiltered ?? dashboardMetrics;
+  const filteredUploads = useMemo(
+    () =>
+      (uploads?.data ?? []).filter(
+        (file) => new Date(file.uploadedAt).getFullYear() === selectedYear,
+      ),
+    [uploads, selectedYear],
+  );
 
   const data = [...TERRITORY_DATA[filter]].sort(
     (a, b) => b.streams - a.streams
@@ -122,60 +212,120 @@ export default function SoloArtistRoyalty() {
 
 const handleUpload = async (file: File, organization: string, onProgress: (msg: string) => void) => {
   try {
-    await uploadRoyaltyFile(file, organization, onProgress);
+    const result = await uploadRoyaltyFile(file, organization, onProgress);
       setIsUploadModalOpen(false);
+      if (result.unmatchedArtists && result.unmatchedArtists.length > 0) {
+        setPendingUnmatchedArtists(result.unmatchedArtists);
+        setOpenUnrecognizedModal(true);
+      }
     } catch (error) {
       console.error("Upload failed", error);
     }
   };
 
-  // Prepare chart data from dashboardMetrics
-  const revenueTrend = useMemo(() => {
-    if (!dashboardMetrics?.revenueByMonth) return [];
-    return dashboardMetrics.revenueByMonth.map(m => ({
-      x: m.label,
-      v: m.revenue || 0
-    }));
-  }, [dashboardMetrics]);
+  const handleResolveUnrecognizedArtists = async (mappings: Record<string, string>) => {
+    if (Object.keys(mappings).length === 0) return;
+    await assignPendingArtists(mappings);
+    setOpenUnrecognizedModal(false);
+    setPendingUnmatchedArtists([]);
+    await refreshPendingArtists();
+  };
 
   const streamsTrend = useMemo(() => {
-    if (!dashboardMetrics?.streamsByMonth) return [];
-    return dashboardMetrics.streamsByMonth.map(m => ({
+    if (!effectiveDashboardMetrics?.streamsByMonth) return [];
+    return effectiveDashboardMetrics.streamsByMonth.map(m => ({
       x: m.label,
       v: m.streams || 0
     }));
-  }, [dashboardMetrics]);
+  }, [effectiveDashboardMetrics]);
+
+  const trackRevenuePerDspTrend = useMemo(() => {
+    if (!effectiveTrackRevenueDsp || effectiveTrackRevenueDsp.length === 0) return [];
+
+    const totalsByDsp = new Map<string, number>();
+    effectiveTrackRevenueDsp.forEach((track) => {
+      track.dsps.forEach((dsp) => {
+        totalsByDsp.set(dsp.dsp, (totalsByDsp.get(dsp.dsp) ?? 0) + (dsp.revenue ?? 0));
+      });
+    });
+
+    return Array.from(totalsByDsp.entries()).map(([dsp, total]) => ({
+      x: dsp,
+      v: total,
+    }));
+  }, [effectiveTrackRevenueDsp]);
 
   const donutParts = useMemo(() => {
-    // TODO: Update when revenueBySource endpoint is available
-    return [];
-  }, []);
+    if (!effectiveTrackStreamsDsp?.dspSummary) return [];
+    const palette = ["#7B00D4", "#00C853", "#FFC24D", "#E9D7FE", "#FF8A65", "#26C6DA"];
+    return effectiveTrackStreamsDsp.dspSummary.map((dsp, idx) => ({
+      name: dsp.dsp,
+      value: dsp.streams,
+      color: palette[idx % palette.length],
+    }));
+  }, [effectiveTrackStreamsDsp]);
 
   const topTracksData = useMemo((): { legend: Array<{ label: string; color: string; value: number }> } => {
-    if (!dashboardMetrics?.topTrack) return { legend: [] };
+    if (!effectiveTrackStreamsDsp?.trackBreakdown || effectiveTrackStreamsDsp.trackBreakdown.length === 0) return { legend: [] };
     const colors = [PURPLE, "#00C853", "#FFC24D", "#E9D7FE", "#FFDFAF"];
-    // API returns single topTrack, convert to array format for consistency
+    const totals = effectiveTrackStreamsDsp.trackBreakdown
+      .map((track) => ({
+        title: track.title,
+        totalStreams: track.dsps.reduce((sum, dsp) => sum + (dsp.streams ?? 0), 0),
+      }))
+      .sort((a, b) => b.totalStreams - a.totalStreams);
+
     return {
-      legend: [{
-        label: dashboardMetrics.topTrack.title,
-        color: colors[0],
-        value: dashboardMetrics.topTrack.totalStreams
-      }]
+      legend: totals.slice(0, 5).map((track, idx) => ({
+        label: track.title,
+        color: colors[idx % colors.length],
+        value: track.totalStreams,
+      })),
     };
-  }, [dashboardMetrics]);
+  }, [effectiveTrackStreamsDsp]);
+
+  const collectiveTrackStreams = useMemo(
+    () =>
+      effectiveTrackStreamsDsp?.trackBreakdown?.reduce(
+        (sum, track) => sum + track.dsps.reduce((innerSum, dsp) => innerSum + (dsp.streams ?? 0), 0),
+        0,
+      ) ?? 0,
+    [effectiveTrackStreamsDsp],
+  );
 
   const revenueBySourceData = useMemo((): { legend: Array<{ label: string; color: string; value: number }> } => {
-    // TODO: Update when revenueBySource endpoint is available
-    return { legend: [] };
-  }, []);
+    if (!effectiveTrackStreamsDsp?.dspSummary || effectiveTrackStreamsDsp.dspSummary.length === 0) return { legend: [] };
+    const colors = [PURPLE, "#00C853", "#FFC24D", "#E9D7FE", "#FFDFAF"];
+    return {
+      legend: effectiveTrackStreamsDsp.dspSummary.slice(0, 5).map((dsp, idx) => ({
+        label: dsp.dsp,
+        color: colors[idx % colors.length],
+        value: dsp.streams,
+      })),
+    };
+  }, [effectiveTrackStreamsDsp]);
 
   const albumPerformanceData = useMemo(() => {
-    if (!albumPerformance) return [];
-    return albumPerformance.map(item => ({
+    if (!effectiveAlbumRevenue) return [];
+    return effectiveAlbumRevenue.map(item => ({
       x: item.day,
-      v: item.streams
+      v: item.revenue
     }));
-  }, [albumPerformance]);
+  }, [effectiveAlbumRevenue]);
+
+  const totalDspStreams = useMemo(
+    () => donutParts.reduce((sum, item) => sum + item.value, 0),
+    [donutParts],
+  );
+
+  const maxTopTrackLegendValue = useMemo(
+    () => Math.max(...topTracksData.legend.map((l) => l.value), 0),
+    [topTracksData]
+  );
+  const maxRevenueSourceLegendValue = useMemo(
+    () => Math.max(...revenueBySourceData.legend.map((l) => l.value), 0),
+    [revenueBySourceData]
+  );
 
   const activeFilter = FILTER_OPTIONS.find((f) => f.key === filter)!;
 
@@ -193,14 +343,45 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
         </div>
         {activeTab === "analytics" ? (
           <div className="grid grid-cols-2 gap-2 lg:flex lg:w-fit">
-            <button className="w-full rounded-2xl bg-[#EAEAEA] px-3 py-2 text-sm font-medium text-neutral-800 lg:w-auto">
+            <div className="relative">
+            <button
+              onClick={() => setShowYearPicker((prev) => !prev)}
+              className="w-full rounded-2xl bg-[#EAEAEA] px-3 py-2 text-sm font-medium text-neutral-800 lg:w-auto"
+            >
               <span className="inline-flex items-center gap-2">
-                <Calendar className="h-4 w-4" /> Filter by: {year}
+                <Calendar className="h-4 w-4" /> Filter by: {selectedYear}
               </span>
             </button>
-            <button className="w-full rounded-2xl bg-[#EAEAEA] px-3 py-2 text-sm font-medium text-neutral-800 lg:w-auto">
+            {showYearPicker && (
+              <div className="absolute top-full mt-2 right-0 z-20 w-64 rounded-xl border border-neutral-200 bg-white shadow-lg p-4">
+                <div className="grid grid-cols-4 gap-2">
+                  {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i).map((yearOption) => (
+                    <button
+                      key={yearOption}
+                      onClick={() => {
+                        setSelectedYear(yearOption);
+                        setShowYearPicker(false);
+                      }}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        yearOption === selectedYear
+                          ? "bg-[#7B00D4] text-white"
+                          : "bg-neutral-50 text-neutral-700 hover:bg-neutral-100"
+                      }`}
+                    >
+                      {yearOption}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            </div>
+            <button
+              onClick={handleExportPdf}
+              disabled={isExporting}
+              className="w-full rounded-2xl bg-[#EAEAEA] px-3 py-2 text-sm font-medium text-neutral-800 lg:w-auto disabled:opacity-60"
+            >
               <span className="inline-flex items-center gap-2">
-                <Download className="h-4 w-4" /> Export
+                <Download className="h-4 w-4" /> {isExporting ? "Exporting..." : "Export"}
               </span>
             </button>
           </div>
@@ -274,10 +455,11 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
               : "text-neutral-500"
           }`}
         >
-          Files({uploads?.total || 0})
+          Files({filteredUploads.length})
         </button>
       </div>
 
+      <div ref={exportRef}>
       {/* ===== FILES TAB ===== */}
       {activeTab === "files" && (
         <div className="mt-6 space-y-3">
@@ -285,7 +467,7 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
             <div className="flex justify-center py-16">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#7B00D4]"></div>
             </div>
-          ) : !uploads?.data || uploads.data.length === 0 ? (
+          ) : filteredUploads.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="mb-3 text-neutral-400">
                 <svg
@@ -301,10 +483,10 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                   <polyline points="13 2 13 9 20 9" />
                 </svg>
               </div>
-              <p className="text-sm text-neutral-500">No files uploaded yet</p>
+              <p className="text-sm text-neutral-500">No files uploaded for {selectedYear}</p>
             </div>
           ) : (
-            uploads.data.map((file) => (
+            filteredUploads.map((file) => (
               <div
                 key={file.hash}
                 className="flex items-center justify-between bg-white  border border-[#EAEAEA] rounded-2xl px-4 py-4 hover:bg-neutral-50 transition-colors"
@@ -356,9 +538,9 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
             {/* 1) Track revenue per DSP */}
             <div className="flex-1 relative">
               <ChartCard
-                title="Revenue Trend"
+                title="Track revenue per DSP"
                 variant="line"
-                data={revenueTrend}
+                data={trackRevenuePerDspTrend}
                 showDots={true}
                 xKey="x"
                 yKey="v"
@@ -396,10 +578,12 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
             {/* <SoftHeader title="Track streams per DSP" right={<FilterPill />} /> */}
             <div className="xl:w-[30%] relative">
               <ChartCard
-                title="Revenue by Source"
+                title="Track streams per DSP"
                 variant="donut"
                 data={donutParts}
-                donutInnerText={"Total\nRevenue"}
+                donutInnerText={`Total\n${totalDspStreams.toLocaleString()}`}
+                emptyStateTitle="No track streams data"
+                emptyStateDescription="Track streams per DSP will appear when royalty data is available."
                 headerFilterLabel={
                   FILTER_OPTIONS.find((f) => f.key === filter2)?.label ||
                   "All months"
@@ -434,7 +618,7 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
               <SoftHeader title="Streams per Track" right={<FilterPill />} />
               <div className="bg-white p-4 pb-12">
                 <div className="mb-3 flex items-baseline gap-2">
-                  <div className="text-4xl font-semibold">{(dashboardMetrics?.totalStreams ?? 0).toLocaleString()}</div>
+                  <div className="text-4xl font-semibold">{collectiveTrackStreams.toLocaleString()}</div>
                   <div className="text-sm text-neutral-500">Total Stream</div>
                 </div>
                 {topTracksData.legend.length > 0 ? (
@@ -449,7 +633,7 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                             style={{ flex: l.value }}
                           >
                             {/* Fill this section with tiny pills of the same color */}
-                            {new Array(Math.ceil(l.value / 35))
+                            {new Array(getCappedSegmentCount(l.value, maxTopTrackLegendValue))
                               .fill(0)
                               .map((_, i) => (
                                 <div
@@ -469,7 +653,7 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                             style={{ flex: l.value }}
                           >
                             {/* Fill this section with tiny pills of the same color */}
-                            {new Array(Math.ceil(l.value / 35))
+                            {new Array(getCappedSegmentCount(l.value, maxTopTrackLegendValue))
                               .fill(0)
                               .map((_, i) => (
                                 <div
@@ -503,8 +687,11 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                     </div>
                   </>
                 ) : (
-                  <div className="mt-4 flex items-center justify-center rounded-xl bg-neutral-50 py-8 text-sm text-neutral-400">
-                    No track data available
+                  <div className="mt-4 rounded-xl bg-neutral-50 py-6">
+                    <ChartEmptyState
+                      title="No track data available"
+                      description="Data will appear here once track insights are available."
+                    />
                   </div>
                 )}
                 <button
@@ -522,7 +709,7 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
             {/* <SoftHeader title="Revenue per Track" right={<FilterPill />} /> */}
             <div className="flex-1 relative">
               <ChartCard
-                title="All album performance"
+                title="Revenue per Track"
                 variant="line"
                 data={albumPerformanceData}
                 xKey="x"
@@ -535,7 +722,7 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                 onHeaderFilterClick={() => setShowDropdown3(!showDropdown3)}
                 footerActionLabel="View all report insight"
                 onFooterActionClick={() => {
-                  /* navigate */
+                  router.push("/royalty/stream-per-track?view=revenue");
                 }}
               />
               {showDropdown3 && (
@@ -561,7 +748,7 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
             {/* 5) Revenue per DSP (monthly) */}
             <div className="overflow-hidden flex-1 relative">
               <ChartCard
-                title="Streams Trend"
+                title="Revenue per DSP"
                 variant="line"
                 data={streamsTrend}
                 xKey="x"
@@ -574,7 +761,7 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                 onHeaderFilterClick={() => setShowDropdown4(!showDropdown4)}
                 footerActionLabel="View all report insight"
                 onFooterActionClick={() => {
-                  router.push("/royalty/stream-per-dsp");
+                  router.push("/royalty/stream-per-dsp?view=revenue");
                 }}
               />
               {showDropdown4 && (
@@ -597,7 +784,7 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
 
             {/* 6) Streams per DSP (bars + legend) */}
             <Card className="overflow-hidden xl:w-[30%] relative">
-              <SoftHeader title="Revenue per Source" right={<FilterPill />} />
+              <SoftHeader title="Streams per DSP" right={<FilterPill />} />
               <div className="bg-white p-4 pb-12">
                 <div className="mb-3 flex items-baseline gap-2">
                   <div className="text-4xl font-semibold">
@@ -617,7 +804,7 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                             style={{ flex: l.value }}
                           >
                             {/* Fill this section with tiny pills of the same color */}
-                            {new Array(Math.ceil(l.value / 35))
+                            {new Array(getCappedSegmentCount(l.value, maxRevenueSourceLegendValue))
                               .fill(0)
                               .map((_, i) => (
                                 <div
@@ -637,7 +824,7 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                             style={{ flex: l.value }}
                           >
                             {/* Fill this section with tiny pills of the same color */}
-                            {new Array(Math.ceil(l.value / 35))
+                            {new Array(getCappedSegmentCount(l.value, maxRevenueSourceLegendValue))
                               .fill(0)
                               .map((_, i) => (
                                 <div
@@ -671,8 +858,11 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                     </div>
                   </>
                 ) : (
-                  <div className="mt-4 flex items-center justify-center rounded-xl bg-neutral-50 py-8 text-sm text-neutral-400">
-                    No revenue source data available
+                  <div className="mt-4 rounded-xl bg-neutral-50 py-6">
+                    <ChartEmptyState
+                      title="No revenue source data available"
+                      description="This graph is not connected to an API endpoint yet."
+                    />
                   </div>
                 )}
                 <button
@@ -706,7 +896,8 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
 
               {/* Body */}
               <div className="bg-neutral-100 px-4 pb-4 pt-3">
-                <div className="grid gap-4 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.8fr)]">
+                {data.length > 0 ? (
+                  <div className="grid gap-4 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.8fr)]">
                   {/* LEFT: horizontal bar chart x2 (streams + revenue) */}
                   <div className="rounded-2xl bg-white p-4">
                     {/* Total label */}
@@ -803,6 +994,7 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                     <div className="mt-3 flex justify-end">
                       <button
                         type="button"
+                        onClick={() => router.push("/royalty/streams-and-revenue-per-territory")}
                         className="inline-flex items-center gap-1 rounded-full bg-[rgba(123,0,212,0.06)] px-3 py-1 text-[11px] font-medium text-[#7B00D4] hover:bg-[rgba(123,0,212,0.12)]"
                       >
                         <span>View report insight</span>
@@ -810,7 +1002,15 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                       </button>
                     </div>
                   </div>
-                </div>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl bg-white p-6">
+                    <ChartEmptyState
+                      title="No territory data available"
+                      description="This graph is not connected to an API endpoint yet."
+                    />
+                  </div>
+                )}
               </div>
             </Card>
 
@@ -839,12 +1039,31 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
           </div>
         </>
       )}
+      </div>
 
       {/* Upload Modal */}
       <UploadFileModal
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
         onUpload={handleUpload}
+      />
+      <SoloUnrecognizedArtistsModal
+        isOpen={openUnrecognizedModal}
+        onClose={() => setOpenUnrecognizedModal(false)}
+        unrecognizedNames={pendingUnmatchedArtists}
+        currentArtistId={user?.id || ''}
+        onFinish={handleResolveUnrecognizedArtists}
+        onIgnore={() => setOpenIgnoreConfirm(true)}
+      />
+      <IgnoreUnrecognizedConfirmModal
+        open={openIgnoreConfirm}
+        onClose={() => setOpenIgnoreConfirm(false)}
+        onConfirm={async () => {
+          setOpenIgnoreConfirm(false);
+          setOpenUnrecognizedModal(false);
+          setPendingUnmatchedArtists([]);
+          await refreshPendingArtists();
+        }}
       />
     </div>
   );
