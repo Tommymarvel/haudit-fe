@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useRef } from "react";
-import { ChevronDown, Download, Calendar } from "lucide-react";
+import { ChevronDown, Download } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import useSWR from "swr";
 import axiosInstance from "@/lib/axiosinstance";
@@ -18,6 +18,7 @@ import { useUnrecognizedArtists } from "@/hooks/useUnrecognizedArtists";
 import { useAuth } from "@/contexts/AuthContext";
 import SoloUnrecognizedArtistsModal from "@/components/ui/SoloUnrecognizedArtistsModal";
 import IgnoreUnrecognizedConfirmModal from "@/components/ui/IgnoreUnrecognizedConfirmModal";
+import YearFilterCalendar from "@/components/ui/YearFilterCalendar";
 
 const PURPLE = "#7B00D4";
 
@@ -130,7 +131,6 @@ export default function SoloArtistRoyalty() {
     "analytics"
   );
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [showYearPicker, setShowYearPicker] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [filter1, setFilter1] = useState("all_months");
   const [filter2, setFilter2] = useState("all_months");
@@ -343,38 +343,14 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
         </div>
         {activeTab === "analytics" ? (
           <div className="grid grid-cols-2 gap-2 lg:flex lg:w-fit">
-            <div className="relative">
-            <button
-              onClick={() => setShowYearPicker((prev) => !prev)}
-              className="w-full rounded-2xl bg-[#EAEAEA] px-3 py-2 text-sm font-medium text-neutral-800 lg:w-auto"
-            >
-              <span className="inline-flex items-center gap-2">
-                <Calendar className="h-4 w-4" /> Filter by: {selectedYear}
-              </span>
-            </button>
-            {showYearPicker && (
-              <div className="absolute top-full mt-2 right-0 z-20 w-64 rounded-xl border border-neutral-200 bg-white shadow-lg p-4">
-                <div className="grid grid-cols-4 gap-2">
-                  {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i).map((yearOption) => (
-                    <button
-                      key={yearOption}
-                      onClick={() => {
-                        setSelectedYear(yearOption);
-                        setShowYearPicker(false);
-                      }}
-                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        yearOption === selectedYear
-                          ? "bg-[#7B00D4] text-white"
-                          : "bg-neutral-50 text-neutral-700 hover:bg-neutral-100"
-                      }`}
-                    >
-                      {yearOption}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            </div>
+            <YearFilterCalendar
+              value={selectedYear}
+              onChange={setSelectedYear}
+              label="Filter by:"
+              showYear={true}
+              align="right"
+              buttonClassName="w-full rounded-2xl bg-[#EAEAEA] px-3 py-2 text-sm font-medium text-neutral-800 lg:w-auto"
+            />
             <button
               onClick={handleExportPdf}
               disabled={isExporting}
@@ -582,8 +558,8 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                 variant="donut"
                 data={donutParts}
                 donutInnerText={`Total\n${totalDspStreams.toLocaleString()}`}
-                emptyStateTitle="No track streams data"
-                emptyStateDescription="Track streams per DSP will appear when royalty data is available."
+                emptyStateTitle="No data available"
+                emptyStateDescription="Data will appear here once records are available."
                 headerFilterLabel={
                   FILTER_OPTIONS.find((f) => f.key === filter2)?.label ||
                   "All months"
@@ -689,8 +665,8 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                 ) : (
                   <div className="mt-4 rounded-xl bg-neutral-50 py-6">
                     <ChartEmptyState
-                      title="No track data available"
-                      description="Data will appear here once track insights are available."
+                      title="No data available"
+                      description="Data will appear here once records are available."
                     />
                   </div>
                 )}
@@ -860,8 +836,8 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                 ) : (
                   <div className="mt-4 rounded-xl bg-neutral-50 py-6">
                     <ChartEmptyState
-                      title="No revenue source data available"
-                      description="This graph is not connected to an API endpoint yet."
+                      title="No data available"
+                      description="Data will appear here once records are available."
                     />
                   </div>
                 )}
@@ -1006,8 +982,8 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                 ) : (
                   <div className="rounded-2xl bg-white p-6">
                     <ChartEmptyState
-                      title="No territory data available"
-                      description="This graph is not connected to an API endpoint yet."
+                      title="No data available"
+                      description="Data will appear here once records are available."
                     />
                   </div>
                 )}

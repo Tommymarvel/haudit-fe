@@ -4,13 +4,14 @@ import React from 'react';
 import { Button } from '@/components/ui/Button';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { StatusPill } from '@/components/ui/StatusPill';
-import { Calendar, Plus, ChevronDown, Table2, MessageSquare, MoreVertical } from 'lucide-react';
+import { Plus, ChevronDown, Table2, MessageSquare, MoreVertical } from 'lucide-react';
 import { Menu } from '@/components/ui/Menu';
 import { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { BRAND } from '@/lib/brand';
 import { useAdvance } from '@/hooks/useAdvance';
 import { Select } from '@/components/ui/Select';
+import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 
 type Row = {
   id: string;
@@ -91,9 +92,7 @@ const RecordLabelAdvance = () => {
           </p>
         </div>
         <div className="w-full lg:w-fit grid grid-cols-2 gap-2 lg:flex">
-          <Button variant="outline" className="w-full bg-[#EAEAEA] rounded-2xl lg:w-auto">
-            <Calendar className="h-4 w-4" /> Year
-          </Button>
+          <YearFilterCalendar buttonClassName="w-full bg-[#EAEAEA] rounded-2xl lg:w-auto inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-neutral-800" />
 
           <Menu
             trigger={

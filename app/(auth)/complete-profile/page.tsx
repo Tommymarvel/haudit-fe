@@ -11,12 +11,26 @@ import axiosInstance from "@/lib/axiosinstance";
 import { useAuth } from "@/contexts/AuthContext";
 
 const ProfileSchema = Yup.object({
-  firstName: Yup.string().required("First name is required"),
-  lastName: Yup.string().required("Last name is required"),
+  firstName: Yup.string().when("$userType", {
+    is: (val: string) => val !== "record_label",
+    then: (schema) => schema.required("First name is required"),
+    otherwise: (schema) => schema.notRequired(),
+  }),
+  lastName: Yup.string().when("$userType", {
+    is: (val: string) => val !== "record_label",
+    then: (schema) => schema.required("Last name is required"),
+    otherwise: (schema) => schema.notRequired(),
+  }),
   other_names: Yup.array().of(Yup.string()),
   label_name: Yup.string().when("$userType", {
     is: (val: string) => val === "record_label",
-    then: (schema) => schema.required("Label name is required for record labels"),
+    then: (schema) =>
+      schema.required("Label name is required for record labels"),
+    otherwise: (schema) => schema.notRequired(),
+  }),
+  address: Yup.string().when("$userType", {
+    is: (val: string) => val === "record_label",
+    then: (schema) => schema.required("Address is required for record labels"),
     otherwise: (schema) => schema.notRequired(),
   }),
 });
@@ -32,15 +46,15 @@ function CompleteProfileContent() {
     // Get user_type from URL or sessionStorage
     const urlUserType = searchParams.get("user");
     const storedUserType = sessionStorage.getItem("user_type");
-    
+
     const finalUserType = urlUserType || storedUserType;
-    
+
     if (!finalUserType) {
       toast.error("Please select your account type first");
       router.push("/whoareyou");
       return;
     }
-    
+
     // Validate user_type
     const validUserTypes = ["artist", "label_artist", "record_label"];
     if (!validUserTypes.includes(finalUserType)) {
@@ -48,9 +62,9 @@ function CompleteProfileContent() {
       router.push("/whoareyou");
       return;
     }
-    
+
     setUserType(finalUserType);
-    
+
     // Store in sessionStorage if it came from URL
     if (urlUserType) {
       sessionStorage.setItem("user_type", urlUserType);
@@ -62,6 +76,7 @@ function CompleteProfileContent() {
     lastName: string;
     other_names: string[];
     label_name?: string;
+    address?: string;
   }) => {
     if (!userType) {
       toast.error("User type is not set");
@@ -74,18 +89,22 @@ function CompleteProfileContent() {
       // Prepare payload
       const payload: {
         user_type: string;
-        first_name: string;
-        last_name: string;
+        first_name?: string;
+        last_name?: string;
         other_names?: string[];
         label_name?: string;
+        address?: string;
       } = {
         user_type: userType,
-        first_name: values.firstName,
-        last_name: values.lastName,
       };
 
+      if (userType !== "record_label") {
+        payload.first_name = values.firstName;
+        payload.last_name = values.lastName;
+      }
+
       // Only add optional fields if they have values
-      if (values.other_names && values.other_names.length > 0) {
+      if (userType !== "record_label" && values.other_names && values.other_names.length > 0) {
         payload.other_names = values.other_names;
       }
 
@@ -93,20 +112,29 @@ function CompleteProfileContent() {
         payload.label_name = values.label_name;
       }
 
+      if (values.address && userType === "record_label") {
+        payload.address = values.address;
+      }
+
       // Call the create-profile API
       await axiosInstance.post("/auth/create-profile", payload);
 
       toast.success("Profile created successfully!");
-      
+
       // Clear user_type from sessionStorage
       sessionStorage.removeItem("user_type");
-      
+
       // Refresh user data and redirect to dashboard
       await refreshUser();
       router.push("/dashboard");
     } catch (error) {
       const errorMessage =
-        (error as { response?: { data?: { message?: string | string[] } }; message?: string })?.response?.data?.message ||
+        (
+          error as {
+            response?: { data?: { message?: string | string[] } };
+            message?: string;
+          }
+        )?.response?.data?.message ||
         (error as { message?: string })?.message ||
         "Failed to create profile";
       toast.error(Array.isArray(errorMessage) ? errorMessage[0] : errorMessage);
@@ -142,21 +170,23 @@ function CompleteProfileContent() {
           lastName: "",
           other_names: [] as string[],
           label_name: "",
+          address: "",
         }}
         validationSchema={ProfileSchema}
         context={{ userType }}
         onSubmit={handleSubmit}
       >
         {({ values, setFieldValue }) => {
-          const allFieldsFilled =
-            values.firstName.trim() !== "" &&
-            values.lastName.trim() !== "" &&
-            (userType !== "record_label" || values.label_name.trim() !== "");
+          const isRecordLabel = userType === "record_label";
+          const allFieldsFilled = isRecordLabel
+            ? values.label_name.trim() !== "" && values.address.trim() !== ""
+            : values.firstName.trim() !== "" && values.lastName.trim() !== "";
 
           return (
             <Form className="space-y-5 mt-6 max-w-[650px] w-full mx-auto">
               {/* Name */}
-              <div className="grid grid-cols-2 gap-3">
+              {!isRecordLabel && (
+                <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-2 block text-sm text-neutral-700">
                     First Name <span className="text-red-500">*</span>
@@ -192,15 +222,38 @@ function CompleteProfileContent() {
                   />
                 </div>
               </div>
+              )}
+              {userType === "record_label" && ( <div>
+                    <label className="mb-2 block text-sm text-neutral-700">
+                      Label Name <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Field
+                        name="label_name"
+                        placeholder="Enter your label name"
+                        className="w-full rounded-2xl border border-neutral-200 px-3 py-2.5 text-black outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
+                      />
+                    </div>
+                    <ErrorMessage
+                      name="label_name"
+                      component="p"
+                      className="mt-1 text-xs text-rose-600"
+                    />
+                  </div>
+              
+              )}
 
               {/* Other Names */}
-              <div>
+              {!isRecordLabel && (
+                <div>
                 <label className="mb-2 block text-sm text-neutral-700">
                   Other Names
                 </label>
                 <TagInput
                   value={values.other_names}
-                  onChange={(newValue) => setFieldValue("other_names", newValue)}
+                  onChange={(newValue) =>
+                    setFieldValue("other_names", newValue)
+                  }
                   placeholder="Type other names and press Enter"
                 />
                 <div className="mt-2 rounded-lg bg-yellow-50 border border-yellow-200 p-3 flex gap-2">
@@ -227,29 +280,30 @@ function CompleteProfileContent() {
                   </p>
                 </div>
               </div>
+              )}
 
               {/* Label Name - Only show for record_label */}
               {userType === "record_label" && (
-                <div>
+                <>
+                   <div className="mt-2">
                   <label className="mb-2 block text-sm text-neutral-700">
-                    Label Name <span className="text-red-500">*</span>
+                    Address <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <Field
-                      name="label_name"
-                      placeholder="Enter your label name"
+                      name="address"
+                      placeholder="Enter your address"
                       className="w-full rounded-2xl border border-neutral-200 px-3 py-2.5 text-black outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
                     />
                   </div>
                   <ErrorMessage
-                    name="label_name"
+                    name="address"
                     component="p"
                     className="mt-1 text-xs text-rose-600"
                   />
                 </div>
+                </>
               )}
-
-             
 
               {/* Submit */}
               <button
@@ -269,7 +323,13 @@ function CompleteProfileContent() {
 
 export default function CompleteProfilePage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><p className="text-neutral-500">Loading...</p></div>}>
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          <p className="text-neutral-500">Loading...</p>
+        </div>
+      }
+    >
       <CompleteProfileContent />
     </Suspense>
   );

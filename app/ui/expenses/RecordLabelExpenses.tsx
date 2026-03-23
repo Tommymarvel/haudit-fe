@@ -4,13 +4,14 @@ import { ChartCard } from '@/components/dashboard/ChartCard';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody } from '@/components/ui/Card';
 import { BRAND } from '@/lib/brand';
-import { Calendar, Plus, ChevronDown, Table2 } from 'lucide-react';
+import { Plus, ChevronDown, Table2 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import AddExpensesModal, { NewExpensesPayload } from './AddExpensesModal';
 import { useExpenses } from '@/hooks/useExpenses';
 import { uploadFile } from '@/lib/utils/upload';
 import { Menu } from '@/components/ui/Menu';
 import { Select } from '@/components/ui/Select';
+import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 
 const CategoryDisplay: Record<string, string> = {
   marketting: 'Marketing',
@@ -53,9 +54,7 @@ const RecordLabelExpenses = () => {
           <p className="text-base text-[#777777]">Manage and track all label expenses</p>
         </div>
         <div className="w-full lg:w-fit grid grid-cols-2 gap-2 lg:flex">
-          <Button variant="outline" className="w-full bg-[#EAEAEA] rounded-2xl lg:w-auto">
-            <Calendar className="h-4 w-4" /> Year
-          </Button>
+          <YearFilterCalendar buttonClassName="w-full bg-[#EAEAEA] rounded-2xl lg:w-auto inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-neutral-800" />
 
           <Menu
             trigger={

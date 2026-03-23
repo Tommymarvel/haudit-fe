@@ -23,12 +23,7 @@ const ROLES: {
     description:
       'An artist who wants to manage their royalties, expenses, and advances independently who have access to their royalty reporting sheet.',
   },
-  {
-    key: 'labelArtist',
-    title: 'Label Artist',
-    description:
-      'A signed artist who can view their expense, royalty, and advance analytics uploaded by their label.',
-  },
+
   {
     key: 'recordLabel',
     title: 'Record label',

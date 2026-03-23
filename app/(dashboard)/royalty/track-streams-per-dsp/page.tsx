@@ -4,7 +4,7 @@ import useSWR from 'swr';
 import axiosInstance from '@/lib/axiosinstance';
 import AppShell from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
-import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Table2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Table2 } from 'lucide-react';
 import { BRAND } from '@/lib/brand';
 import {
   Line,
@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import { ReportInsightDropdown } from '@/components/report-insight/ReportInsightDropdown';
 import { ChartEmptyState } from '@/components/dashboard/ChartEmptyState';
+import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 
 const EMPTY_COLUMN_LABELS = ['DSP 1', 'DSP 2', 'DSP 3', 'DSP 4', 'DSP 5', 'DSP 6', 'DSP 7', 'DSP 8'];
 const PAGE_SIZE = 10;
@@ -49,7 +50,6 @@ const fetcher = (url: string) => axiosInstance.get(url).then((res) => res.data);
 export default function TrackStreamsPerDSP() {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
-  const [showYearPicker, setShowYearPicker] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -144,36 +144,12 @@ export default function TrackStreamsPerDSP() {
             </p>
           </div>
           <div className="w-full lg:w-fit flex gap-2">
-            <div className="relative">
-              <Button
-                variant="outline"
-                className="w-full bg-[#EAEAEA] rounded-2xl lg:w-auto"
-                onClick={() => setShowYearPicker(!showYearPicker)}
-              >
-                <Calendar className="h-4 w-4" /> {selectedYear} <ChevronDown className="h-4 w-4 ml-1" />
-              </Button>
-              {showYearPicker && (
-                <div className="absolute top-full mt-2 left-0 z-50 w-64 rounded-xl border border-neutral-200 bg-white shadow-lg p-4">
-                  <div className="grid grid-cols-4 gap-2">
-                    {Array.from({ length: 10 }, (_, i) => currentYear - i).map((year) => (
-                      <button
-                        key={year}
-                        onClick={() => {
-                          setSelectedYear(year);
-                          setShowYearPicker(false);
-                        }}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${year === selectedYear
-                          ? 'bg-[#7B00D4] text-white'
-                          : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100'
-                          }`}
-                      >
-                        {year}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            <YearFilterCalendar
+              value={selectedYear}
+              onChange={setSelectedYear}
+              showYear={true}
+              buttonClassName="w-full rounded-2xl bg-[#EAEAEA] px-3 py-2 text-sm font-medium text-neutral-800 lg:w-auto"
+            />
             <Button
               variant="primary"
               className="w-full rounded-2xl lg:w-auto"

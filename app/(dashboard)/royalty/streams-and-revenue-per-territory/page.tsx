@@ -3,9 +3,9 @@
 import React from 'react';
 import AppShell from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
-import { Calendar } from 'lucide-react';
 import { BRAND } from '@/lib/brand';
 import { ReportInsightDropdown } from '@/components/report-insight/ReportInsightDropdown';
+import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 
 // Mock Data
 const TERRITORY_DATA = [
@@ -231,12 +231,9 @@ export default function StreamsAndRevenuePerTerritory() {
                         </p>
                     </div>
                     <div className="w-full lg:w-fit flex gap-2">
-                        <Button
-                            variant="outline"
-                            className="w-full bg-[#EAEAEA] rounded-2xl lg:w-auto text-neutral-600 border-none"
-                        >
-                            <Calendar className="h-4 w-4 mr-2" /> Year
-                        </Button>
+                        <YearFilterCalendar
+                            buttonClassName="w-full bg-[#EAEAEA] rounded-2xl lg:w-auto text-neutral-600 border-none inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium"
+                        />
                         <Button
                             variant="primary"
                             className="w-full rounded-2xl lg:w-auto"
