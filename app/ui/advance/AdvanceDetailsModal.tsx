@@ -12,12 +12,14 @@ import {
   Mail,
   Paperclip,
 } from 'lucide-react';
+import { formatCurrencyAmount } from '@/lib/utils/currency';
 
 export type AdvanceDetails = {
   id: string;
   date: string; // 03-May-2025
   status: 'Repaid' | 'Outstanding' | 'Pending';
   amount: number; // 1500
+  currency?: string;
   repaidAmount: number; // 1500
   type: 'Personal' | 'Marketing';
   source: string; // Chocolate City
@@ -45,7 +47,7 @@ export default function AdvanceDetailsModal({
   data: AdvanceDetails | null;
 }) {
   if (!open || !data) return null;
-  const currency = (n: number) => `$${n.toLocaleString()}`;
+  const currency = (n: number) => formatCurrencyAmount(n, data.currency || 'USD');
 
   return (
     <Modal

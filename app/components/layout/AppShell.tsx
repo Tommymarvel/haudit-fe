@@ -44,9 +44,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Content column - scrollable */}
-      <div className="flex max-w-[1440px] flex-1 mx-auto flex-col bg-white h-screen overflow-y-auto">
+      <div className="flex max-w-[1440px] flex-1 mx-auto flex-col bg-white h-screen overflow-y-auto ">
         {/* Mobile Header */}
-        <div className="flex items-center gap-3 p-4 md:hidden border-b border-neutral-100 sticky top-0 bg-white z-30">
+        <div className="flex items-center gap-3 p-4 md:hidden border-b border-neutral-200 sticky top-0 bg-white z-30">
           <button
             onClick={() => setIsMobileMenuOpen(true)}
             className="p-2 -ml-2 rounded-lg hover:bg-neutral-100 text-neutral-600"

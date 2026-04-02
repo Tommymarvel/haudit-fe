@@ -4,15 +4,25 @@ import FileDropzone from '@/components/ui/FIleDropzone';
 import * as Yup from 'yup';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import Image from 'next/image';
+import { formatAmountInput, formatCurrencyAmount, parseAmountInput } from '@/lib/utils/currency';
 
-const createSchema = (requireAdvance: boolean) => Yup.object({
-  advanceId: requireAdvance 
-    ? Yup.string().required('Please select an advance')
-    : Yup.string(),
-  amount: Yup.number().typeError('Enter a valid amount')
-    .min(1, 'Must be at least 1').required('Amount is required'),
-  files: Yup.array().min(1, 'Please attach at least one proof').required(),
-});
+const parseAmountForValidation = (originalValue: unknown) => {
+  if (originalValue === undefined || originalValue === null) return undefined;
+  if (typeof originalValue === 'string' && originalValue.trim() === '') return undefined;
+  const parsed = parseAmountInput(originalValue);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+};
+
+const createSchema = (requireAdvance: boolean) =>
+  Yup.object({
+    advanceId: requireAdvance ? Yup.string().required('Please select an advance') : Yup.string(),
+    amount: Yup.number()
+      .transform((_value, originalValue) => parseAmountForValidation(originalValue))
+      .typeError('Enter a valid amount')
+      .min(1, 'Must be at least 1')
+      .required('Amount is required'),
+    files: Yup.array().min(1, 'Please attach at least one proof').required(),
+  });
 
 export type RepaymentPayload = {
   advanceId?: string;
@@ -25,6 +35,7 @@ type AdvanceOption = {
   source: string;
   amount: number;
   balance: number;
+  currency?: string;
 };
 
 export default function RepaymentModal({
@@ -62,9 +73,10 @@ export default function RepaymentModal({
         validationSchema={createSchema(!!showAdvanceSelector)}
         onSubmit={async (vals, { setSubmitting }) => {
           try {
+            const parsedAmount = parseAmountInput(vals.amount);
             await onSubmit({ 
               advanceId: vals.advanceId || preselectedAdvanceId,
-              amount: Number(vals.amount), 
+              amount: Number.isFinite(parsedAmount) ? parsedAmount : 0, 
               files: vals.files 
             });
             onClose();
@@ -88,8 +100,8 @@ export default function RepaymentModal({
                 >
                   <option value="">Select an advance to repay</option>
                   {advances.map((adv) => (
-                    <option key={adv.id} value={adv.id}>
-                      {adv.source} - ${adv.amount.toLocaleString()} (Balance: ${adv.balance.toLocaleString()})
+                  <option key={adv.id} value={adv.id}>
+                      {adv.source} - {formatCurrencyAmount(adv.amount, adv.currency)} (Balance: {formatCurrencyAmount(adv.balance, adv.currency)})
                     </option>
                   ))}
                 </Field>
@@ -104,10 +116,14 @@ export default function RepaymentModal({
               <label className="mb-1 block text-sm font-medium text-neutral-700">
                 Amount
               </label>
-              <Field
+              <input
                 name="amount"
                 inputMode="decimal"
                 placeholder="Enter request amount"
+                value={values.amount}
+                onChange={(event) =>
+                  setFieldValue('amount', formatAmountInput(event.target.value))
+                }
                 className="w-full rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none
                            focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
               />

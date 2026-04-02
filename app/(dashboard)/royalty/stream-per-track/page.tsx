@@ -21,6 +21,7 @@ import {
 import { ReportInsightDropdown } from '@/components/report-insight/ReportInsightDropdown';
 import { ChartEmptyState } from '@/components/dashboard/ChartEmptyState';
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
+import { appendQueryParam } from '@/lib/utils/query';
 
 type Row = {
   track: string;
@@ -71,11 +72,16 @@ export default function StreamPerTrackPanel() {
   const searchParams = useSearchParams();
   const rawViewMode = searchParams.get('view')?.toLowerCase();
   const viewMode: 'streams' | 'revenue' = rawViewMode === 'revenue' ? 'revenue' : 'streams';
+  const selectedArtistId = (searchParams.get('artistId') || '').trim();
 
   const apiEndpoint =
-    viewMode === 'revenue'
-      ? `/royalties/track-revenue-dsp?year=${selectedYear}&monthly=false`
-      : `/royalties/track-streams-dsp?year=${selectedYear}&monthly=false`;
+    appendQueryParam(
+      viewMode === 'revenue'
+        ? `/royalties/track-revenue-dsp?year=${selectedYear}&monthly=false`
+        : `/royalties/track-streams-dsp?year=${selectedYear}&monthly=false`,
+      'artistId',
+      selectedArtistId
+    );
 
   const { data: apiResponse, isLoading } = useSWR<{
     trackBreakdown?: ApiTrack[];
@@ -344,7 +350,7 @@ export default function StreamPerTrackPanel() {
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-neutral-100">
+                    <tbody className="divide-y divide-[#EAEAEA]">
                       {rows.length === 0 ? (
                         <tr>
                           <td colSpan={tableColumnLabels.length + 2} className="py-20">
@@ -391,7 +397,7 @@ export default function StreamPerTrackPanel() {
                     </tbody>
                   </table>
                 </div>
-                <div className="flex items-center justify-between border-t border-neutral-100 px-3 py-3">
+                <div className="flex items-center justify-between border-t border-neutral-200 px-3 py-3">
                   <button
                     type="button"
                     disabled={rows.length === 0 || currentPage === 1}

@@ -87,7 +87,7 @@ export function ToastCloseButton({ closeToast }: CloseButtonProps) {
     <button
       type="button"
       onClick={(event) => closeToast?.(event)}
-      className="m-0 cursor-pointer self-center rounded-[6px] border-0 bg-transparent p-0 leading-none text-[#98A2B3] hover:text-[#667085] focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-[#98A2B3]"
+      className="m-0 mt-0.5 cursor-pointer self-start rounded-[6px] border-0 bg-transparent p-0 leading-none text-[#98A2B3] hover:text-[#667085] focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-[#98A2B3]"
       aria-label="Close notification"
     >
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">

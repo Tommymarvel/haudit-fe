@@ -1,10 +1,13 @@
 'use client';
 import Modal from '@/components/ui/Modal';
 import FileDropzone from '@/components/ui/FIleDropzone';
+import { Select } from '@/components/ui/Select';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
 import Image from 'next/image';
 import { ChevronDown, Loader2 } from 'lucide-react';
+import { useMemo } from 'react';
+import { formatAmountInput, parseAmountInput } from '@/lib/utils/currency';
 
 const BRAND_PURPLE = '#7B00D4';
 
@@ -12,10 +15,11 @@ const Categories = ['marketting', 'production', 'personal'] as const;
 type Category = (typeof Categories)[number];
 
 const Currencies = ['NGN', 'USD'] as const;
+const RecoupableValues = ['Yes', 'No'] as const;
 
 // Currency prefix mapping to display symbols/text
 const CurrencyPrefix: Record<(typeof Currencies)[number], string> = {
-  NGN: '₦',
+  NGN: 'NGN',
   USD: '$',
 };
 
@@ -26,25 +30,41 @@ const CategoryDisplay: Record<Category, string> = {
   personal: 'Personal',
 };
 
-const Schema = Yup.object({
-  expense_date: Yup.string().required('Date is required'),
-  category: Yup.mixed<Category>()
-    .oneOf([...Categories] as readonly Category[], 'Select a valid category')
-    .required('Category is required'),
-  currency: Yup.string().required('Currency is required'),
-  amount: Yup.number()
-    .typeError('Enter a valid amount')
-    .min(1, 'Must be at least 1')
-    .required('Amount is required'),
-  description: Yup.string().max(800, 'Too long').optional(),
-  proofs: Yup.array().of(Yup.mixed<File>()).optional(),
-});
+const parseAmountForValidation = (originalValue: unknown) => {
+  if (originalValue === undefined || originalValue === null) return undefined;
+  if (typeof originalValue === 'string' && originalValue.trim() === '') return undefined;
+  const parsed = parseAmountInput(originalValue);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+};
+
+function createSchema(requireArtistName: boolean) {
+  return Yup.object({
+    artist_name: requireArtistName
+      ? Yup.string().trim().required('Artist name is required')
+      : Yup.string().optional(),
+    expense_date: Yup.string().required('Date is required'),
+    category: Yup.mixed<Category>()
+      .oneOf([...Categories] as readonly Category[], 'Select a valid category')
+      .required('Category is required'),
+    currency: Yup.string().required('Currency is required'),
+    amount: Yup.number()
+      .transform((_value, originalValue) => parseAmountForValidation(originalValue))
+      .typeError('Enter a valid amount')
+      .min(1, 'Must be at least 1')
+      .required('Amount is required'),
+    recoupable: Yup.string().optional(),
+    description: Yup.string().max(800, 'Too long').optional(),
+    proofs: Yup.array().of(Yup.mixed<File>()).optional(),
+  });
+}
 
 export type NewExpensesPayload = {
-  expense_date: string; // e.g. 2025-03-01 (or your preferred format)
+  artist_name?: string;
+  expense_date: string;
   category: Category;
   amount: number;
   currency: string;
+  recoupable?: string;
   description?: string;
   proofs?: File[];
 };
@@ -53,11 +73,38 @@ export default function AddExpensesModal({
   open,
   onClose,
   onSubmit,
+  recordLabelFields = false,
+  initialArtistName = '',
+  artistOptions = [],
+  submitLabel = 'Save expense',
 }: {
   open: boolean;
   onClose: () => void;
   onSubmit: (data: NewExpensesPayload) => Promise<void> | void;
+  recordLabelFields?: boolean;
+  initialArtistName?: string;
+  artistOptions?: string[];
+  submitLabel?: string;
 }) {
+  const normalizedArtistOptions = useMemo(() => {
+    const names = artistOptions
+      .map((name) => name.trim())
+      .filter(Boolean);
+
+    const initial = initialArtistName.trim();
+    if (initial) names.push(initial);
+
+    return Array.from(new Set(names)).sort((left, right) =>
+      left.localeCompare(right, undefined, { sensitivity: 'base' })
+    );
+  }, [artistOptions, initialArtistName]);
+
+  const shouldRequireArtistName = recordLabelFields;
+  const validationSchema = useMemo(
+    () => createSchema(shouldRequireArtistName),
+    [shouldRequireArtistName]
+  );
+
   return (
     <Modal
       open={open}
@@ -78,21 +125,26 @@ export default function AddExpensesModal({
 
         <Formik
           initialValues={{
+            artist_name: initialArtistName || '',
             expense_date: '',
             category: '',
             amount: '',
-            currency: 'NGN',
+            currency: 'USD',
+            recoupable: '',
             description: '',
             proofs: [] as File[],
           }}
-          validationSchema={Schema}
+          validationSchema={validationSchema}
           onSubmit={async (vals, { setSubmitting }) => {
             try {
+              const parsedAmount = parseAmountInput(vals.amount);
               await onSubmit({
+                artist_name: vals.artist_name?.trim() || undefined,
                 expense_date: vals.expense_date,
                 category: vals.category as Category,
-                amount: Number(vals.amount),
+                amount: Number.isFinite(parsedAmount) ? parsedAmount : 0,
                 currency: vals.currency,
+                recoupable: vals.recoupable || undefined,
                 description: vals.description?.trim() || undefined,
                 proofs: vals.proofs,
               });
@@ -105,6 +157,34 @@ export default function AddExpensesModal({
           {({ isSubmitting, setFieldValue, values }) => (
             <Form className="mx-auto mt-6 w-full max-w-xl  ">
               <div className="space-y-4">
+                {recordLabelFields && (
+                  <div>
+                    <label className="mb-3 block text-sm font-medium text-neutral-700">
+                      Artist Name
+                    </label>
+                    <Select
+                      value={values.artist_name}
+                      onChange={(value) => setFieldValue('artist_name', value)}
+                      placeholder={
+                        normalizedArtistOptions.length > 0
+                          ? 'Select artist name'
+                          : 'No artists available'
+                      }
+                      className="h-12 rounded-2xl border-neutral-300 bg-white pr-10 text-sm focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
+                      options={normalizedArtistOptions.map((name) => ({
+                        label: name,
+                        value: name,
+                      }))}
+                      disabled={normalizedArtistOptions.length === 0}
+                    />
+                    <ErrorMessage
+                      name="artist_name"
+                      component="p"
+                      className="mt-1 text-xs text-rose-600"
+                    />
+                  </div>
+                )}
+
                 {/* Date */}
                 <div>
                   <label className="mb-3 block text-sm font-medium text-neutral-700">
@@ -127,18 +207,16 @@ export default function AddExpensesModal({
                   <label className="mb-3 block text-sm font-medium text-neutral-700">
                     Category
                   </label>
-                  <Field
-                    as="select"
-                    name="category"
-                    className="w-full rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                  >
-                    <option value="">Select category</option>
-                    {Categories.map((c) => (
-                      <option key={c} value={c}>
-                        {CategoryDisplay[c]}
-                      </option>
-                    ))}
-                  </Field>
+                  <Select
+                    value={values.category}
+                    onChange={(value) => setFieldValue('category', value)}
+                    placeholder="Select category"
+                    className="h-12 rounded-2xl border-neutral-300 bg-white pr-10 text-sm focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
+                    options={Categories.map((c) => ({
+                      value: c,
+                      label: CategoryDisplay[c],
+                    }))}
+                  />
                   <ErrorMessage
                     name="category"
                     component="p"
@@ -168,10 +246,14 @@ export default function AddExpensesModal({
                         <ChevronDown className="pointer-events-none absolute right-0 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
                       </div>
                     </div>
-                    <Field
+                    <input
                       name="amount"
                       inputMode="decimal"
                       placeholder="Enter amount"
+                      value={values.amount}
+                      onChange={(event) =>
+                        setFieldValue('amount', formatAmountInput(event.target.value))
+                      }
                       className="w-full rounded-2xl border border-neutral-300 bg-white py-3 pl-23  text-sm outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
                     />
                   </div>
@@ -181,6 +263,29 @@ export default function AddExpensesModal({
                     className="mt-1 text-xs text-rose-600"
                   />
                 </div>
+
+                {recordLabelFields && (
+                  <div>
+                    <label className="mb-3 block text-sm font-medium text-neutral-700">
+                      Recoupable
+                    </label>
+                    <Select
+                      value={values.recoupable}
+                      onChange={(value) => setFieldValue('recoupable', value)}
+                      placeholder="Select recoupable"
+                      className="h-12 rounded-2xl border-neutral-300 bg-white pr-10 text-sm focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
+                      options={RecoupableValues.map((value) => ({
+                        value,
+                        label: value,
+                      }))}
+                    />
+                    <ErrorMessage
+                      name="recoupable"
+                      component="p"
+                      className="mt-1 text-xs text-rose-600"
+                    />
+                  </div>
+                )}
 
                 {/* Receipts / Proofs */}
                 <div>
@@ -227,7 +332,7 @@ export default function AddExpensesModal({
                 style={{ backgroundColor: BRAND_PURPLE }}
               >
                 {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                {isSubmitting ? 'Saving...' : 'Save expense'}
+                {isSubmitting ? 'Saving...' : submitLabel}
               </button>
             </Form>
           )}

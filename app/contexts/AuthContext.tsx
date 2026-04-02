@@ -35,6 +35,34 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const PREVIEW_ROLE_STORAGE_KEY = 'haudit_preview_role';
+const PREVIEW_ROLES = ['label_artist', 'record_label', 'solo_artist'] as const;
+type PreviewRole = (typeof PREVIEW_ROLES)[number];
+
+function getPreviewRoleFromSession(): PreviewRole | null {
+  if (process.env.NODE_ENV === 'production' || typeof window === 'undefined') return null;
+
+  const params = new URLSearchParams(window.location.search);
+  const roleFromQuery = params.get('previewRole');
+
+  if (roleFromQuery === 'off') {
+    window.sessionStorage.removeItem(PREVIEW_ROLE_STORAGE_KEY);
+    return null;
+  }
+
+  if (roleFromQuery && PREVIEW_ROLES.includes(roleFromQuery as PreviewRole)) {
+    const role = roleFromQuery as PreviewRole;
+    window.sessionStorage.setItem(PREVIEW_ROLE_STORAGE_KEY, role);
+    return role;
+  }
+
+  const storedRole = window.sessionStorage.getItem(PREVIEW_ROLE_STORAGE_KEY);
+  if (storedRole && PREVIEW_ROLES.includes(storedRole as PreviewRole)) {
+    return storedRole as PreviewRole;
+  }
+
+  return null;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -89,7 +117,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  };  const logout = async () => {
+  };
+
+  const logout = async () => {
     setUser(null);
     await clearAuthCookie();
     router.push('/login');
@@ -100,6 +130,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         await fetchUser();
       } catch {
+        const previewRole = getPreviewRoleFromSession();
+        if (previewRole) {
+          setUser({
+            id: 'preview-user',
+            email: 'preview@haudit.dev',
+            first_name: 'Diamond',
+            last_name: 'Artist',
+            user_type: previewRole,
+          });
+          return;
+        }
+
         setUser(null);
         await clearAuthCookie();
         

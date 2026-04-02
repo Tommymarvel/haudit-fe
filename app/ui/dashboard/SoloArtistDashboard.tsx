@@ -63,7 +63,7 @@ export default function SoloArtistDashboard() {
       }
       await createAdvance({
         amount: payload.amount,
-        currency: 'NGN',
+        currency: payload.currency,
         advance_source_name: payload.sourceName,
         advance_source_phn: payload.phone,
         advance_source_email: payload.email,

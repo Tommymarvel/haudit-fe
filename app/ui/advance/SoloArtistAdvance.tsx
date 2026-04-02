@@ -17,11 +17,13 @@ import { useAdvance } from "@/hooks/useAdvance";
 import { uploadFile } from "@/lib/utils/upload";
 import { Select } from "@/components/ui/Select";
 import YearFilterCalendar from "@/components/ui/YearFilterCalendar";
+import { formatCurrencyAmount } from "@/lib/utils/currency";
 
 type Row = {
   id: string;
   date: string;
   amount: number;
+  currency: string;
   type: "Personal" | "Marketing";
   status: "Repaid" | "Outstanding" | "Pending";
   source: string;
@@ -50,6 +52,7 @@ const SoloArtistAdvance = () => {
       id: adv._id,
       date: new Date((adv.createdAt || adv.created_at) as string).toLocaleDateString(),
       amount: adv.amount,
+      currency: adv.currency || "USD",
       type: ((() => {
         const t = (adv.advance_type || '').toLowerCase();
         return t === 'marketting' || t === 'marketing' ? 'Marketing' : 'Personal';
@@ -136,6 +139,7 @@ const SoloArtistAdvance = () => {
         date: r.date,
         status: r.status,
         amount: r.amount,
+        currency: r.currency,
         repaidAmount: repaidAmount,
         type: r.type,
         source: r.source,
@@ -164,6 +168,7 @@ const SoloArtistAdvance = () => {
         source: r.source,
         amount: r.amount,
         balance: r.advanceBalance || r.amount,
+        currency: r.currency,
       }));
   }, [rows]);
 
@@ -255,7 +260,7 @@ const SoloArtistAdvance = () => {
         <StatCard
           className="min-w-[280px] lg:min-w-0 flex-shrink-0"
           title="Total Advance"
-          value={`$${kpis.total.toLocaleString()}`}
+          value={formatCurrencyAmount(kpis.total, "USD")}
           icon={
             <Image
               src="/svgs/moneybag.svg"
@@ -268,7 +273,7 @@ const SoloArtistAdvance = () => {
         <StatCard
           className="min-w-[280px] lg:min-w-0 flex-shrink-0"
           title="Repaid Advance"
-          value={`$${kpis.repaid.toLocaleString()}`}
+          value={formatCurrencyAmount(kpis.repaid, "USD")}
           icon={
             <Image src="/svgs/repaid.svg" width={48} height={48} alt="haudit" />
           }
@@ -376,7 +381,7 @@ const SoloArtistAdvance = () => {
                         <th className="py-3 pr-4 whitespace-nowrap"></th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-neutral-100">
+                    <tbody className="divide-y divide-[#EAEAEA]">
                       {filtered.length === 0 ? (
                         <tr>
                           <td colSpan={6} className="py-20">
@@ -396,7 +401,7 @@ const SoloArtistAdvance = () => {
                               {r.date}
                             </td>
                             <td className="py-3 pr-4 whitespace-nowrap">
-                              ${r.amount.toLocaleString()}
+                              {formatCurrencyAmount(r.amount, r.currency)}
                             </td>
                             <td className="py-3 pr-4 whitespace-nowrap">
                               {r.type}
@@ -474,7 +479,7 @@ const SoloArtistAdvance = () => {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-neutral-100">
+                <tbody className="divide-y divide-[#EAEAEA]">
                   {filtered.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="py-20">
@@ -494,13 +499,13 @@ const SoloArtistAdvance = () => {
                           {r.source}
                         </td>
                         <td className="py-3 pr-4 whitespace-nowrap">
-                          ${r.totalAdvance?.toLocaleString() || "0"}
+                          {formatCurrencyAmount(r.totalAdvance || 0, r.currency)}
                         </td>
                         <td className="py-3 pr-4 whitespace-nowrap">
-                          ${r.repaidAdvance?.toLocaleString() || "0"}
+                          {formatCurrencyAmount(r.repaidAdvance || 0, r.currency)}
                         </td>
                         <td className="py-3 pr-4 whitespace-nowrap">
-                          ${r.advanceBalance?.toLocaleString() || "0"}
+                          {formatCurrencyAmount(r.advanceBalance || 0, r.currency)}
                         </td>
                         <td className="py-3 pr-4 whitespace-nowrap">
                           {r.phone || "N/A"}
@@ -565,7 +570,7 @@ const SoloArtistAdvance = () => {
 
             await createAdvance({
               amount: payload.amount,
-              currency: "NGN", // Default currency
+              currency: payload.currency,
               advance_source_name: payload.sourceName,
               advance_source_phn: payload.phone,
               advance_source_email: payload.email,

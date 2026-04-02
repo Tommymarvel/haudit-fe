@@ -7,10 +7,13 @@ import Modal from './Modal';
 interface UploadFileModalProps {
   isOpen: boolean;
   onClose: () => void;
+  showArtistSelect?: boolean;
+  artistOptions?: string[];
   onUpload?: (
     file: File,
     organization: string,
     onProgress: (message: string) => void,
+    artistName?: string,
   ) => Promise<{ unmatchedArtists?: string[] } | void>;
 }
 
@@ -32,15 +35,26 @@ const ORGANIZATIONS = ['FUGA', 'DITTO'];
 export default function UploadFileModal({
   isOpen,
   onClose,
+  showArtistSelect = false,
+  artistOptions = [],
   onUpload,
 }: UploadFileModalProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedArtist, setSelectedArtist] = useState('');
   const [selectedOrganization, setSelectedOrganization] = useState('');
   const [isDragging, setIsDragging] = useState(false);
+  const [showArtistDropdown, setShowArtistDropdown] = useState(false);
   const [showOrgDropdown, setShowOrgDropdown] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [progressMessages, setProgressMessages] = useState<string[]>([]);
   const [latestProgress, setLatestProgress] = useState<string>('');
+  const shouldShowArtistSelect = showArtistSelect;
+  const hasArtistOptions = artistOptions.length > 0;
+  const canSubmit =
+    !!selectedFile &&
+    !!selectedOrganization &&
+    (!shouldShowArtistSelect || !hasArtistOptions || !!selectedArtist) &&
+    !isUploading;
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -82,7 +96,7 @@ export default function UploadFileModal({
   };
 
   const handleNext = async () => {
-    if (selectedFile && selectedOrganization && onUpload) {
+    if (canSubmit && onUpload && selectedFile) {
       setIsUploading(true);
       setProgressMessages([]);
       setLatestProgress('');
@@ -92,7 +106,12 @@ export default function UploadFileModal({
         setProgressMessages((prev) => [...prev, parsed]);
       };
       try {
-        await onUpload(selectedFile, selectedOrganization, handleProgress);
+        await onUpload(
+          selectedFile,
+          selectedOrganization,
+          handleProgress,
+          selectedArtist || undefined,
+        );
         handleClose();
       } catch (error) {
         console.error('Upload failed:', error);
@@ -105,7 +124,9 @@ export default function UploadFileModal({
   const handleClose = () => {
     if (isUploading) return; // Prevent closing during upload
     setSelectedFile(null);
+    setSelectedArtist('');
     setSelectedOrganization('');
+    setShowArtistDropdown(false);
     setShowOrgDropdown(false);
     setIsUploading(false);
     setProgressMessages([]);
@@ -132,7 +153,7 @@ export default function UploadFileModal({
         <div className="px-6 py-6">
           <h2 className="text-xl font-semibold text-neutral-900">Upload file</h2>
           <p className="mt-1 text-sm text-neutral-500">
-            Enter your email to reset your password
+            Upload your royalty file to continue.
           </p>
 
           {/* Upload area */}
@@ -222,49 +243,105 @@ export default function UploadFileModal({
             </div>
           )}
 
-          {/* Organization selector */}
-          <div className="mt-6">
-            <label className="block text-sm font-medium text-neutral-700 mb-2">
-              Select reporting Organisation
-            </label>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowOrgDropdown(!showOrgDropdown)}
-                className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-[#7B00D4]/20"
-              >
-                {selectedOrganization || 'Select Organization'}
-                <svg
-                  className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
-              </button>
-              {showOrgDropdown && (
-                <div className="absolute z-10 mt-1 w-full rounded-xl border border-neutral-200 bg-white shadow-lg">
-                  {ORGANIZATIONS.map((org) => (
-                    <button
-                      key={org}
-                      type="button"
-                      onClick={() => {
-                        setSelectedOrganization(org);
-                        setShowOrgDropdown(false);
-                      }}
-                      className="w-full px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50 first:rounded-t-xl last:rounded-b-xl"
+          {/* Selectors */}
+          <div className="mt-6 space-y-4">
+            {shouldShowArtistSelect && (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <label className="text-sm font-medium text-neutral-700">
+                  Select artist
+                </label>
+                <div className="relative w-full sm:w-[68%]">
+                  <button
+                    type="button"
+                    disabled={!hasArtistOptions}
+                    onClick={() => {
+                      setShowArtistDropdown(!showArtistDropdown);
+                      setShowOrgDropdown(false);
+                    }}
+                    className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-[#7B00D4]/20 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+                  >
+                    {selectedArtist || (hasArtistOptions ? 'Select artist' : 'No artists available')}
+                    <svg
+                      className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
                     >
-                      {org}
-                    </button>
-                  ))}
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </button>
+                  {showArtistDropdown && hasArtistOptions && (
+                    <div className="absolute z-10 mt-1 w-full rounded-xl border border-neutral-200 bg-white shadow-lg">
+                      {artistOptions.map((artist) => (
+                        <button
+                          key={artist}
+                          type="button"
+                          onClick={() => {
+                            setSelectedArtist(artist);
+                            setShowArtistDropdown(false);
+                          }}
+                          className="w-full px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50 first:rounded-t-xl last:rounded-b-xl"
+                        >
+                          {artist}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <label className="text-sm font-medium text-neutral-700">
+                Select reporting Organisation
+              </label>
+              <div className="relative w-full sm:w-[68%]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowOrgDropdown(!showOrgDropdown);
+                    setShowArtistDropdown(false);
+                  }}
+                  className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-[#7B00D4]/20"
+                >
+                  {selectedOrganization || 'Select organization'}
+                  <svg
+                    className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </button>
+                {showOrgDropdown && (
+                  <div className="absolute z-10 mt-1 w-full rounded-xl border border-neutral-200 bg-white shadow-lg">
+                    {ORGANIZATIONS.map((org) => (
+                      <button
+                        key={org}
+                        type="button"
+                        onClick={() => {
+                          setSelectedOrganization(org);
+                          setShowOrgDropdown(false);
+                        }}
+                        className="w-full px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50 first:rounded-t-xl last:rounded-b-xl"
+                      >
+                        {org}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -316,7 +393,7 @@ export default function UploadFileModal({
             </button>
             <button
               onClick={handleNext}
-              disabled={!selectedFile || !selectedOrganization || isUploading}
+              disabled={!canSubmit}
               className="flex-1 rounded-xl bg-[#7B00D4] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#6A00B8] disabled:bg-neutral-400 disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-2"
             >
               {isUploading ? (

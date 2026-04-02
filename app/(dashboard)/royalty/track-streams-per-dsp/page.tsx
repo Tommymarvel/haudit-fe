@@ -18,6 +18,8 @@ import {
 import { ReportInsightDropdown } from '@/components/report-insight/ReportInsightDropdown';
 import { ChartEmptyState } from '@/components/dashboard/ChartEmptyState';
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
+import { useSearchParams } from 'next/navigation';
+import { appendQueryParam } from '@/lib/utils/query';
 
 const EMPTY_COLUMN_LABELS = ['DSP 1', 'DSP 2', 'DSP 3', 'DSP 4', 'DSP 5', 'DSP 6', 'DSP 7', 'DSP 8'];
 const PAGE_SIZE = 10;
@@ -52,9 +54,15 @@ export default function TrackStreamsPerDSP() {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
+  const searchParams = useSearchParams();
+  const selectedArtistId = (searchParams.get('artistId') || '').trim();
 
   const { data, isLoading } = useSWR<TrackStreamsResponse>(
-    `/royalties/track-streams-dsp?year=${selectedYear}&monthly=false`,
+    appendQueryParam(
+      `/royalties/track-streams-dsp?year=${selectedYear}&monthly=false`,
+      'artistId',
+      selectedArtistId
+    ),
     fetcher,
   );
 
@@ -309,7 +317,7 @@ export default function TrackStreamsPerDSP() {
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-neutral-100">
+                    <tbody className="divide-y divide-[#EAEAEA]">
                       {rows.length === 0 ? (
                         <tr>
                           <td colSpan={tableColumnLabels.length + 2} className="py-20">
@@ -353,7 +361,7 @@ export default function TrackStreamsPerDSP() {
                     </tbody>
                   </table>
                 </div>
-                <div className="flex items-center justify-between border-t border-neutral-100 px-3 py-3">
+                <div className="flex items-center justify-between border-t border-neutral-200 px-3 py-3">
                   <button
                     type="button"
                     disabled={rows.length === 0 || currentPage === 1}

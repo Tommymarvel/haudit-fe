@@ -102,7 +102,7 @@ export default function SoloUnrecognizedArtistsModal({
           ))}
         </div>
 
-        <div className="pt-4 border-t border-neutral-100 flex items-center gap-4">
+        <div className="pt-4 border-t border-neutral-200 flex items-center gap-4">
           <Button
             variant="outline"
             className="flex-1 justify-center rounded-2xl border-[1.5px] border-[#7B00D4] text-[#7B00D4] hover:bg-[#7B00D4]/5 py-3"

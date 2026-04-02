@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Home, HelpCircle, ChevronDown, Bell } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useRecordLabelArtists } from "@/hooks/useRecordLabelArtists";
+import { getRecordLabelArtistName } from "@/lib/utils/recordLabelArtist";
 
 type NavItem = {
   href?: string;
@@ -25,7 +27,7 @@ const NAV: NavItem[] = [
   },
   {
     href: "/advance",
-    label: "Advance",
+    label: "Advance-o-Meter",
     icon: (
       <svg
         width="20"
@@ -42,6 +44,7 @@ const NAV: NavItem[] = [
       </svg>
     ),
   },
+
   {
     href: "/expenses",
     label: "Expenses",
@@ -77,6 +80,24 @@ const NAV: NavItem[] = [
           fillRule="evenodd"
           clipRule="evenodd"
           d="M18 1.00268e-07C18.5046 -0.000159579 18.9906 0.190406 19.3605 0.533497C19.7305 0.876587 19.9572 1.34684 19.995 1.85L20 2V12C20.0002 12.5046 19.8096 12.9906 19.4665 13.3605C19.1234 13.7305 18.6532 13.9572 18.15 13.995L18 14H2C1.49542 14.0002 1.00943 13.8096 0.639452 13.4665C0.269471 13.1234 0.0428434 12.6532 0.00500022 12.15L1.00268e-07 12V2C-0.000159579 1.49542 0.190407 1.00943 0.533497 0.639452C0.876588 0.269471 1.34684 0.0428434 1.85 0.00500021L2 1.00268e-07H18ZM15.003 2H4.997L5 2.125C5 2.50255 4.92564 2.8764 4.78115 3.22521C4.63667 3.57403 4.4249 3.89096 4.15793 4.15793C3.89096 4.4249 3.57403 4.63667 3.22522 4.78115C2.8764 4.92564 2.50255 5 2.125 5L2 4.997V9.003L2.125 9C2.8875 9 3.61877 9.3029 4.15793 9.84207C4.6971 10.3812 5 11.1125 5 11.875L4.997 12H15.003L15 11.875C15 11.1418 15.2802 10.4362 15.7832 9.90274C16.2862 9.36925 16.974 9.0481 17.706 9.005L17.938 9.001L18 9.003V4.997L17.875 5C17.1418 4.99999 16.4362 4.71983 15.9027 4.21682C15.3692 3.71381 15.0481 3.02597 15.005 2.294L15 2.062L15.003 2ZM17.875 11C17.7495 11 17.6255 11.027 17.5114 11.0791C17.3973 11.1313 17.2957 11.2073 17.2136 11.3022C17.1314 11.397 17.0707 11.5084 17.0354 11.6288C17.0001 11.7492 16.9911 11.8758 17.009 12H18V11.009C17.9586 11.0031 17.9168 11.0001 17.875 11ZM2.125 11C2.08317 11.0001 2.0414 11.0031 2 11.009V12H2.991C3.00892 11.8758 2.99993 11.7492 2.96463 11.6288C2.92934 11.5084 2.86856 11.397 2.78642 11.3022C2.70428 11.2073 2.60271 11.1313 2.48859 11.0791C2.37447 11.027 2.25047 11 2.125 11ZM10 3C11.0609 3 12.0783 3.42143 12.8284 4.17157C13.5786 4.92172 14 5.93913 14 7C14 8.06087 13.5786 9.07828 12.8284 9.82843C12.0783 10.5786 11.0609 11 10 11C8.93913 11 7.92172 10.5786 7.17157 9.82843C6.42143 9.07828 6 8.06087 6 7C6 5.93913 6.42143 4.92172 7.17157 4.17157C7.92172 3.42143 8.93913 3 10 3ZM10 5C9.46957 5 8.96086 5.21071 8.58579 5.58579C8.21072 5.96086 8 6.46957 8 7C8 7.53043 8.21072 8.03914 8.58579 8.41421C8.96086 8.78929 9.46957 9 10 9C10.5304 9 11.0391 8.78929 11.4142 8.41421C11.7893 8.03914 12 7.53043 12 7C12 6.46957 11.7893 5.96086 11.4142 5.58579C11.0391 5.21071 10.5304 5 10 5ZM2.991 2H2V2.991C2.12418 3.00892 2.25076 2.99993 2.37117 2.96463C2.49157 2.92934 2.60297 2.86856 2.69781 2.78642C2.79266 2.70428 2.86873 2.60271 2.92087 2.48859C2.97301 2.37447 3 2.25047 3 2.125L2.998 2.062L2.991 2ZM18 2H17.009C16.9911 2.12418 17.0001 2.25076 17.0354 2.37116C17.0707 2.49156 17.1314 2.60297 17.2136 2.69781C17.2957 2.79266 17.3973 2.86873 17.5114 2.92087C17.6255 2.97301 17.7495 3 17.875 3L17.938 2.998L18 2.99V2Z"
+          fill="#5A5A5A"
+        />
+      </svg>
+    ),
+  },
+  {
+    href: "/artists",
+    label: "Artists",
+    icon: (
+      <svg
+        width="20"
+        height="18"
+        viewBox="0 0 20 18"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M2.05014 2.05212C3.13302 0.968422 4.54151 0.269903 6.05957 0.0637043C7.57763 -0.142494 9.12142 0.155014 10.4541 0.910596C11.7868 1.66618 12.8349 2.8381 13.4375 4.24661C14.0401 5.65512 14.164 7.22243 13.7901 8.70812L13.7211 8.96412L17.1211 13.3361C17.4074 13.7041 17.5935 14.1399 17.6613 14.6011C17.7291 15.0624 17.6763 15.5333 17.5081 15.9681C17.6081 15.9981 17.7301 16.0141 17.8801 15.9841L17.9981 15.9531C18.2479 15.876 18.5179 15.8998 18.7503 16.0193C18.9828 16.1388 19.1592 16.3446 19.2418 16.5925C19.3244 16.8405 19.3067 17.111 19.1924 17.346C19.078 17.5811 18.8762 17.762 18.6301 17.8501C18.206 17.9967 17.7526 18.0379 17.3091 17.9702C16.8655 17.9024 16.4451 17.7277 16.0841 17.4611C15.6693 17.6446 15.2149 17.7207 14.763 17.6822C14.311 17.6438 13.876 17.4921 13.4981 17.2411L13.3341 17.1241L8.96214 13.7231C7.47003 14.1588 5.87535 14.0855 4.42953 13.5147C2.9837 12.9439 1.769 11.9081 0.976939 10.5706C0.184879 9.23313 -0.139473 7.67006 0.0550237 6.12786C0.249521 4.58566 0.951802 3.15206 2.05114 2.05312L2.05014 2.05212ZM12.7591 10.9841C12.2781 11.6782 11.6762 12.2801 10.9821 12.7611L14.5621 15.5451C14.697 15.6469 14.8641 15.6965 15.0326 15.6847C15.2011 15.673 15.3597 15.6007 15.4791 15.4811C15.5985 15.3616 15.6706 15.203 15.6822 15.0344C15.6938 14.8659 15.6441 14.6988 15.5421 14.5641L12.7591 10.9841ZM11.1021 4.14312L10.8991 4.47912C10.0926 5.77842 9.1397 6.98095 8.05914 8.06312C6.97722 9.14327 5.77504 10.0958 4.47614 10.9021L4.14014 11.1051C5.10317 11.7759 6.27146 12.0867 7.44051 11.9829C8.60955 11.8792 9.70488 11.3676 10.5348 10.5377C11.3647 9.70786 11.8762 8.61253 11.98 7.44349C12.0837 6.27444 11.7729 5.10615 11.1021 4.14312ZM9.60414 2.73311C8.64655 2.14982 7.52075 1.90518 6.40745 2.03846C5.29415 2.17174 4.25792 2.67521 3.46507 3.46805C2.67223 4.2609 2.16876 5.29713 2.03548 6.41043C1.9022 7.52373 2.14684 8.64953 2.73014 9.60712L3.05414 9.42412C4.36374 8.65436 5.57067 7.72195 6.64614 6.64912C7.61708 5.67575 8.47332 4.59437 9.19814 3.42612L9.31414 3.23612L9.51714 2.88912L9.60414 2.73311Z"
           fill="#5A5A5A"
         />
       </svg>
@@ -199,9 +220,34 @@ function SidebarCollapsibleLink({ item }: { item: NavItem }) {
 
 function ArtistSelector() {
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState("Label Overview");
   const ref = useRef<HTMLDivElement>(null);
-  const artists = ["Diamond Platnumz", "Sarkodie", "Burna Boy", "Yemi Alade"];
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { artists: apiArtists } = useRecordLabelArtists();
+
+  type SidebarArtistOption = { id: string; name: string };
+  const artists = useMemo(
+    () => {
+      const uniqueById = new Map<string, SidebarArtistOption>();
+      apiArtists.forEach((artist) => {
+        const artistId = (artist.id || artist._id || '').toString().trim();
+        const artistName = getRecordLabelArtistName(artist);
+        if (!artistId || !artistName) return;
+        if (!uniqueById.has(artistId)) {
+          uniqueById.set(artistId, { id: artistId, name: artistName });
+        }
+      });
+
+      return Array.from(uniqueById.values()).sort((left, right) =>
+        left.name.localeCompare(right.name, undefined, { sensitivity: "base" }),
+      );
+    },
+    [apiArtists],
+  );
+  const selectedArtistId = (searchParams.get("artistId") || '').trim();
+  const selectedArtist = artists.find((artist) => artist.id === selectedArtistId);
+  const selected = selectedArtist?.name || "Label Overview";
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) =>
@@ -210,45 +256,62 @@ function ArtistSelector() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
+  const onSelectArtist = (artist?: SidebarArtistOption) => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("artist");
+    if (!artist) {
+      nextParams.delete("artistId");
+    } else {
+      nextParams.set("artistId", artist.id);
+    }
+    const query = nextParams.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    setOpen(false);
+  };
+
   return (
     <div className="relative mt-3 w-full" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full inline-flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm text-[#5A5A5A] hover:bg-neutral-50"
+        className="w-full inline-flex items-center justify-between rounded-2xl border border-[#CFCFCF] bg-white px-4 py-2.5 text-[18px] font-medium text-[#5A5A5A] hover:bg-neutral-50"
       >
         <span>{selected}</span>
         <ChevronDown className="h-4 w-4 text-neutral-500" />
       </button>
 
       {open && (
-        <div className="absolute left-0 mt-2 w-full z-50 rounded-xl border border-neutral-200 bg-white shadow-xl overflow-hidden py-1">
+        <div className="absolute left-0 z-50 mt-2 w-full overflow-hidden rounded-2xl border border-[#CFCFCF] bg-white shadow-xl">
           <button
-            className="w-full text-left px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50 font-medium"
+            className="w-full px-4 py-2.5 text-left text-[18px] font-medium text-[#5A5A5A] hover:bg-neutral-50"
             onClick={() => {
-              setSelected("Label Overview");
-              setOpen(false);
+              onSelectArtist();
             }}
           >
             Label Overview
           </button>
-          <div className="h-px bg-neutral-100 mx-4" />
-          {artists.map((artist, idx) => (
-            <div key={artist}>
-              <button
-                className="w-full text-left px-4 py-3 text-sm text-neutral-700 hover:bg-neutral-50"
-                onClick={() => {
-                  setSelected(artist);
-                  setOpen(false);
-                }}
-              >
-                {artist}
-              </button>
-              {idx < artists.length - 1 && (
-                <div className="h-px bg-neutral-100 mx-4" />
-              )}
+          <div className="mx-4 h-px bg-neutral-200" />
+          {artists.length === 0 ? (
+            <div className="px-4 py-2.5 text-[16px] text-[#9A9A9A]">
+              No artists available
             </div>
-          ))}
+          ) : (
+            artists.map((artist, idx) => (
+              <div key={artist.id}>
+                <button
+                  className="w-full px-4 py-2.5 text-left text-[18px] text-[#5A5A5A] hover:bg-neutral-50"
+                  onClick={() => {
+                    onSelectArtist(artist);
+                  }}
+                >
+                  {artist.name}
+                </button>
+                {idx < artists.length - 1 && (
+                  <div className="mx-4 h-px bg-neutral-200" />
+                )}
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>
@@ -257,6 +320,13 @@ function ArtistSelector() {
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
+  const pathname = usePathname();
+  const isDashboard = pathname === '/dashboard';
+  const visibleNav =
+    user?.user_type === "record_label"
+      ? NAV
+      : NAV.filter((item) => item.href !== "/artists");
+
   return (
     <div className="flex h-dvh w-full overflow-hidden flex-col border-r border-neutral-200 bg-neutral-50/70 backdrop-blur-sm">
       {/* Header */}
@@ -271,12 +341,12 @@ export default function Sidebar() {
         </div>
 
         {/* Period / Artist selector */}
-        {user?.user_type === "record_label" ? <ArtistSelector /> : null}
+        {user?.user_type === "record_label" && !isDashboard ? <ArtistSelector /> : null}
       </div>
 
       {/* Nav */}
       <nav className="mt-3 flex-1 overflow-y-auto ">
-        {NAV.map((item) =>
+        {visibleNav.map((item) =>
           item.subItems ? (
             <SidebarCollapsibleLink key={item.label} item={item} />
           ) : (

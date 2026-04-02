@@ -1,8 +1,17 @@
 import useSWR, { mutate } from 'swr';
 import axiosInstance from '@/lib/axiosinstance';
 import { AxiosError } from 'axios';
-import { RoyaltyDashboardMetrics, RoyaltyUploadResponse, RoyaltyUploadsResponse, TrackStreamsDsp } from '@/lib/types/royalty';
+import {
+  RoyaltyDashboardMetrics,
+  RoyaltyUploadResponse,
+  RoyaltyUploadsResponse,
+  TerritoryAnalysisItem,
+  TrackStreamsDsp,
+} from '@/lib/types/royalty';
 import { toast } from 'react-toastify';
+import { useSearchParams } from 'next/navigation';
+import { useMemo } from 'react';
+import { appendQueryParam } from '@/lib/utils/query';
 
 type UnmatchedArtistApiItem = {
   name: string;
@@ -20,21 +29,67 @@ const isUnmatchedArtistApiArray = (payload: unknown): payload is UnmatchedArtist
   );
 
 const fetcher = (url: string) => axiosInstance.get(url).then((res) => res.data);
+const listFetcher = <T,>(url: string) =>
+  axiosInstance.get(url).then((res) => {
+    const payload = res.data;
+    if (Array.isArray(payload)) return payload as T[];
+    if (payload?.data && Array.isArray(payload.data)) return payload.data as T[];
+    return [] as T[];
+  });
 
 export function useRoyalty() {
-  const { data: dashboardMetrics, error: dashboardError, isLoading: isDashboardLoading } = useSWR<RoyaltyDashboardMetrics>('/royalties/dashboard', fetcher);
+  const searchParams = useSearchParams();
+  const artistId = (searchParams.get('artistId') || '').trim();
 
-  const { data: uploads, error: uploadsError, isLoading: isUploadsLoading } = useSWR<RoyaltyUploadsResponse>('/royalties/uploads?limit=10&page=1', fetcher);
+  const dashboardEndpoint = useMemo(
+    () => appendQueryParam('/royalties/dashboard', 'artistId', artistId),
+    [artistId]
+  );
+  const uploadsEndpoint = useMemo(
+    () => appendQueryParam('/royalties/uploads?limit=10&page=1', 'artistId', artistId),
+    [artistId]
+  );
+  const albumPerformanceEndpoint = useMemo(
+    () => appendQueryParam('/royalties/album-performance', 'artistId', artistId),
+    [artistId]
+  );
+  const albumRevenueEndpoint = useMemo(
+    () => appendQueryParam('/royalties/album-revenue', 'artistId', artistId),
+    [artistId]
+  );
+  const albumInteractionsEndpoint = useMemo(
+    () => appendQueryParam('/royalties/album-interactions', 'artistId', artistId),
+    [artistId]
+  );
+  const trackRevenueDspEndpoint = useMemo(
+    () => appendQueryParam('/royalties/track-revenue-dsp', 'artistId', artistId),
+    [artistId]
+  );
+  const trackStreamsDspEndpoint = useMemo(
+    () => appendQueryParam('/royalties/track-streams-dsp?monthly=false', 'artistId', artistId),
+    [artistId]
+  );
+  const territoryAnalysisEndpoint = useMemo(
+    () => appendQueryParam('/royalties/territory-analysis', 'artistId', artistId),
+    [artistId]
+  );
 
-  const { data: albumPerformance, error: albumPerformanceError, isLoading: isAlbumPerformanceLoading } = useSWR<Array<{ streams: number; day: string }>>('/royalties/album-performance', fetcher);
+  const { data: dashboardMetrics, error: dashboardError, isLoading: isDashboardLoading } = useSWR<RoyaltyDashboardMetrics>(dashboardEndpoint, fetcher);
 
-  const { data: albumRevenue, error: albumRevenueError, isLoading: isAlbumRevenueLoading } = useSWR<Array<{ revenue: number; day: string }>>('/royalties/album-revenue', fetcher);
+  const { data: uploads, error: uploadsError, isLoading: isUploadsLoading } = useSWR<RoyaltyUploadsResponse>(uploadsEndpoint, fetcher);
 
-  const { data: albumInteractions, error: albumInteractionsError, isLoading: isAlbumInteractionsLoading } = useSWR<{ totalStreams: number }>('/royalties/album-interactions', fetcher);
+  const { data: albumPerformance, error: albumPerformanceError, isLoading: isAlbumPerformanceLoading } = useSWR<Array<{ streams: number; day: string }>>(albumPerformanceEndpoint, fetcher);
 
-  const { data: trackRevenueDsp, error: trackRevenueDspError, isLoading: isTrackRevenueDspLoading } = useSWR<Array<{ assetId: string; assetTitle: string; dsps: Array<{ dsp: string; revenue: number }> }>>('/royalties/track-revenue-dsp', fetcher);
+  const { data: albumRevenue, error: albumRevenueError, isLoading: isAlbumRevenueLoading } = useSWR<Array<{ revenue: number; day: string }>>(albumRevenueEndpoint, fetcher);
 
-  const { data: trackStreamsDsp, error: trackStreamsDspError, isLoading: isTrackStreamsDspLoading } = useSWR<TrackStreamsDsp>('/royalties/track-streams-dsp?monthly=false', fetcher);
+  const { data: albumInteractions, error: albumInteractionsError, isLoading: isAlbumInteractionsLoading } = useSWR<{ totalStreams: number }>(albumInteractionsEndpoint, fetcher);
+
+  const { data: trackRevenueDsp, error: trackRevenueDspError, isLoading: isTrackRevenueDspLoading } = useSWR<Array<{ assetId: string; assetTitle: string; dsps: Array<{ dsp: string; revenue: number }> }>>(trackRevenueDspEndpoint, fetcher);
+
+  const { data: trackStreamsDsp, error: trackStreamsDspError, isLoading: isTrackStreamsDspLoading } = useSWR<TrackStreamsDsp>(trackStreamsDspEndpoint, fetcher);
+
+  const { data: territoryAnalysis, error: territoryAnalysisError, isLoading: isTerritoryAnalysisLoading } =
+    useSWR<TerritoryAnalysisItem[]>(territoryAnalysisEndpoint, listFetcher<TerritoryAnalysisItem>);
 
   const uploadRoyaltyFile = async (
     file: File,
@@ -66,8 +121,10 @@ export function useRoyalty() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       toast.success('Royalty file uploaded successfully');
-      mutate('/royalties/uploads?limit=10&page=1'); // Revalidate uploads list
-      mutate('/royalties/dashboard'); // Revalidate dashboard metrics
+      mutate('/royalties/uploads?limit=10&page=1');
+      mutate('/royalties/dashboard');
+      if (uploadsEndpoint !== '/royalties/uploads?limit=10&page=1') mutate(uploadsEndpoint);
+      if (dashboardEndpoint !== '/royalties/dashboard') mutate(dashboardEndpoint);
       return response.data;
     } catch (err: unknown) {
       const error = err as AxiosError<{ message?: string } | UnmatchedArtistApiItem[]>;
@@ -119,6 +176,9 @@ export function useRoyalty() {
     trackStreamsDsp,
     isTrackStreamsDspLoading,
     trackStreamsDspError,
+    territoryAnalysis,
+    isTerritoryAnalysisLoading,
+    territoryAnalysisError,
     uploadRoyaltyFile,
   };
 }

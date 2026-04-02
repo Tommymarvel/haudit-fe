@@ -8,7 +8,7 @@ import axiosInstance from "@/lib/axiosinstance";
 import { RoyaltyDashboardMetrics, TrackStreamsDsp } from "@/lib/types/royalty";
 import generatePDF from "react-to-pdf";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { ChartCard } from "@/components/dashboard/ChartCard";
 import { ChartEmptyState } from "@/components/dashboard/ChartEmptyState";
@@ -16,9 +16,12 @@ import UploadFileModal from "@/components/ui/UploadFileModal";
 import { useRoyalty } from "@/hooks/useRoyalty";
 import { useUnrecognizedArtists } from "@/hooks/useUnrecognizedArtists";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRecordLabelArtists } from "@/hooks/useRecordLabelArtists";
 import SoloUnrecognizedArtistsModal from "@/components/ui/SoloUnrecognizedArtistsModal";
 import IgnoreUnrecognizedConfirmModal from "@/components/ui/IgnoreUnrecognizedConfirmModal";
 import YearFilterCalendar from "@/components/ui/YearFilterCalendar";
+import { appendQueryParam } from "@/lib/utils/query";
+import { getRecordLabelArtistName } from "@/lib/utils/recordLabelArtist";
 
 const PURPLE = "#7B00D4";
 
@@ -107,15 +110,12 @@ function getCappedSegmentCount(value: number, maxValue: number) {
   return Math.max(1, Math.min(MAX_PILL_SEGMENTS, normalized));
 }
 
-const TERRITORY_DATA: Record<FilterKey, Territory[]> = {
-  all_months: [],
-  last_30_days: [],
-  this_year: [],
-};
-
-
 export default function SoloArtistRoyalty() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const selectedArtistId = (searchParams.get("artistId") || "").trim();
+  const { artists: recordLabelArtistsApi } = useRecordLabelArtists();
+  const canUploadRoyalty = user?.user_type !== "label_artist";
   const { 
     dashboardMetrics, 
     uploads, 
@@ -124,6 +124,8 @@ export default function SoloArtistRoyalty() {
     albumRevenue,
     trackRevenueDsp,
     trackStreamsDsp,
+    territoryAnalysis,
+    isTerritoryAnalysisLoading,
   } = useRoyalty();
   const { assignPendingArtists, refreshPendingArtists } = useUnrecognizedArtists();
 
@@ -149,24 +151,34 @@ export default function SoloArtistRoyalty() {
   const [pendingUnmatchedArtists, setPendingUnmatchedArtists] = useState<string[]>([]);
   const exportRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const withArtistId = (endpoint: string) =>
+    appendQueryParam(endpoint, "artistId", selectedArtistId);
 
   const { data: trackRevenueDspFiltered } = useSWR<TrackRevenueDspResponse>(
-    `/royalties/track-revenue-dsp?${buildFilterQuery(filter1 as FilterKey, selectedYear, true)}`,
+    withArtistId(
+      `/royalties/track-revenue-dsp?${buildFilterQuery(filter1 as FilterKey, selectedYear, true)}`,
+    ),
     fetcher,
   );
 
   const { data: trackStreamsDspFiltered } = useSWR<TrackStreamsDsp>(
-    `/royalties/track-streams-dsp?${buildFilterQuery(filter2 as FilterKey, selectedYear, true)}`,
+    withArtistId(
+      `/royalties/track-streams-dsp?${buildFilterQuery(filter2 as FilterKey, selectedYear, true)}`,
+    ),
     fetcher,
   );
 
   const { data: albumRevenueFiltered } = useSWR<AlbumRevenueResponse>(
-    `/royalties/album-revenue?${buildFilterQuery(filter3 as FilterKey, selectedYear)}`,
+    withArtistId(
+      `/royalties/album-revenue?${buildFilterQuery(filter3 as FilterKey, selectedYear)}`,
+    ),
     fetcher,
   );
 
   const { data: dashboardMetricsFiltered } = useSWR<RoyaltyDashboardMetrics>(
-    `/royalties/dashboard?${buildFilterQuery(filter4 as FilterKey, selectedYear)}`,
+    withArtistId(
+      `/royalties/dashboard?${buildFilterQuery(filter4 as FilterKey, selectedYear)}`,
+    ),
     fetcher,
   );
 
@@ -197,9 +209,17 @@ export default function SoloArtistRoyalty() {
     [uploads, selectedYear],
   );
 
-  const data = [...TERRITORY_DATA[filter]].sort(
-    (a, b) => b.streams - a.streams
+  const territoryRows = useMemo<Territory[]>(
+    () =>
+      (territoryAnalysis ?? []).map((entry) => ({
+        name: entry.territory || '-',
+        streams: Number(entry.streams ?? 0),
+        revenue: Number(entry.totalRevenueUSD ?? 0),
+      })),
+    [territoryAnalysis],
   );
+
+  const data = [...territoryRows].sort((a, b) => b.streams - a.streams);
   const totalTerritories = data.length;
 
   const handleDownload = (fileUrl: string) => {
@@ -207,6 +227,7 @@ export default function SoloArtistRoyalty() {
   };
 
   const handleAddNewRecord = () => {
+    if (!canUploadRoyalty) return;
     setIsUploadModalOpen(true);
   };
 
@@ -222,6 +243,18 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
       console.error("Upload failed", error);
     }
   };
+
+  const recordLabelArtists = useMemo(() => {
+    const uniqueNames = new Set<string>();
+    recordLabelArtistsApi.forEach((artist) => {
+      const name = getRecordLabelArtistName(artist);
+      if (name) uniqueNames.add(name);
+    });
+
+    return Array.from(uniqueNames).sort((left, right) =>
+      left.localeCompare(right, undefined, { sensitivity: "base" }),
+    );
+  }, [recordLabelArtistsApi]);
 
   const handleResolveUnrecognizedArtists = async (mappings: Record<string, string>) => {
     if (Object.keys(mappings).length === 0) return;
@@ -349,7 +382,7 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
               label="Filter by:"
               showYear={true}
               align="right"
-              buttonClassName="w-full rounded-2xl bg-[#EAEAEA] px-3 py-2 text-sm font-medium text-neutral-800 lg:w-auto"
+            
             />
             <button
               onClick={handleExportPdf}
@@ -383,31 +416,33 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                 />
               </svg>
             </div>
-            <button
-              onClick={handleAddNewRecord}
-              className="rounded-xl bg-[#7B00D4] px-4 py-2 text-sm font-medium text-white hover:bg-[#6A00B8] transition-colors inline-flex items-center gap-2"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
+            {canUploadRoyalty && (
+              <button
+                onClick={handleAddNewRecord}
+                className="rounded-xl bg-[#7B00D4] px-4 py-2 text-sm font-medium text-white hover:bg-[#6A00B8] transition-colors inline-flex items-center gap-2"
               >
-                <g clip-path="url(#clip0_486_12947)">
-                  <path
-                    d="M13.586 2C14.0556 2.00011 14.5101 2.16543 14.87 2.467L15 2.586L19.414 7C19.746 7.33202 19.9506 7.77028 19.992 8.238L20 8.414V20C20.0002 20.5046 19.8096 20.9906 19.4665 21.3605C19.1234 21.7305 18.6532 21.9572 18.15 21.995L18 22H6C5.49542 22.0002 5.00943 21.8096 4.63945 21.4665C4.26947 21.1234 4.04284 20.6532 4.005 20.15L4 20V4C3.99984 3.49542 4.19041 3.00943 4.5335 2.63945C4.87659 2.26947 5.34684 2.04284 5.85 2.005L6 2H13.586ZM12 4H6V20H18V10H13.5C13.1022 10 12.7206 9.84196 12.4393 9.56066C12.158 9.27936 12 8.89782 12 8.5V4ZM12 11.5C12.2652 11.5 12.5196 11.6054 12.7071 11.7929C12.8946 11.9804 13 12.2348 13 12.5V14H14.5C14.7652 14 15.0196 14.1054 15.2071 14.2929C15.3946 14.4804 15.5 14.7348 15.5 15C15.5 15.2652 15.3946 15.5196 15.2071 15.7071C15.0196 15.8946 14.7652 16 14.5 16H13V17.5C13 17.7652 12.8946 18.0196 12.7071 18.2071C12.5196 18.3946 12.2652 18.5 12 18.5C11.7348 18.5 11.4804 18.3946 11.2929 18.2071C11.1054 18.0196 11 17.7652 11 17.5V16H9.5C9.23478 16 8.98043 15.8946 8.79289 15.7071C8.60536 15.5196 8.5 15.2652 8.5 15C8.5 14.7348 8.60536 14.4804 8.79289 14.2929C8.98043 14.1054 9.23478 14 9.5 14H11V12.5C11 12.2348 11.1054 11.9804 11.2929 11.7929C11.4804 11.6054 11.7348 11.5 12 11.5ZM14 4.414V8H17.586L14 4.414Z"
-                    fill="white"
-                  />
-                </g>
-                <defs>
-                  <clipPath id="clip0_486_12947">
-                    <rect width="24" height="24" fill="white" />
-                  </clipPath>
-                </defs>
-              </svg>
-              Add new royalty record
-            </button>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <g clip-path="url(#clip0_486_12947)">
+                    <path
+                      d="M13.586 2C14.0556 2.00011 14.5101 2.16543 14.87 2.467L15 2.586L19.414 7C19.746 7.33202 19.9506 7.77028 19.992 8.238L20 8.414V20C20.0002 20.5046 19.8096 20.9906 19.4665 21.3605C19.1234 21.7305 18.6532 21.9572 18.15 21.995L18 22H6C5.49542 22.0002 5.00943 21.8096 4.63945 21.4665C4.26947 21.1234 4.04284 20.6532 4.005 20.15L4 20V4C3.99984 3.49542 4.19041 3.00943 4.5335 2.63945C4.87659 2.26947 5.34684 2.04284 5.85 2.005L6 2H13.586ZM12 4H6V20H18V10H13.5C13.1022 10 12.7206 9.84196 12.4393 9.56066C12.158 9.27936 12 8.89782 12 8.5V4ZM12 11.5C12.2652 11.5 12.5196 11.6054 12.7071 11.7929C12.8946 11.9804 13 12.2348 13 12.5V14H14.5C14.7652 14 15.0196 14.1054 15.2071 14.2929C15.3946 14.4804 15.5 14.7348 15.5 15C15.5 15.2652 15.3946 15.5196 15.2071 15.7071C15.0196 15.8946 14.7652 16 14.5 16H13V17.5C13 17.7652 12.8946 18.0196 12.7071 18.2071C12.5196 18.3946 12.2652 18.5 12 18.5C11.7348 18.5 11.4804 18.3946 11.2929 18.2071C11.1054 18.0196 11 17.7652 11 17.5V16H9.5C9.23478 16 8.98043 15.8946 8.79289 15.7071C8.60536 15.5196 8.5 15.2652 8.5 15C8.5 14.7348 8.60536 14.4804 8.79289 14.2929C8.98043 14.1054 9.23478 14 9.5 14H11V12.5C11 12.2348 11.1054 11.9804 11.2929 11.7929C11.4804 11.6054 11.7348 11.5 12 11.5ZM14 4.414V8H17.586L14 4.414Z"
+                      fill="white"
+                    />
+                  </g>
+                  <defs>
+                    <clipPath id="clip0_486_12947">
+                      <rect width="24" height="24" fill="white" />
+                    </clipPath>
+                  </defs>
+                </svg>
+                Add new royalty record
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -872,7 +907,14 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
 
               {/* Body */}
               <div className="bg-neutral-100 px-4 pb-4 pt-3">
-                {data.length > 0 ? (
+                {isTerritoryAnalysisLoading ? (
+                  <div className="rounded-2xl bg-white p-6">
+                    <ChartEmptyState
+                      title="Loading territory analysis"
+                      description="Please wait while we fetch territory records."
+                    />
+                  </div>
+                ) : data.length > 0 ? (
                   <div className="grid gap-4 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.8fr)]">
                   {/* LEFT: horizontal bar chart x2 (streams + revenue) */}
                   <div className="rounded-2xl bg-white p-4">
@@ -1018,11 +1060,15 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
       </div>
 
       {/* Upload Modal */}
-      <UploadFileModal
-        isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
-        onUpload={handleUpload}
-      />
+      {canUploadRoyalty && (
+        <UploadFileModal
+          isOpen={isUploadModalOpen}
+          onClose={() => setIsUploadModalOpen(false)}
+          showArtistSelect={user?.user_type === "record_label"}
+          artistOptions={recordLabelArtists}
+          onUpload={handleUpload}
+        />
+      )}
       <SoloUnrecognizedArtistsModal
         isOpen={openUnrecognizedModal}
         onClose={() => setOpenUnrecognizedModal(false)}

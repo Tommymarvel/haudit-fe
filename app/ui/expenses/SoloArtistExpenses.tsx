@@ -10,6 +10,7 @@ import { uploadFile } from '@/lib/utils/upload';
 import { Menu } from '@/components/ui/Menu';
 import { Select } from '@/components/ui/Select';
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
+import { formatCurrencyAmount } from '@/lib/utils/currency';
 
 const CategoryDisplay: Record<string, string> = {
   marketting: 'Marketing',
@@ -152,7 +153,7 @@ const SoloArtistExpenses = () => {
                   <th className="py-3 pr-3 whitespace-nowrap">Receipt</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100">
+              <tbody className="divide-y divide-[#EAEAEA]">
                 {filtered.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-20">
@@ -174,7 +175,7 @@ const SoloArtistExpenses = () => {
                         {CategoryDisplay[r.category] || r.category}
                       </td>
                       <td className="py-3 pr-4 whitespace-nowrap">
-                        {r.amount ? `$${r.amount.toLocaleString()}` : 'N/A'}
+                        {r.amount != null ? formatCurrencyAmount(r.amount, r.currency || 'USD') : 'N/A'}
                       </td>
                       <td className="py-3 pr-4 whitespace-nowrap">
                         {r.description || 'N/A'}

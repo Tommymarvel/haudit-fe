@@ -5,11 +5,21 @@ import { Formik, Form, Field, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
 import Image from 'next/image';
 import { Loader2 } from 'lucide-react';
+import { formatAmountInput, parseAmountInput } from '@/lib/utils/currency';
 
 const BRAND_PURPLE = '#7B00D4';
+const Currencies = ['USD', 'NGN'] as const;
+
+const parseAmountForValidation = (originalValue: unknown) => {
+  if (originalValue === undefined || originalValue === null) return undefined;
+  if (typeof originalValue === 'string' && originalValue.trim() === '') return undefined;
+  const parsed = parseAmountInput(originalValue);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+};
 
 const Schema = Yup.object({
   amount: Yup.number()
+    .transform((_value, originalValue) => parseAmountForValidation(originalValue))
     .typeError('Enter a valid amount')
     .min(1, 'Must be at least 1')
     .required('Amount is required'),
@@ -22,6 +32,9 @@ const Schema = Yup.object({
   repaymentStatus: Yup.string()
     .oneOf(['repaid', 'outstanding'], 'Select a valid repayment status')
     .required('Repayment status is required'),
+  currency: Yup.mixed<(typeof Currencies)[number]>()
+    .oneOf([...Currencies] as readonly (typeof Currencies)[number][], 'Select a valid currency')
+    .required('Currency is required'),
   purpose: Yup.string().max(800, 'Too long').required('Purpose is required'),
   proofs: Yup.array().of(Yup.mixed<File>()).optional(),
 });
@@ -33,6 +46,7 @@ export type NewAdvancePayload = {
   email: string;
   advanceType: 'personal' | 'marketting';
   repaymentStatus: 'repaid' | 'outstanding';
+  currency: (typeof Currencies)[number];
   purpose?: string;
   proofs?: File[];
 };
@@ -73,6 +87,7 @@ export default function AddAdvanceModal({
             sourceName: '',
             phone: '',
             email: '',
+            currency: 'USD',
             advanceType: 'personal',
             repaymentStatus: 'outstanding',
             purpose: '',
@@ -81,13 +96,15 @@ export default function AddAdvanceModal({
           validationSchema={Schema}
           onSubmit={async (vals, { setSubmitting }) => {
             try {
+              const parsedAmount = parseAmountInput(vals.amount);
               await onSubmit({
-                amount: Number(vals.amount),
+                amount: Number.isFinite(parsedAmount) ? parsedAmount : 0,
                 sourceName: vals.sourceName.trim(),
                 phone: vals.phone.trim(),
                 email: vals.email.trim(),
                 advanceType: vals.advanceType as 'personal' | 'marketting',
                 repaymentStatus: vals.repaymentStatus as 'repaid' | 'outstanding',
+                currency: vals.currency as (typeof Currencies)[number],
                 purpose: vals.purpose?.trim() || undefined,
                 proofs: vals.proofs,
               });
@@ -105,15 +122,42 @@ export default function AddAdvanceModal({
                   <label className="mb-3 block text-sm font-medium text-neutral-700">
                     Amount
                   </label>
-                  <Field
+                  <input
                     name="amount"
                     inputMode="decimal"
                     placeholder="Enter request amount"
+                    value={values.amount}
+                    onChange={(event) =>
+                      setFieldValue('amount', formatAmountInput(event.target.value))
+                    }
                     className="w-full rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none
                            focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
                   />
                   <ErrorMessage
                     name="amount"
+                    component="p"
+                    className="mt-1 text-xs text-rose-600"
+                  />
+                </div>
+                {/* Currency */}
+                <div>
+                  <label className="mb-3 block text-sm font-medium text-neutral-700">
+                    Currency
+                  </label>
+                  <Field
+                    as="select"
+                    name="currency"
+                    className="w-full rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none
+                           focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
+                  >
+                    {Currencies.map((currency) => (
+                      <option key={currency} value={currency}>
+                        {currency}
+                      </option>
+                    ))}
+                  </Field>
+                  <ErrorMessage
+                    name="currency"
                     component="p"
                     className="mt-1 text-xs text-rose-600"
                   />

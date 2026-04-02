@@ -142,7 +142,7 @@ function FormRow({
     helpText?: React.ReactNode;
 }) {
     return (
-        <div className="grid md:grid-cols-[280px_1fr] gap-4 py-5 border-b border-neutral-100 last:border-0">
+        <div className="grid md:grid-cols-[280px_1fr] gap-4 py-5 border-b border-neutral-200 last:border-0">
             <div>
                 <label className="block text-sm font-semibold text-[#414651]">
                     {label} {required && <span className="text-[#7F56D9]">*</span>}

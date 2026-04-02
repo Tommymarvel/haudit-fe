@@ -49,6 +49,12 @@ export interface RoyaltyDashboardMetrics {
   streamsByMonth: MonthlyMetric[];
 }
 
+export interface TerritoryAnalysisItem {
+  territory: string;
+  streams: number;
+  totalRevenueUSD: number;
+}
+
 // Assuming structure for other endpoints based on descriptions
 export interface TrackRevenueDsp {
   // Structure not fully visible in screenshot, assuming generic for now

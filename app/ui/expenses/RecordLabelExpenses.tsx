@@ -3,178 +3,304 @@
 import { ChartCard } from '@/components/dashboard/ChartCard';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody } from '@/components/ui/Card';
+import { Select } from '@/components/ui/Select';
+import { useExpenses } from '@/hooks/useExpenses';
+import { useRecordLabelArtists } from '@/hooks/useRecordLabelArtists';
 import { BRAND } from '@/lib/brand';
-import { Plus, ChevronDown, Table2 } from 'lucide-react';
+import { getRecordLabelArtistName } from '@/lib/utils/recordLabelArtist';
+import { uploadFile } from '@/lib/utils/upload';
+import { deriveSingleCurrency, formatCurrencyAmount } from '@/lib/utils/currency';
+import { ArrowUpDown, CalendarDays, MoreVertical, Search, UserRound } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import React, { useMemo, useState } from 'react';
 import AddExpensesModal, { NewExpensesPayload } from './AddExpensesModal';
-import { useExpenses } from '@/hooks/useExpenses';
-import { uploadFile } from '@/lib/utils/upload';
-import { Menu } from '@/components/ui/Menu';
-import { Select } from '@/components/ui/Select';
-import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
+import { StatusPill } from '@/components/ui/StatusPill';
 
-const CategoryDisplay: Record<string, string> = {
-  marketting: 'Marketing',
-  production: 'Production',
-  personal: 'Personal',
+type ExpenseStatus = 'Approved' | 'Pending' | 'Rejected';
+
+type ExpenseRow = {
+  id: string;
+  date: string;
+  artistId: string;
+  artistName: string;
+  category: string;
+  status: ExpenseStatus;
+  amount: number;
+  currency: string;
+  loggedBy: string;
 };
 
+function normalizeStatus(value?: string): ExpenseStatus {
+  const key = (value || '').trim().toLowerCase();
+  if (key === 'approved' || key === 'paid' || key === 'repaid') return 'Approved';
+  if (key === 'rejected') return 'Rejected';
+  return 'Pending';
+}
+
+function updateArtistQuery(
+  pathname: string,
+  searchParams: URLSearchParams,
+  artistId: string,
+  router: ReturnType<typeof useRouter>
+) {
+  const next = new URLSearchParams(searchParams.toString());
+  next.delete('artist');
+  if (artistId === 'all') {
+    next.delete('artistId');
+  } else {
+    next.set('artistId', artistId);
+  }
+  const query = next.toString();
+  router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+}
+
 const RecordLabelExpenses = () => {
-  const { expenses, trend, createExpense } = useExpenses();
   const [q, setQ] = useState('');
-  const [category, setCategory] = useState('All Categories');
+  const [category, setCategory] = useState('all');
   const [openAdd, setOpenAdd] = useState(false);
+  const { expenses, trend, createExpense } = useExpenses();
+  const { artists } = useRecordLabelArtists();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
 
-  const trendData = useMemo(() => {
-    if (!trend || trend.length === 0) return [];
-    return trend.map((item) => ({
-      label: new Date(item.day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      value: item.amount,
-    }));
-  }, [trend]);
+  const artistFromSidebarId = searchParams.get('artistId') || 'all';
 
-  const filtered = useMemo(
+  const trendData = useMemo(
     () =>
-      (expenses || []).filter(
-        (r) =>
-          (category === 'All Categories' || r.category === category) &&
-          (q === '' ||
-            r._id.toLowerCase().includes(q.toLowerCase()) ||
-            r.category.toLowerCase().includes(q.toLowerCase()) ||
-            r.description.toLowerCase().includes(q.toLowerCase()))
-      ),
-    [q, category, expenses]
+      (trend ?? []).map((item) => ({
+        label: new Date(item.day).toLocaleDateString('en-US', { month: 'short' }),
+        date: item.day,
+        value: Number(item.amount ?? 0),
+      })),
+    [trend]
   );
+
+  const rows = useMemo<ExpenseRow[]>(
+    () =>
+      (expenses ?? []).map((item, index) => ({
+        id: item.ref_id || item._id || `EXP-${index + 1}`,
+        date: new Date(item.expense_date || item.createdAt)
+          .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+          .replace(/ /g, '-'),
+        artistId:
+          ((item as { artist_id?: string; artistId?: string }).artist_id ||
+            (item as { artist_id?: string; artistId?: string }).artistId ||
+            '') + '',
+        artistName:
+          (item as { artist_name?: string; artistName?: string }).artist_name ||
+          (item as { artist_name?: string; artistName?: string }).artistName ||
+          '-',
+        category: item.category || '-',
+        status: normalizeStatus((item as { status?: string }).status),
+        amount: Number(item.amount ?? 0),
+        currency: (item.currency || 'USD').toUpperCase(),
+        loggedBy:
+          (item as { logged_by?: string; paid_by?: string }).logged_by ||
+          (item as { logged_by?: string; paid_by?: string }).paid_by ||
+          'Admin',
+      })),
+    [expenses]
+  );
+  const totalCurrency = useMemo(
+    () => deriveSingleCurrency(rows.map((item) => item.currency), 'USD'),
+    [rows]
+  );
+
+  const totalExpenses = useMemo(
+    () => rows.reduce((sum, item) => sum + item.amount, 0),
+    [rows]
+  );
+
+  const artistOptions = useMemo(() => {
+    const uniqueById = new Map<string, string>();
+    artists.forEach((artist) => {
+      const artistId = (artist.id || artist._id || '').toString().trim();
+      const artistName = getRecordLabelArtistName(artist);
+      if (!artistId || !artistName) return;
+      uniqueById.set(artistId, artistName);
+    });
+    return [{ label: 'All artist', value: 'all' }].concat(
+      Array.from(uniqueById.entries()).map(([id, name]) => ({ label: name, value: id }))
+    );
+  }, [artists]);
+  const artistNameOptions = useMemo(
+    () => artistOptions.filter((option) => option.value !== 'all').map((option) => option.label),
+    [artistOptions]
+  );
+
+  const categoryOptions = useMemo(() => {
+    const categories = Array.from(new Set(rows.map((item) => item.category).filter(Boolean)));
+    return [{ label: 'All categories', value: 'all' }].concat(
+      categories.map((cat) => ({ label: cat, value: cat }))
+    );
+  }, [rows]);
+
+  const filteredExpenses = useMemo(() => {
+    const search = q.trim().toLowerCase();
+    return rows.filter((item) => {
+      const matchesArtist =
+        artistFromSidebarId === 'all' ||
+        item.artistId === '' ||
+        item.artistId === artistFromSidebarId;
+      const matchesCategory = category === 'all' || item.category === category;
+      const matchesSearch =
+        search === '' ||
+        item.id.toLowerCase().includes(search) ||
+        item.artistName.toLowerCase().includes(search) ||
+        item.category.toLowerCase().includes(search) ||
+        item.loggedBy.toLowerCase().includes(search);
+
+      return matchesArtist && matchesCategory && matchesSearch;
+    });
+  }, [artistFromSidebarId, category, q, rows]);
 
   return (
     <div>
-      <div className="flex flex-col items-start gap-3 lg:flex-row lg:items-center justify-between">
+      <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
-          <h1 className="text-2xl font-medium text-[#3C3C3C]">Expenses</h1>
-          <p className="text-base text-[#777777]">Manage and track all label expenses</p>
+          <h1 className="text-[24px] font-medium leading-[120%] text-[#3C3C3C]">
+            Artist Expenses
+          </h1>
+          <p className="mt-1 text-[16px] leading-[120%] text-[#6E6E6E]">
+            You are now on the page to manage Record Label artists.
+          </p>
         </div>
-        <div className="w-full lg:w-fit grid grid-cols-2 gap-2 lg:flex">
-          <YearFilterCalendar buttonClassName="w-full bg-[#EAEAEA] rounded-2xl lg:w-auto inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-neutral-800" />
 
-          <Menu
-            trigger={
-              <Button
-                variant="outline"
-                className="w-full bg-[#EAEAEA] rounded-2xl lg:w-auto gap-2"
-              >
-                <svg width="15" height="17" viewBox="0 0 15 17" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path fillRule="evenodd" clipRule="evenodd" d="M7.98833 0C8.37963 9.56093e-05 8.75841 0.137862 9.05833 0.389167L9.16667 0.488333L12.845 4.16667C13.1217 4.44335 13.2922 4.80857 13.3267 5.19833L13.3333 5.345V8.33333H11.6667V6.66667H7.91667C7.60593 6.66665 7.30634 6.5509 7.07632 6.34198C6.84629 6.13307 6.70233 5.84597 6.6725 5.53667L6.66667 5.41667V1.66667H1.66667V15H6.66667V16.6667H1.66667C1.24619 16.6668 0.841195 16.508 0.532877 16.2221C0.224559 15.9362 0.0357029 15.5443 0.00416685 15.125L8.35567e-08 15V1.66667C-0.000132983 1.24619 0.158672 0.841194 0.444581 0.532877C0.73049 0.224559 1.12237 0.0357028 1.54167 0.00416676L1.66667 0H7.98833ZM12.2558 10.3875L14.6125 12.7442C14.7687 12.9004 14.8565 13.1124 14.8565 13.3333C14.8565 13.5543 14.7687 13.7662 14.6125 13.9225L12.2558 16.2792C12.179 16.3588 12.087 16.4222 11.9853 16.4659C11.8837 16.5096 11.7743 16.5326 11.6637 16.5335C11.553 16.5345 11.4433 16.5134 11.3409 16.4715C11.2385 16.4296 11.1454 16.3677 11.0672 16.2895C10.9889 16.2113 10.927 16.1182 10.8851 16.0158C10.8432 15.9134 10.8222 15.8036 10.8231 15.693C10.8241 15.5823 10.8471 15.473 10.8907 15.3713C10.9344 15.2697 10.9979 15.1777 11.0775 15.1008L12.0117 14.1667H8.33333C8.11232 14.1667 7.90036 14.0789 7.74408 13.9226C7.5878 13.7663 7.5 13.5543 7.5 13.3333C7.5 13.1123 7.5878 12.9004 7.74408 12.7441C7.90036 12.5878 8.11232 12.5 8.33333 12.5H12.0117L11.0775 11.5658C10.9211 11.4096 10.8332 11.1976 10.8332 10.9765C10.8331 10.7555 10.9208 10.5435 11.0771 10.3871C11.2333 10.2307 11.4453 10.1428 11.6664 10.1427C11.8874 10.1427 12.0995 10.2304 12.2558 10.3867V10.3875ZM8.33333 2.01167V5H11.3217L8.33333 2.01167Z" fill="#2D2D2D" />
-                </svg>
-                Export <ChevronDown className="h-4 w-4" />
-              </Button>
-            }
-            items={[
-              { label: 'Export analytics', onClick: () => {} },
-              { label: 'Export data', onClick: () => {} },
-            ]}
-          />
+        <div className="flex w-full gap-3 lg:w-auto">
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-2xl bg-[#E9E9E9] px-3 py-1 text-[14px] font-medium text-[#5A5A5A]"
+          >
+            <CalendarDays className="h-4 w-4" />
+            Year
+          </button>
 
           <Button
             variant="primary"
-            className="col-span-2 w-full rounded-2xl lg:col-span-1 lg:w-auto"
+            className="rounded-2xl  text-[14px] px-4 font-medium"
             style={{ backgroundColor: BRAND.purple }}
             onClick={() => setOpenAdd(true)}
           >
-            <Plus className="h-4 w-4" /> Add Expense
+            Add Expense
           </Button>
         </div>
       </div>
 
-      <div className="mt-10">
+      <div className="mt-5">
         <ChartCard
           title="Expenses Trend"
           variant="line"
           data={trendData}
           xKey="label"
           yKey="value"
-          color={BRAND.purple}
-          bandFill="#F4F4F4"
+          bandFill="#E8E8E8"
           lineType="monotone"
+          chartMarginTop={48}
+          chartOverlay={
+            <div className="leading-none">
+              <div className="leading-none">
+                <div className=" flex items-center gap-2 text-[12px] font-normal leading-[120%] text-[#AAAAAA]">
+                  <span className="h-3 w-[2px] rounded bg-[#7B00D4]" />
+                  Total Expenses
+                </div>
+                <p className=" mt-1 text-[20px] font-medium leading-[120%] tracking-[0] text-[#3C3C3C]">
+                  {formatCurrencyAmount(totalExpenses, totalCurrency, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </p>
+              </div>
+            </div>
+          }
         />
       </div>
 
-      <Card className="flex-1 mt-8">
+      <Card className="mt-8 overflow-hidden">
         <CardBody className="p-0!">
-          <div className="flex flex-wrap items-center justify-between p-3 gap-3">
-            <div className="text-sm font-semibold text-[#3C3C3C]">All expenses</div>
-            <div className="lg:ml-auto flex lg:items-center lg:flex-row flex-col items-start gap-2">
-              <input
-                placeholder="Search expenses"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                className="h-10 w-60 rounded-xl border border-neutral-200 bg-[#F4F4F4] px-3 text-sm outline-none focus:ring-2 focus:ring-neutral-100"
+          <div className="flex flex-col gap-3 border-b border-neutral-200 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="text-[14px] font-semibold text-[#3C3C3C]">All Expenses</div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+                <input
+                  value={q}
+                  onChange={(event) => setQ(event.target.value)}
+                  placeholder="Search expense"
+                  className="h-10 w-[280px] rounded-xl border border-neutral-200 bg-[#F4F4F4] pl-9 pr-3 text-[14px] text-neutral-700 outline-none"
+                />
+              </div>
+
+              <Select
+                value={category}
+                onChange={setCategory}
+                className="h-10 min-w-[160px] bg-[#F8F8F8] text-[14px] text-[#5A5A5A]"
+                options={categoryOptions}
               />
+
+              <div className="relative min-w-[160px]">
+                <UserRound className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-[#707070]" />
+                <Select
+                  value={artistFromSidebarId}
+                  onChange={(value) =>
+                    updateArtistQuery(pathname, new URLSearchParams(searchParams.toString()), value, router)
+                  }
+                  className="h-10 w-full bg-[#F8F8F8] pl-8 text-[14px] text-[#5A5A5A]"
+                  options={artistOptions}
+                />
+              </div>
             </div>
-            <Select
-              value={category}
-              onChange={setCategory}
-              className="w-[170px]"
-              options={[
-                { label: 'All Categories', value: 'All Categories' },
-                { label: 'Marketing', value: 'marketting' },
-                { label: 'Production', value: 'production' },
-                { label: 'Personal', value: 'personal' },
-              ]}
-            />
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-base">
-              <thead className="text-left text-neutral-500 bg-[#F4F4F4]">
+            <table className="w-full min-w-[980px]">
+              <thead className="bg-[#ECECEC] text-left text-[16px] font-medium text-[#5F5F5F]">
                 <tr>
-                  <th className="py-3 pl-3 pr-4 whitespace-nowrap">ID</th>
-                  <th className="py-3 pr-4 whitespace-nowrap">Date</th>
-                  <th className="py-3 pr-4 whitespace-nowrap">Category</th>
-                  <th className="py-3 pr-4 whitespace-nowrap">Amount</th>
-                  <th className="py-3 pr-4 whitespace-nowrap">Description</th>
-                  <th className="py-3 pr-3 whitespace-nowrap">Receipt</th>
+                  <th className="px-4 py-3">ID</th>
+                  <th className="px-4 py-3">
+                    <span className="inline-flex items-center gap-1">
+                      Date
+                      <ArrowUpDown className="h-3.5 w-3.5" />
+                    </span>
+                  </th>
+                  <th className="px-4 py-3">Artist Name</th>
+                  <th className="px-4 py-3">Category</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Amount</th>
+                  <th className="px-4 py-3">Logged by</th>
+                  <th className="px-4 py-3" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {filtered.map((r, i) => (
-                  <tr key={r.ref_id || r._id || i} className="text-neutral-800">
-                    <td className="py-3 pl-3 pr-4 whitespace-nowrap max-w-[150px] truncate">{r.ref_id}</td>
-                    <td className="py-3 pr-4 whitespace-nowrap">
-                      {new Date(r.expense_date || r.createdAt).toLocaleDateString()}
+              <tbody className="divide-y divide-[#EAEAEA] text-[16px] text-[#4C4C4C]">
+                {filteredExpenses.map((item, index) => (
+                  <tr key={`${item.id}-${index}`} className="bg-white">
+                    <td className="px-4 py-3 whitespace-nowrap">{item.id}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{item.date}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{item.artistName}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{item.category}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <StatusPill label={item.status} />
                     </td>
-                    <td className="py-3 pr-4 whitespace-nowrap">
-                      {CategoryDisplay[r.category] || r.category}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {formatCurrencyAmount(item.amount, item.currency)}
                     </td>
-                    <td className="py-3 pr-4 whitespace-nowrap">
-                      {r.amount ? `$${r.amount.toLocaleString()}` : 'N/A'}
-                    </td>
-                    <td className="py-3 pr-4 whitespace-nowrap">{r.description || 'N/A'}</td>
-                    <td className="py-3 pr-3 whitespace-nowrap">
-                      {r.receipt_url ? (
-                        <a
-                          href={r.receipt_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline"
-                        >
-                          View Receipt
-                        </a>
-                      ) : (
-                        'N/A'
-                      )}
+                    <td className="px-4 py-3 whitespace-nowrap">{item.loggedBy}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        className="rounded-lg p-1 text-[#5A5A5A] hover:bg-neutral-100"
+                        aria-label="More row actions"
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </button>
                     </td>
                   </tr>
                 ))}
-                {filtered.length === 0 && (
+                {filteredExpenses.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-20">
-                      <div className="flex flex-col items-center justify-center text-center">
-                        <Table2 className="h-5 w-5 text-[#7B00D4]" />
-                        <p className="mt-2 text-sm font-medium text-neutral-700">No records yet</p>
-                        <p className="mt-1 max-w-xs text-xs text-neutral-500">
-                          Entries will appear here once financial data is added by your label.
-                        </p>
-                      </div>
+                    <td colSpan={8} className="px-4 py-16 text-center text-[#777777]">
+                      No expenses match this artist/category filter.
                     </td>
                   </tr>
                 )}
@@ -187,17 +313,22 @@ const RecordLabelExpenses = () => {
       <AddExpensesModal
         open={openAdd}
         onClose={() => setOpenAdd(false)}
+        recordLabelFields
+        artistOptions={artistNameOptions}
         onSubmit={async (payload: NewExpensesPayload) => {
           try {
             let receiptUrl = '';
             if (payload.proofs && payload.proofs.length > 0) {
               receiptUrl = await uploadFile(payload.proofs[0], 'expense');
             }
+
             await createExpense({
+              artist_name: payload.artist_name,
               expense_date: payload.expense_date,
               category: payload.category,
               currency: payload.currency,
               amount: payload.amount,
+              recoupable: payload.recoupable,
               description: payload.description,
               receipt_url: receiptUrl,
             });
