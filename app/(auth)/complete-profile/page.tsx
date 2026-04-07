@@ -10,30 +10,25 @@ import { TagInput } from "@/components/ui/TagInput";
 import axiosInstance from "@/lib/axiosinstance";
 import { useAuth } from "@/contexts/AuthContext";
 
-const ProfileSchema = Yup.object({
-  firstName: Yup.string().when("$userType", {
-    is: (val: string) => val !== "record_label",
-    then: (schema) => schema.required("First name is required"),
-    otherwise: (schema) => schema.notRequired(),
-  }),
-  lastName: Yup.string().when("$userType", {
-    is: (val: string) => val !== "record_label",
-    then: (schema) => schema.required("Last name is required"),
-    otherwise: (schema) => schema.notRequired(),
-  }),
-  other_names: Yup.array().of(Yup.string()),
-  label_name: Yup.string().when("$userType", {
-    is: (val: string) => val === "record_label",
-    then: (schema) =>
-      schema.required("Label name is required for record labels"),
-    otherwise: (schema) => schema.notRequired(),
-  }),
-  address: Yup.string().when("$userType", {
-    is: (val: string) => val === "record_label",
-    then: (schema) => schema.required("Address is required for record labels"),
-    otherwise: (schema) => schema.notRequired(),
-  }),
-});
+function buildProfileSchema(userType: string) {
+  const isRecordLabel = userType === "record_label";
+
+  return Yup.object({
+    firstName: isRecordLabel
+      ? Yup.string().notRequired()
+      : Yup.string().required("First name is required"),
+    lastName: isRecordLabel
+      ? Yup.string().notRequired()
+      : Yup.string().required("Last name is required"),
+    other_names: Yup.array().of(Yup.string()),
+    label_name: isRecordLabel
+      ? Yup.string().required("Label name is required for record labels")
+      : Yup.string().notRequired(),
+    address: isRecordLabel
+      ? Yup.string().required("Address is required for record labels")
+      : Yup.string().notRequired(),
+  });
+}
 
 function CompleteProfileContent() {
   const router = useRouter();
@@ -172,15 +167,11 @@ function CompleteProfileContent() {
           label_name: "",
           address: "",
         }}
-        validationSchema={ProfileSchema}
-        context={{ userType }}
+        validationSchema={buildProfileSchema(userType)}
         onSubmit={handleSubmit}
       >
-        {({ values, setFieldValue }) => {
+        {({ values, setFieldValue, isValid }) => {
           const isRecordLabel = userType === "record_label";
-          const allFieldsFilled = isRecordLabel
-            ? values.label_name.trim() !== "" && values.address.trim() !== ""
-            : values.firstName.trim() !== "" && values.lastName.trim() !== "";
 
           return (
             <Form className="space-y-5 mt-6 max-w-[650px] w-full mx-auto">
@@ -308,7 +299,7 @@ function CompleteProfileContent() {
               {/* Submit */}
               <button
                 type="submit"
-                disabled={!allFieldsFilled || submitting}
+                disabled={!isValid || submitting}
                 className="w-full rounded-2xl text-white py-3 font-medium transition-colors disabled:bg-[#959595] enabled:bg-[#7B00D4] enabled:hover:bg-[#6A00B8]"
               >
                 {submitting ? "Creating profile..." : "Complete Profile"}
