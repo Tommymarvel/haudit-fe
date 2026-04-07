@@ -4,7 +4,7 @@ import YearFilterCalendar from '../ui/YearFilterCalendar';
 
 export default function Topbar() {
   const { user } = useAuth();
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   return (
     <div className="flex items-center justify-between border-neutral-200  ">
       <div>

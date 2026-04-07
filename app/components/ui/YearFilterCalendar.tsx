@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 
 type YearFilterCalendarProps = {
-  value?: number;
-  onChange?: (year: number) => void;
+  value?: number | null;
+  onChange?: (year: number | null) => void;
   label?: string;
   showYear?: boolean;
   align?: "left" | "right" | "auto";
@@ -61,13 +61,23 @@ export default function YearFilterCalendar({
   align = "auto",
   buttonClassName = "",
 }: YearFilterCalendarProps) {
-  const initialYear = value ?? new Date().getFullYear();
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const initialYear = value ?? today.getFullYear();
   const [isOpen, setIsOpen] = useState(false);
-  const [viewDate, setViewDate] = useState(new Date(initialYear, new Date().getMonth(), 1));
-  const [startDate, setStartDate] = useState<Date | null>(new Date(initialYear, 0, 1));
-  const [endDate, setEndDate] = useState<Date | null>(new Date(initialYear, 11, 31));
-  const [draftStartDate, setDraftStartDate] = useState<Date | null>(new Date(initialYear, 0, 1));
-  const [draftEndDate, setDraftEndDate] = useState<Date | null>(new Date(initialYear, 11, 31));
+  const [viewDate, setViewDate] = useState(new Date(initialYear, today.getMonth(), 1));
+  const [startDate, setStartDate] = useState<Date | null>(
+    typeof value === "number" ? new Date(value, 0, 1) : null,
+  );
+  const [endDate, setEndDate] = useState<Date | null>(
+    typeof value === "number" ? new Date(value, 11, 31) : null,
+  );
+  const [draftStartDate, setDraftStartDate] = useState<Date | null>(
+    typeof value === "number" ? new Date(value, 0, 1) : null,
+  );
+  const [draftEndDate, setDraftEndDate] = useState<Date | null>(
+    typeof value === "number" ? new Date(value, 11, 31) : null,
+  );
   const [resolvedAlign, setResolvedAlign] = useState<"left" | "right">("right");
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -99,8 +109,17 @@ export default function YearFilterCalendar({
       setEndDate(nextEnd);
       setDraftStartDate(nextStart);
       setDraftEndDate(nextEnd);
+      return;
     }
-  }, [value]);
+
+    const nextStart = new Date(currentYear, 0, 1);
+    const nextEnd = new Date(currentYear, 11, 31);
+    setStartDate(nextStart);
+    setEndDate(nextEnd);
+    setDraftStartDate(nextStart);
+    setDraftEndDate(nextEnd);
+    setViewDate(new Date(currentYear, today.getMonth(), 1));
+  }, [currentYear, value]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -142,7 +161,15 @@ export default function YearFilterCalendar({
   }, []);
 
   const cells = useMemo(() => buildCalendarCells(viewDate), [viewDate]);
-  const selectedYear = value ?? endDate?.getFullYear() ?? viewDate.getFullYear();
+  const selectedYear =
+    typeof value === "number"
+      ? value
+      : endDate?.getFullYear() ?? currentYear;
+
+  const selectFullYear = (year: number) => {
+    setDraftStartDate(new Date(year, 0, 1));
+    setDraftEndDate(new Date(year, 11, 31));
+  };
 
   const handleDayClick = (clickedDate: Date) => {
     const normalized = normalizeDate(clickedDate);
@@ -177,10 +204,10 @@ export default function YearFilterCalendar({
           setDraftEndDate(endDate);
           setIsOpen((prev) => !prev);
         }}
-        className={buttonClassName || "inline-flex items-center gap-2 rounded-2xl bg-[#EAEAEA] px-3 py-2 text-sm font-medium text-neutral-800"}
+        className={`inline-flex items-center gap-2 whitespace-nowrap rounded-2xl bg-[#EAEAEA] px-3 py-2 text-sm font-medium text-neutral-800 ${buttonClassName}`}
       >
-        <Calendar className="h-4 w-4" />
-        <span>{label}{showYear ? ` ${selectedYear}` : ""}</span>
+        <Calendar className="h-4 w-4 shrink-0" />
+        <span className="whitespace-nowrap">{label}{showYear ? ` ${selectedYear}` : ""}</span>
       </button>
 
       {isOpen && (
@@ -204,6 +231,16 @@ export default function YearFilterCalendar({
               className="rounded-md p-1 text-neutral-300 hover:bg-white/10"
             >
               <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="mb-4 grid grid-cols-1 gap-2">
+            <button
+              type="button"
+              onClick={() => selectFullYear(viewDate.getFullYear())}
+              className="rounded-lg border border-[#4B5563] px-2 py-1.5 text-xs text-neutral-200 hover:bg-white/10"
+            >
+              Full year {viewDate.getFullYear()}
             </button>
           </div>
 

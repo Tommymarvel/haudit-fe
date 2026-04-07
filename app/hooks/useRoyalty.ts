@@ -2,6 +2,7 @@ import useSWR, { mutate } from 'swr';
 import axiosInstance from '@/lib/axiosinstance';
 import { AxiosError } from 'axios';
 import {
+  AlbumInteractionItem,
   RoyaltyDashboardMetrics,
   RoyaltyUploadResponse,
   RoyaltyUploadsResponse,
@@ -82,7 +83,7 @@ export function useRoyalty() {
 
   const { data: albumRevenue, error: albumRevenueError, isLoading: isAlbumRevenueLoading } = useSWR<Array<{ revenue: number; day: string }>>(albumRevenueEndpoint, fetcher);
 
-  const { data: albumInteractions, error: albumInteractionsError, isLoading: isAlbumInteractionsLoading } = useSWR<{ totalStreams: number }>(albumInteractionsEndpoint, fetcher);
+  const { data: albumInteractions, error: albumInteractionsError, isLoading: isAlbumInteractionsLoading } = useSWR<AlbumInteractionItem[]>(albumInteractionsEndpoint, fetcher);
 
   const { data: trackRevenueDsp, error: trackRevenueDspError, isLoading: isTrackRevenueDspLoading } = useSWR<Array<{ assetId: string; assetTitle: string; dsps: Array<{ dsp: string; revenue: number }> }>>(trackRevenueDspEndpoint, fetcher);
 
@@ -95,10 +96,14 @@ export function useRoyalty() {
     file: File,
     source: string,
     onProgress?: (message: string) => void,
+    artistIds?: string[],
   ): Promise<RoyaltyUploadResponse> => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('source', source);
+    if (artistIds && artistIds.length > 0) {
+      artistIds.forEach((artistId) => formData.append('artistIds', artistId));
+    }
 
     const sseUrl = `${process.env.NEXT_PUBLIC_API_URL}royalties/upload-progress`;
     const eventSource = new EventSource(sseUrl, { withCredentials: true });

@@ -47,15 +47,21 @@ function buildPagination(currentPage: number, totalPages: number): PaginationIte
 }
 
 export default function TrackRevenuePerDSPPanel() {
-  const currentYear = new Date().getFullYear();
-  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const [currentPage, setCurrentPage] = useState(1);
   const searchParams = useSearchParams();
-  const selectedArtistId = (searchParams.get("artistId") || "").trim();
+  const selectedArtistId = (searchParams.get("artistId") || searchParams.get("id") || "").trim();
 
   const { data: trackRevenueDsp, isLoading: isTrackRevenueDspLoading } = useSWR<Array<{ assetId: string; assetTitle: string; dsps: Array<{ dsp: string; revenue: number }> }>>(
     appendQueryParam(
-      `/royalties/track-revenue-dsp?year=${selectedYear}&monthly=false`,
+      `/royalties/track-revenue-dsp?${(() => {
+        const params = new URLSearchParams();
+        params.set('monthly', 'false');
+        if (typeof selectedYear === 'number') {
+          params.set('year', String(selectedYear));
+        }
+        return params.toString();
+      })()}`,
       "artistId",
       selectedArtistId,
     ),

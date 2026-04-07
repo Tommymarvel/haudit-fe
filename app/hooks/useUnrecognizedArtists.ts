@@ -53,20 +53,30 @@ export function useUnrecognizedArtists() {
 
   const assignPendingArtists = async (mappings: Record<string, string>) => {
     try {
-      const namesToCreate = Array.from(
-        new Set(
-          Object.keys(mappings)
-            .map((name) => name.trim())
-            .filter(Boolean),
-        ),
-      );
+      const groupedByArtistId = new Map<string, Set<string>>();
+
+      Object.entries(mappings).forEach(([name, artistId]) => {
+        const normalizedName = name.trim();
+        const normalizedArtistId = (artistId || '').trim();
+        if (!normalizedName || !normalizedArtistId) return;
+
+        const existing = groupedByArtistId.get(normalizedArtistId) ?? new Set<string>();
+        existing.add(normalizedName);
+        groupedByArtistId.set(normalizedArtistId, existing);
+      });
 
       await Promise.all(
-        namesToCreate.map((name) =>
-          axiosInstance.post(CREATE_USER_NAME_ENDPOINT, {
-            name,
-            name_type: 'other_names',
-          }),
+        Array.from(groupedByArtistId.entries()).map(([artistId, namesSet]) =>
+          axiosInstance.post(
+            CREATE_USER_NAME_ENDPOINT,
+            {
+              names: Array.from(namesSet),
+              name_type: 'other_names',
+            },
+            {
+              params: { artistId },
+            },
+          ),
         ),
       );
 

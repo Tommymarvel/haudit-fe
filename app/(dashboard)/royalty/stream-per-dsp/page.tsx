@@ -62,24 +62,29 @@ function buildPagination(currentPage: number, totalPages: number): PaginationIte
 const fetcher = (url: string) => axiosInstance.get(url).then((res) => res.data);
 
 export default function StreamPerDSPPanel() {
-  const currentYear = new Date().getFullYear();
-  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
 
   const router = useRouter();
   const searchParams = useSearchParams();
   const viewMode = (searchParams.get('view') as 'streams' | 'revenue') || 'streams';
-  const selectedArtistId = (searchParams.get('artistId') || '').trim();
+  const selectedArtistId = (searchParams.get('artistId') || searchParams.get('id') || '').trim();
 
-  const apiEndpoint =
-    appendQueryParam(
+  const apiEndpoint = (() => {
+    const params = new URLSearchParams();
+    params.set('monthly', 'false');
+    if (typeof selectedYear === 'number') {
+      params.set('year', String(selectedYear));
+    }
+
+    const basePath =
       viewMode === 'revenue'
-        ? `/royalties/track-revenue-dsp?year=${selectedYear}&monthly=false`
-        : `/royalties/track-streams-dsp?year=${selectedYear}&monthly=false`,
-      'artistId',
-      selectedArtistId
-    );
+        ? `/royalties/track-revenue-dsp?${params.toString()}`
+        : `/royalties/track-streams-dsp?${params.toString()}`;
+
+    return appendQueryParam(basePath, 'artistId', selectedArtistId);
+  })();
 
   const { data: apiResponse, isLoading } = useSWR<{
     trackBreakdown?: ApiTrack[];

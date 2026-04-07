@@ -12,6 +12,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { createPortal } from 'react-dom';
 import { ChartCard } from '@/components/dashboard/ChartCard';
 import Modal from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
@@ -333,7 +334,7 @@ function MetricCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-[#D5D5D5] bg-white p-4">
+    <div className="min-w-[240px] shrink-0 rounded-2xl border border-[#D5D5D5] bg-white p-4">
       <div className="flex items-start justify-between">
         <div>
           <p className="text-[30px] font-semibold leading-none text-[#3C3C3C]">{value}</p>
@@ -413,8 +414,10 @@ export default function RecordLabelArtists() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const menuRootRef = useRef<HTMLDivElement | null>(null);
+  const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; placement: 'up' | 'down' } | null>(null);
 
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const [openAddArtist, setOpenAddArtist] = useState(false);
   const [menuOpenForId, setMenuOpenForId] = useState<string | null>(null);
   const [pendingArtistActionId, setPendingArtistActionId] = useState<string | null>(null);
@@ -470,28 +473,57 @@ export default function RecordLabelArtists() {
   useEffect(() => {
     if (!menuOpenForId) return;
 
+    const updateMenuPosition = () => {
+      if (!menuAnchorEl) return;
+      const rect = menuAnchorEl.getBoundingClientRect();
+      const menuWidth = 170;
+      const estimatedMenuHeight = 180;
+      const gap = 6;
+      const viewportPadding = 8;
+
+      const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
+      const spaceAbove = rect.top - viewportPadding;
+      const placement: 'up' | 'down' =
+        spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow ? 'up' : 'down';
+
+      const top = placement === 'down' ? rect.bottom + gap : rect.top - gap;
+      const left = Math.max(viewportPadding, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - viewportPadding));
+
+      setMenuPosition({ top, left, placement });
+    };
+
+    updateMenuPosition();
+
     const handleDocumentClick = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (menuRootRef.current && !menuRootRef.current.contains(target)) {
-        setMenuOpenForId(null);
-      }
+      if (menuRootRef.current?.contains(target)) return;
+      if (menuAnchorEl?.contains(target)) return;
+      setMenuOpenForId(null);
+      setMenuAnchorEl(null);
+      setMenuPosition(null);
     };
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setMenuOpenForId(null);
+        setMenuAnchorEl(null);
+        setMenuPosition(null);
       }
     };
 
     document.addEventListener('mousedown', handleDocumentClick);
     document.addEventListener('keydown', handleEscape);
+    window.addEventListener('resize', updateMenuPosition);
+    window.addEventListener('scroll', updateMenuPosition, true);
     return () => {
       document.removeEventListener('mousedown', handleDocumentClick);
       document.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('resize', updateMenuPosition);
+      window.removeEventListener('scroll', updateMenuPosition, true);
     };
-  }, [menuOpenForId]);
+  }, [menuOpenForId, menuAnchorEl]);
 
-  const selectedArtistId = (searchParams.get('artistId') || '').trim();
+  const selectedArtistId = (searchParams.get('artistId') || searchParams.get('id') || '').trim();
   const selectedViewParam = searchParams.get('view');
   const activeView: ArtistView = !selectedArtistId
     ? 'list'
@@ -512,6 +544,24 @@ export default function RecordLabelArtists() {
       },
     [artists, selectedArtistId, user],
   );
+
+  const selectedArtistRecord = useMemo(
+    () => artistsResponse.find((artist) => (artist.id || artist._id) === selectedArtistId),
+    [artistsResponse, selectedArtistId],
+  );
+
+  const selectedArtistNameEntries = useMemo(() => {
+    const namesField = selectedArtistRecord?.names;
+    if (!namesField) return [] as Array<{ _id?: string; name: string; name_type?: string }>;
+    const entries = Array.isArray(namesField) ? namesField : [namesField];
+    return entries
+      .filter((entry) => !!entry && typeof entry.name === 'string')
+      .map((entry) => ({
+        _id: entry._id,
+        name: (entry.name || '').trim(),
+        name_type: entry.name_type,
+      }));
+  }, [selectedArtistRecord]);
 
   const chartTrackRevenueData = useMemo(
     () =>
@@ -601,16 +651,37 @@ export default function RecordLabelArtists() {
   );
 
   const goToArtistView = (artistId: string, view: Exclude<ArtistView, 'list'>) => {
+    if (view === 'profile') {
+      const params = new URLSearchParams();
+      params.set('artistId', artistId);
+      router.replace(`/settings?${params.toString()}`, { scroll: false });
+      setMenuOpenForId(null);
+      setMenuAnchorEl(null);
+      setMenuPosition(null);
+      return;
+    }
+
     const href = addArtistQueryState(pathname, new URLSearchParams(searchParams.toString()), artistId, view);
     router.replace(href, { scroll: false });
     setMenuOpenForId(null);
+    setMenuAnchorEl(null);
+    setMenuPosition(null);
   };
 
   const goBackToArtistList = () => {
     const href = addArtistQueryState(pathname, new URLSearchParams(searchParams.toString()));
     router.replace(href, { scroll: false });
     setMenuOpenForId(null);
+    setMenuAnchorEl(null);
+    setMenuPosition(null);
   };
+
+  useEffect(() => {
+    if (activeView !== 'profile' || !selectedArtistId) return;
+    router.replace(`/settings?artistId=${encodeURIComponent(selectedArtistId)}`, {
+      scroll: false,
+    });
+  }, [activeView, selectedArtistId, router]);
 
   const handleDeactivateOrActivateArtist = async (artist: ArtistRow) => {
     try {
@@ -621,6 +692,8 @@ export default function RecordLabelArtists() {
         await deactivateArtist(artist.id);
       }
       setMenuOpenForId(null);
+      setMenuAnchorEl(null);
+      setMenuPosition(null);
     } finally {
       setPendingArtistActionId(null);
     }
@@ -635,10 +708,17 @@ export default function RecordLabelArtists() {
         await archiveArtist(artist.id);
       }
       setMenuOpenForId(null);
+      setMenuAnchorEl(null);
+      setMenuPosition(null);
     } finally {
       setPendingArtistActionId(null);
     }
   };
+
+  const openedMenuArtist = useMemo(
+    () => artists.find((artist) => artist.id === menuOpenForId) ?? null,
+    [artists, menuOpenForId],
+  );
 
   const handleAddArtist = async (payload: AddArtistPayload) => {
     const cleanedName = payload.name.trim();
@@ -662,51 +742,75 @@ export default function RecordLabelArtists() {
   useEffect(() => {
     if (activeView !== 'profile') return;
 
-    const nameFromSelection = activeArtist.name?.trim() || '';
-    const [selectedFirstName = '', ...selectedLastName] = nameFromSelection.split(/\s+/).filter(Boolean);
-    const userPhone = (user as unknown as { phn_no?: string } | null)?.phn_no || '';
+    const recordName = (selectedArtistRecord?.name || '').trim();
+    const nameFromSelection = recordName || activeArtist.name?.trim() || '';
+    const [fallbackFirstName = '', ...fallbackLastName] = nameFromSelection.split(/\s+/).filter(Boolean);
 
-    setProfileForm({
-      firstName: selectedFirstName || user?.first_name || '',
-      lastName: selectedLastName.join(' ') || user?.last_name || '',
-      email: activeArtist.email && activeArtist.email !== '--' ? activeArtist.email : user?.email || '',
-      phone: activeArtist.phone && activeArtist.phone !== '--' ? activeArtist.phone : userPhone,
-    });
-
-    const otherNamesFromUser = (user?.names ?? [])
+    const firstNameFromEntry =
+      selectedArtistNameEntries.find((entry) => entry.name_type === 'first_name')?.name || '';
+    const lastNameFromEntry =
+      selectedArtistNameEntries.find((entry) => entry.name_type === 'last_name')?.name || '';
+    const otherNamesFromEntry = selectedArtistNameEntries
       .filter((entry) => entry.name_type === 'other_names')
       .map((entry) => entry.name)
       .filter(Boolean);
-    setProfileOtherNames(Array.from(new Set(otherNamesFromUser)));
-  }, [activeArtist, activeView, user]);
+
+    setProfileForm({
+      firstName: firstNameFromEntry || fallbackFirstName || '',
+      lastName: lastNameFromEntry || fallbackLastName.join(' ') || '',
+      email:
+        (selectedArtistRecord?.email || '').trim() ||
+        (activeArtist.email && activeArtist.email !== '--' ? activeArtist.email : ''),
+      phone:
+        (selectedArtistRecord?.phn_no || '').trim() ||
+        (activeArtist.phone && activeArtist.phone !== '--' ? activeArtist.phone : ''),
+    });
+
+    setProfileOtherNames(Array.from(new Set(otherNamesFromEntry)));
+  }, [activeArtist, activeView, selectedArtistNameEntries, selectedArtistRecord]);
 
   const handleUpdateProfile = async () => {
-    const firstName = profileForm.firstName.trim();
-    const lastName = profileForm.lastName.trim();
-    const email = profileForm.email.trim();
-    const phone = profileForm.phone.trim();
+    if (isUpdatingProfile) return;
 
-    if (!firstName || !lastName || !email) {
-      toast.error('First name, last name, and email are required');
+    if (!selectedArtistId) {
+      toast.error('Please select an artist to update');
       return;
     }
+
+    const fallbackName = (selectedArtistRecord?.name || activeArtist.name || '').trim();
+    const [fallbackFirst = '', ...fallbackLast] = fallbackName.split(/\s+/).filter(Boolean);
+
+    const emailLocal = profileForm.email.trim().split('@')[0]?.trim() || '';
+    const firstName = profileForm.firstName.trim() || fallbackFirst || emailLocal || 'Artist';
+    const lastName = profileForm.lastName.trim() || fallbackLast.join(' ');
+    const email = profileForm.email.trim();
+    const phone = profileForm.phone.trim();
 
     try {
       setIsUpdatingProfile(true);
 
-      await axiosInstance.patch('/auth/profile', {
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        phn_no: phone,
-      });
+      const artistProfilePayload: { email?: string; phn_no?: string } = {};
+      if (email) artistProfilePayload.email = email;
+      if (phone) artistProfilePayload.phn_no = phone;
+
+      if (Object.keys(artistProfilePayload).length > 0) {
+        await axiosInstance.patch(`/record-label/artists/${selectedArtistId}`, artistProfilePayload);
+      }
 
       const desiredOtherNames = Array.from(
         new Set(profileOtherNames.map((name) => name.trim()).filter(Boolean)),
       );
-      const existingOtherNameEntries = (user?.names ?? []).filter(
+      const existingOtherNameEntries = selectedArtistNameEntries.filter(
         (entry) => entry.name_type === 'other_names',
       );
+
+      const existingFirstNameEntry = selectedArtistNameEntries.find(
+        (entry) => entry.name_type === 'first_name',
+      );
+      const existingLastNameEntry = selectedArtistNameEntries.find(
+        (entry) => entry.name_type === 'last_name',
+      );
+
       const existingByNormalized = new Map(
         existingOtherNameEntries.map((entry) => [normalizeName(entry.name), entry]),
       );
@@ -717,6 +821,59 @@ export default function RecordLabelArtists() {
       });
 
       const requests: Promise<unknown>[] = [];
+
+      if (existingFirstNameEntry?._id) {
+        if (existingFirstNameEntry.name !== firstName) {
+          requests.push(
+            axiosInstance.patch(
+              `/auth/user-names/${existingFirstNameEntry._id}`,
+              {
+                name: firstName,
+                name_type: 'first_name',
+              },
+              { params: { artistId: selectedArtistId } },
+            ),
+          );
+        }
+      } else if (firstName) {
+        requests.push(
+          axiosInstance.post(
+            '/auth/user-names',
+            {
+              names: [firstName],
+              name_type: 'first_name',
+            },
+            { params: { artistId: selectedArtistId } },
+          ),
+        );
+      }
+
+      if (existingLastNameEntry?._id) {
+        if (existingLastNameEntry.name !== lastName) {
+          requests.push(
+            axiosInstance.patch(
+              `/auth/user-names/${existingLastNameEntry._id}`,
+              {
+                name: lastName,
+                name_type: 'last_name',
+              },
+              { params: { artistId: selectedArtistId } },
+            ),
+          );
+        }
+      } else if (lastName) {
+        requests.push(
+          axiosInstance.post(
+            '/auth/user-names',
+            {
+              names: [lastName],
+              name_type: 'last_name',
+            },
+            { params: { artistId: selectedArtistId } },
+          ),
+        );
+      }
+
       existingOtherNameEntries.forEach((entry) => {
         const normalized = normalizeName(entry.name);
         if (!desiredByNormalized.has(normalized)) {
@@ -724,18 +881,36 @@ export default function RecordLabelArtists() {
         }
       });
       desiredByNormalized.forEach((name, normalized) => {
-        if (!existingByNormalized.has(normalized)) {
+        const existing = existingByNormalized.get(normalized);
+        if (!existing) {
           requests.push(
-            axiosInstance.post('/auth/user-names', {
-              name,
-              name_type: 'other_names',
-            }),
+            axiosInstance.post(
+              '/auth/user-names',
+              {
+                names: [name],
+                name_type: 'other_names',
+              },
+              { params: { artistId: selectedArtistId } },
+            ),
+          );
+          return;
+        }
+
+        if (existing._id && existing.name !== name) {
+          requests.push(
+            axiosInstance.patch(
+              `/auth/user-names/${existing._id}`,
+              {
+                name,
+                name_type: 'other_names',
+              },
+              { params: { artistId: selectedArtistId } },
+            ),
           );
         }
       });
 
       await Promise.all(requests);
-      await refreshUser();
       toast.success('Profile updated successfully');
     } catch (error) {
       const err = error as { response?: { data?: { message?: string } } };
@@ -767,8 +942,8 @@ export default function RecordLabelArtists() {
             </button>
           </div>
 
-          <div className="mt-6 overflow-hidden">
-            <div className="overflow-x-auto">
+          <div className="mt-6 overflow-visible">
+            <div className="overflow-x-auto overflow-y-visible">
               <table className="w-full min-w-[880px] text-sm ">
                 <thead className="bg-[#F4F4F4] text-left text-[#666666]">
                   <tr>
@@ -814,61 +989,24 @@ export default function RecordLabelArtists() {
                       <td className="px-4 py-4">{artist.dateAdded}</td>
                       <td className="px-4 py-4">{artist.tracks}</td>
                       <td className="px-4 py-4 text-right">
-                        <div
-                          className="relative inline-flex"
-                          ref={menuOpenForId === artist.id ? menuRootRef : null}
-                        >
+                        <div className="relative inline-flex">
                           <button
                             type="button"
-                            onClick={() =>
-                              setMenuOpenForId((prev) => (prev === artist.id ? null : artist.id))
-                            }
+                            onClick={(event) => {
+                              setMenuOpenForId((prev) => (prev === artist.id ? null : artist.id));
+                              if (menuOpenForId === artist.id) {
+                                setMenuAnchorEl(null);
+                                setMenuPosition(null);
+                              } else {
+                                setMenuAnchorEl(event.currentTarget);
+                              }
+                            }}
                             aria-haspopup="menu"
                             aria-expanded={menuOpenForId === artist.id}
                             className="rounded-md p-1 text-[#5A5A5A] hover:bg-[#F1F1F1]"
                           >
                             <MoreVertical className="h-5 w-5" />
                           </button>
-
-                          {menuOpenForId === artist.id && (
-                            <div
-                              role="menu"
-                              className="absolute right-0 top-[calc(100%+6px)] z-50 w-[170px] overflow-hidden rounded-lg bg-[#242427] py-1 text-left text-xs text-white shadow-xl"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => goToArtistView(artist.id, 'profile')}
-                                className="block w-full px-3 py-2 hover:bg-white/10"
-                              >
-                                View profile
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => goToArtistView(artist.id, 'performance')}
-                                className="block w-full px-3 py-2 hover:bg-white/10"
-                              >
-                                View performance
-                              </button>
-                              {artist.status !== 'archived' && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeactivateOrActivateArtist(artist)}
-                                  disabled={pendingArtistActionId === artist.id}
-                                  className="block w-full px-3 py-2 text-left hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  {artist.status === 'inactive' ? 'Activate artist' : 'Deactivate artist'}
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => handleArchiveOrUnarchiveArtist(artist)}
-                                disabled={pendingArtistActionId === artist.id}
-                                className="block w-full px-3 py-2 text-left hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                {artist.status === 'archived' ? 'Unarchive artist' : 'Archive artist'}
-                              </button>
-                            </div>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -926,6 +1064,55 @@ export default function RecordLabelArtists() {
         </div>
       )}
 
+      {menuOpenForId && openedMenuArtist && menuPosition
+        ? createPortal(
+            <div
+              ref={menuRootRef}
+              role="menu"
+              className="fixed z-[120] w-[170px] overflow-hidden rounded-lg bg-[#242427] py-1 text-left text-xs text-white shadow-xl"
+              style={{
+                top: menuPosition.top,
+                left: menuPosition.left,
+                transform: menuPosition.placement === 'up' ? 'translateY(-100%)' : undefined,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => goToArtistView(openedMenuArtist.id, 'profile')}
+                className="block w-full px-3 py-2 text-left hover:bg-white/10"
+              >
+                View profile
+              </button>
+              <button
+                type="button"
+                onClick={() => goToArtistView(openedMenuArtist.id, 'performance')}
+                className="block w-full px-3 py-2 text-left hover:bg-white/10"
+              >
+                View performance
+              </button>
+              {openedMenuArtist.status !== 'archived' && (
+                <button
+                  type="button"
+                  onClick={() => handleDeactivateOrActivateArtist(openedMenuArtist)}
+                  disabled={pendingArtistActionId === openedMenuArtist.id}
+                  className="block w-full px-3 py-2 text-left hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {openedMenuArtist.status === 'inactive' ? 'Activate artist' : 'Deactivate artist'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleArchiveOrUnarchiveArtist(openedMenuArtist)}
+                disabled={pendingArtistActionId === openedMenuArtist.id}
+                className="block w-full px-3 py-2 text-left hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {openedMenuArtist.status === 'archived' ? 'Unarchive artist' : 'Archive artist'}
+              </button>
+            </div>,
+            document.body,
+          )
+        : null}
+
       {activeView === 'performance' && (
         <div className="mt-4 space-y-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -961,7 +1148,7 @@ export default function RecordLabelArtists() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="flex gap-3 overflow-x-auto pb-1">
             {performanceMetrics.map((metric) => (
               <MetricCard key={metric.label} value={metric.value} label={metric.label} icon={metric.icon} />
             ))}

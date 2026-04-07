@@ -353,8 +353,8 @@ export default function LabelArtistExpenses() {
         open={openAdd}
         onClose={() => setOpenAdd(false)}
         recordLabelFields
-        initialArtistName={titleName}
-        artistOptions={[titleName]}
+        initialArtistId={user?.id || ''}
+        artistOptions={user?.id ? [{ id: user.id, name: titleName }] : []}
         submitLabel="Submit"
         onSubmit={async (payload: NewExpensesPayload) => {
           try {
@@ -364,7 +364,7 @@ export default function LabelArtistExpenses() {
             }
 
             await createExpense({
-              artist_name: payload.artist_name,
+              artistId: payload.artistId,
               expense_date: payload.expense_date,
               category: payload.category,
               currency: payload.currency,

@@ -50,16 +50,22 @@ type TrackStreamsResponse = {
 const fetcher = (url: string) => axiosInstance.get(url).then((res) => res.data);
 
 export default function TrackStreamsPerDSP() {
-  const currentYear = new Date().getFullYear();
-  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const searchParams = useSearchParams();
-  const selectedArtistId = (searchParams.get('artistId') || '').trim();
+  const selectedArtistId = (searchParams.get('artistId') || searchParams.get('id') || '').trim();
 
   const { data, isLoading } = useSWR<TrackStreamsResponse>(
     appendQueryParam(
-      `/royalties/track-streams-dsp?year=${selectedYear}&monthly=false`,
+      `/royalties/track-streams-dsp?${(() => {
+        const params = new URLSearchParams();
+        params.set('monthly', 'false');
+        if (typeof selectedYear === 'number') {
+          params.set('year', String(selectedYear));
+        }
+        return params.toString();
+      })()}`,
       'artistId',
       selectedArtistId
     ),

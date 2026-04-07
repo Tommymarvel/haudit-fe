@@ -124,8 +124,11 @@ const RecordLabelExpenses = () => {
       Array.from(uniqueById.entries()).map(([id, name]) => ({ label: name, value: id }))
     );
   }, [artists]);
-  const artistNameOptions = useMemo(
-    () => artistOptions.filter((option) => option.value !== 'all').map((option) => option.label),
+  const artistSelectOptions = useMemo(
+    () =>
+      artistOptions
+        .filter((option) => option.value !== 'all')
+        .map((option) => ({ id: option.value, name: option.label })),
     [artistOptions]
   );
 
@@ -314,7 +317,7 @@ const RecordLabelExpenses = () => {
         open={openAdd}
         onClose={() => setOpenAdd(false)}
         recordLabelFields
-        artistOptions={artistNameOptions}
+        artistOptions={artistSelectOptions}
         onSubmit={async (payload: NewExpensesPayload) => {
           try {
             let receiptUrl = '';
@@ -323,7 +326,7 @@ const RecordLabelExpenses = () => {
             }
 
             await createExpense({
-              artist_name: payload.artist_name,
+              artistId: payload.artistId,
               expense_date: payload.expense_date,
               category: payload.category,
               currency: payload.currency,

@@ -53,8 +53,10 @@ type TopExpenseRow = {
   amount: string;
 };
 
+const ALBUM_INTERACTION_COLORS = ["#00D447", BRAND.purple, "#3B82F6", "#F59E0B", "#EF4444"];
+
 export default function RecordLabelDashboard() {
-  const { uploadRoyaltyFile, dashboardMetrics, albumPerformance } = useRoyalty();
+  const { uploadRoyaltyFile, dashboardMetrics, albumPerformance, albumInteractions } = useRoyalty();
   const { createAdvance, marketingTrend, personalTrend, typePercentage } =
     useAdvance();
   const { createExpense, trend: expensesTrend } = useExpenses();
@@ -106,8 +108,8 @@ export default function RecordLabelDashboard() {
       );
   }, [recordLabelArtistsList]);
 
-  const recordLabelArtistNames = useMemo(
-    () => recordLabelArtists.map((artist) => artist.name),
+  const recordLabelArtistOptions = useMemo(
+    () => recordLabelArtists.map((artist) => ({ id: artist.id, name: artist.name })),
     [recordLabelArtists],
   );
 
@@ -162,7 +164,7 @@ export default function RecordLabelDashboard() {
         receiptUrl = await uploadFile(payload.proofs[0], "expense");
       }
       await createExpense({
-        artist_name: payload.artist_name,
+        artistId: payload.artistId,
         expense_date: payload.expense_date,
         category: payload.category,
         currency: payload.currency,
@@ -319,13 +321,14 @@ export default function RecordLabelDashboard() {
   }, [topTracks]);
 
   const albumInteractionData = useMemo<DonutSlice[]>(() => {
-    const totalStreams = (topAlbums ?? []).reduce(
-      (sum, item) => sum + Number(item.totalStreams || 0),
-      0,
-    );
-    if (totalStreams <= 0) return [];
-    return [{ name: "Stream", value: totalStreams, color: "#00D447" }];
-  }, [topAlbums]);
+    return (albumInteractions ?? [])
+      .map((item, index) => ({
+        name: item.saleType,
+        value: Number(item.count ?? 0),
+        color: ALBUM_INTERACTION_COLORS[index % ALBUM_INTERACTION_COLORS.length],
+      }))
+      .filter((item) => item.value > 0);
+  }, [albumInteractions]);
 
   const advanceTrendData = useMemo(() => {
     const monthMap = new Map<
@@ -1099,7 +1102,7 @@ export default function RecordLabelDashboard() {
         isOpen={openUpload}
         onClose={() => setOpenUpload(false)}
         showArtistSelect
-        artistOptions={recordLabelArtistNames}
+        artistOptions={recordLabelArtistOptions}
         onUpload={handleUpload}
       />
       <AddAdvanceModal
@@ -1111,7 +1114,7 @@ export default function RecordLabelDashboard() {
         open={openExpense}
         onClose={() => setOpenExpense(false)}
         recordLabelFields
-        artistOptions={recordLabelArtistNames}
+        artistOptions={recordLabelArtistOptions}
         onSubmit={handleAddExpense}
       />
       <UnrecognizedArtistsModal

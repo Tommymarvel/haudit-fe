@@ -39,7 +39,7 @@ export function useExpenses() {
   const createExpense = async (payload: CreateExpensePayload) => {
     try {
       await axiosInstance.post('/expenses', {
-        artist_name: payload.artist_name,
+        artistId: payload.artistId,
         expense_date: payload.expense_date,
         category: payload.category,
         currency: payload.currency,

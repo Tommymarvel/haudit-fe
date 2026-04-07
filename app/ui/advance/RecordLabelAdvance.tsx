@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ChartCard } from '@/components/dashboard/ChartCard';
 import { Card, CardBody } from '@/components/ui/Card';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { Select } from '@/components/ui/Select';
+import Modal from '@/components/ui/Modal';
+import FileDropzone from '@/components/ui/FIleDropzone';
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 import {
   ArrowUpDown,
@@ -14,16 +16,19 @@ import {
   Hourglass,
   MessageSquare,
   MoreVertical,
+  RefreshCcw,
   Search,
   WalletCards,
   XCircle,
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
+import { createPortal } from 'react-dom';
 import { useAdvance } from '@/hooks/useAdvance';
 import { Advance } from '@/lib/types/advance';
 import { useRecordLabelArtists } from '@/hooks/useRecordLabelArtists';
 import { getRecordLabelArtistName } from '@/lib/utils/recordLabelArtist';
 import { deriveSingleCurrency, formatCurrencyAmount } from '@/lib/utils/currency';
+import { toast } from 'react-toastify';
 
 type AdvanceTab = 'request' | 'analytics';
 type AdvanceType = 'Personal' | 'Marketing';
@@ -37,9 +42,23 @@ type AdvanceRow = {
   type: AdvanceType;
   status: AdvanceStatus;
   artist: string;
+  purpose: string;
+  accountNumber: string;
+  bank: string;
+  accountName: string;
+  adminInCharge: string;
+  adminMessage: string;
+  receiptRef: string;
   rawDateIso: string;
   repaidAmount: number;
 };
+
+type UpdateStatusValue = 'approved' | 'rejected';
+
+const UPDATE_STATUS_OPTIONS = [
+  { label: 'Approved', value: 'approved' },
+  { label: 'Rejected', value: 'rejected' },
+];
 
 type ChartPoint = {
   label: string;
@@ -177,6 +196,46 @@ const RecordLabelAdvance = () => {
   const [tab, setTab] = useState<AdvanceTab>('request');
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('all');
+  const [menuOpenForId, setMenuOpenForId] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
+  const [detailsRow, setDetailsRow] = useState<AdvanceRow | null>(null);
+  const [statusRow, setStatusRow] = useState<AdvanceRow | null>(null);
+  const [statusUpdate, setStatusUpdate] = useState<UpdateStatusValue | ''>('');
+  const [statusDescription, setStatusDescription] = useState('');
+  const [statusReceiptFiles, setStatusReceiptFiles] = useState<File[]>([]);
+  const [rowStatusOverrides, setRowStatusOverrides] = useState<
+    Record<string, { status: AdvanceStatus; adminMessage: string; receiptRef?: string }>
+  >({});
+
+  useEffect(() => {
+    const closeMenu = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.closest('[data-advance-action-menu="true"]')) return;
+      if (target.closest('[data-advance-action-trigger="true"]')) return;
+      setMenuOpenForId(null);
+      setMenuPosition(null);
+    };
+
+    document.addEventListener('mousedown', closeMenu);
+    return () => document.removeEventListener('mousedown', closeMenu);
+  }, []);
+
+  const openRowActionsMenu = (event: React.MouseEvent<HTMLButtonElement>, rowId: string) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 220;
+    const viewportPadding = 8;
+    const desiredLeft = rect.right - menuWidth;
+    const clampedLeft = Math.max(
+      viewportPadding,
+      Math.min(desiredLeft, window.innerWidth - menuWidth - viewportPadding)
+    );
+
+    setMenuPosition({
+      top: rect.bottom + 6,
+      left: clampedLeft,
+    });
+    setMenuOpenForId((prev) => (prev === rowId ? null : rowId));
+  };
 
   const rows = useMemo<AdvanceRow[]>(() => {
     return advances.map((advance: Advance, index) => {
@@ -187,13 +246,70 @@ const RecordLabelAdvance = () => {
         amount: Number(advance.amount) || 0,
         currency: (advance.currency || 'USD').toUpperCase(),
         type: normalizeType(advance.advance_type || ''),
-        status: normalizeStatus(advance.repayment_status || ''),
+        status:
+          rowStatusOverrides[advance._id || `ADV-${index + 1}`]?.status ||
+          normalizeStatus(advance.repayment_status || ''),
         artist: advance.advance_source_name?.trim() || 'Unknown Artist',
+        purpose: advance.purpose?.trim() || 'No purpose provided.',
+        accountNumber: '0432568913',
+        bank: 'GTBank',
+        accountName: advance.advance_source_name?.trim() || 'N/A',
+        adminInCharge: 'Record Label Admin',
+        adminMessage:
+          rowStatusOverrides[advance._id || `ADV-${index + 1}`]?.adminMessage ||
+          'No admin message yet.',
+        receiptRef:
+          rowStatusOverrides[advance._id || `ADV-${index + 1}`]?.receiptRef ||
+          (advance.proof_of_payment?.split('/').pop() || 'Transaction Rec..'),
         rawDateIso: rawDate,
         repaidAmount: Number(advance.repaid_amount) || 0,
       };
     });
-  }, [advances]);
+  }, [advances, rowStatusOverrides]);
+
+  const resetStatusModal = () => {
+    setStatusUpdate('');
+    setStatusDescription('');
+    setStatusReceiptFiles([]);
+  };
+
+  const openStatusModal = (row: AdvanceRow) => {
+    setStatusRow(row);
+    setStatusUpdate(row.status === 'Rejected' ? 'rejected' : 'approved');
+    setStatusDescription('');
+    setStatusReceiptFiles([]);
+    setMenuOpenForId(null);
+  };
+
+  const submitStatusUpdate = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!statusRow) return;
+    if (!statusUpdate) {
+      toast.error('Select a status to continue');
+      return;
+    }
+    if (!statusDescription.trim()) {
+      toast.error('Description is required');
+      return;
+    }
+    if (statusUpdate === 'rejected' && statusReceiptFiles.length === 0) {
+      toast.error('Upload receipt is required for rejected status');
+      return;
+    }
+
+    const receiptRef = statusReceiptFiles[0]?.name;
+    setRowStatusOverrides((prev) => ({
+      ...prev,
+      [statusRow.id]: {
+        status: statusUpdate === 'approved' ? 'Approved' : 'Rejected',
+        adminMessage: statusDescription.trim(),
+        receiptRef,
+      },
+    }));
+    toast.success('Status updated successfully');
+    setStatusRow(null);
+    resetStatusModal();
+  };
 
   const scopedRows = useMemo(() => {
     return rows;
@@ -429,11 +545,12 @@ const RecordLabelAdvance = () => {
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">{row.artist}</td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-2 text-[#9C9C9C]">
+                          <div className="relative flex items-center justify-end gap-2 text-[#9C9C9C]">
                             <button
                               type="button"
                               className="hover:text-[#7B00D4]"
                               aria-label="Comments"
+                              onClick={() => setDetailsRow(row)}
                             >
                               <MessageSquare
                                 className={`h-4 w-4 ${
@@ -445,6 +562,8 @@ const RecordLabelAdvance = () => {
                               type="button"
                               className="hover:text-[#7B00D4]"
                               aria-label="More actions"
+                              data-advance-action-trigger="true"
+                              onClick={(event) => openRowActionsMenu(event, row.id)}
                             >
                               <MoreVertical className="h-4 w-4" />
                             </button>
@@ -531,6 +650,165 @@ const RecordLabelAdvance = () => {
           />
         </div>
       )}
+
+      {menuOpenForId && menuPosition
+        ? createPortal(
+            <div
+              data-advance-action-menu="true"
+              style={{ position: 'fixed', top: menuPosition.top, left: menuPosition.left }}
+              className="z-[130] w-[220px] rounded-xl border border-[#E2E2E2] bg-white p-2 shadow-lg"
+            >
+              {(() => {
+                const menuRow = filtered.find((row) => row.id === menuOpenForId);
+                if (!menuRow) return null;
+
+                return (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDetailsRow(menuRow);
+                        setMenuOpenForId(null);
+                        setMenuPosition(null);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[#494F59] hover:bg-[#F6F7F9]"
+                    >
+                      <ArrowUpDown className="h-4 w-4 rotate-90 text-[#97A0AF]" />
+                      <span className="font-medium">Advance details</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        openStatusModal(menuRow);
+                        setMenuPosition(null);
+                      }}
+                      className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[#494F59] hover:bg-[#F6F7F9]"
+                    >
+                      <RefreshCcw className="h-4 w-4 text-[#97A0AF]" />
+                      <span className="font-medium">Update status</span>
+                    </button>
+                  </>
+                );
+              })()}
+            </div>,
+            document.body,
+          )
+        : null}
+
+      <Modal
+        open={Boolean(statusRow)}
+        onClose={() => {
+          setStatusRow(null);
+          resetStatusModal();
+        }}
+        headerVariant="none"
+        closeVariant="island"
+        size="md"
+      >
+        <div className="m-5 rounded-3xl border border-[#DBDBDB] bg-white p-6">
+          <div className="mx-auto mb-4 h-10 w-10 rounded-full bg-[#F3E6FF]" />
+          <h3 className="text-center text-3xl font-medium text-[#222222]">Status Update</h3>
+          <p className="mt-1 text-center text-sm text-[#9C9C9C]">
+            Fill out form to update artist advance request.
+          </p>
+
+          <form className="mt-5 space-y-4" onSubmit={submitStatusUpdate}>
+            <div>
+              <label className="text-xs font-medium text-[#2D2D2D]">Status</label>
+              <div className="mt-1">
+                <Select
+                  value={statusUpdate}
+                  onChange={(value) => setStatusUpdate(value as UpdateStatusValue)}
+                  options={UPDATE_STATUS_OPTIONS}
+                  placeholder="Select status"
+                  className="h-10 rounded-xl border border-[#B9B9B9] bg-white text-sm"
+                />
+              </div>
+            </div>
+
+            {statusUpdate === 'rejected' && (
+              <div>
+                <label className="text-xs font-medium text-[#2D2D2D]">Upload receipt</label>
+                <div className="mt-1">
+                  <FileDropzone onFiles={(files) => setStatusReceiptFiles(files)} className="bg-white" />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-medium text-[#2D2D2D]">Description</label>
+              <textarea
+                rows={5}
+                placeholder="Enter expenses description"
+                className="mt-1 w-full resize-none rounded-xl border border-[#B9B9B9] bg-white px-3 py-2 text-sm text-[#3C3C3C] outline-none placeholder:text-[#B0B0B0]"
+                value={statusDescription}
+                onChange={(event) => setStatusDescription(event.target.value)}
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="mt-1 h-10 w-full rounded-xl bg-[#7B00D4] text-sm font-medium text-white"
+            >
+              Submit
+            </button>
+          </form>
+        </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(detailsRow)}
+        onClose={() => setDetailsRow(null)}
+        headerVariant="none"
+        closeVariant="island"
+        size="xl"
+      >
+        {detailsRow && (
+          <div className="overflow-hidden rounded-3xl border border-[#D5D5D5]">
+            <div className="border-b border-[#D5D5D5] bg-[#FAFAFA] px-4 py-2 text-sm text-[#3F3F3F]">
+              Advance details / {detailsRow.id}
+            </div>
+
+            <div className="p-4">
+              <p className="text-[40px] font-semibold leading-none text-[#2F2F2F]">
+                {formatCurrencyAmount(detailsRow.amount, detailsRow.currency)}
+              </p>
+
+              <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-2 text-[#4E4E4E]">
+                <p className="text-[15px] text-[#808080]">Transaction Id</p>
+                <p className="text-base">{detailsRow.id}</p>
+
+                <p className="text-[15px] text-[#808080]">Date</p>
+                <p className="text-base">{detailsRow.date}</p>
+
+                <p className="text-[15px] text-[#808080]">Status</p>
+                <div>
+                  <StatusPill label={detailsRow.status} />
+                </div>
+
+                <p className="text-[15px] text-[#808080]">Advance Type</p>
+                <p className="text-base">{detailsRow.type}</p>
+
+                <p className="text-[15px] text-[#808080]">Account Number</p>
+                <p className="text-base">{detailsRow.accountNumber}</p>
+
+                <p className="text-[15px] text-[#808080]">Bank</p>
+                <p className="text-base">{detailsRow.bank}</p>
+
+                <p className="text-[15px] text-[#808080]">Account Name</p>
+                <p className="text-base">{detailsRow.accountName}</p>
+
+                <p className="text-[15px] text-[#808080]">Receipt</p>
+                <p className="text-base">{detailsRow.receiptRef}</p>
+
+                <p className="text-[15px] text-[#808080]">Purpose</p>
+                <p className="text-base line-clamp-3">{detailsRow.purpose}</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowUpDown,
   Calendar,
@@ -26,6 +26,7 @@ import { useAdvance } from '@/hooks/useAdvance';
 import { useAuth } from '@/contexts/AuthContext';
 import { BRAND } from '@/lib/brand';
 import { toast } from 'react-toastify';
+import FileDropzone from '@/components/ui/FIleDropzone';
 import {
   deriveSingleCurrency,
   formatAmountInput,
@@ -59,6 +60,7 @@ type RequestFormState = {
   bank: string;
   accountName: string;
   advanceType: 'personal' | 'marketting';
+  repaymentStatus: 'outstanding' | 'repaid';
   purpose: string;
 };
 
@@ -78,6 +80,11 @@ const ADVANCE_TYPE_OPTIONS = [
   { label: 'Marketing', value: 'marketting' },
 ];
 
+const REPAYMENT_STATUS_OPTIONS = [
+  { label: 'Outstanding', value: 'outstanding' },
+  { label: 'Repaid', value: 'repaid' },
+];
+
 const BANK_OPTIONS = [
   { label: 'GTBank', value: 'GTBank' },
   { label: 'First Bank', value: 'First Bank' },
@@ -89,6 +96,11 @@ const BANK_OPTIONS = [
 const CURRENCY_OPTIONS = [
   { label: 'USD', value: 'USD' },
   { label: 'NGN', value: 'NGN' },
+];
+
+const UPDATE_STATUS_OPTIONS = [
+  { label: 'Approved', value: 'approved' },
+  { label: 'Rejected', value: 'rejected' },
 ];
 
 function normalizeStatus(rawStatus: string): LabelAdvanceStatus {
@@ -112,6 +124,7 @@ function buildInitialRequestForm(name: string): RequestFormState {
     bank: 'GTBank',
     accountName: name || 'Samuel Oyebowo',
     advanceType: 'personal',
+    repaymentStatus: 'outstanding',
     purpose: '',
   };
 }
@@ -204,7 +217,26 @@ export default function LabelArtistAdvance() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [openRequestModal, setOpenRequestModal] = useState(false);
   const [selectedRow, setSelectedRow] = useState<AdvanceRow | null>(null);
+  const [menuOpenForId, setMenuOpenForId] = useState<string | null>(null);
+  const [statusTargetRow, setStatusTargetRow] = useState<AdvanceRow | null>(null);
+  const [statusToSet, setStatusToSet] = useState<'approved' | 'rejected' | ''>('');
+  const [statusDescription, setStatusDescription] = useState('');
+  const [statusReceiptFiles, setStatusReceiptFiles] = useState<File[]>([]);
+  const [rowStatusOverrides, setRowStatusOverrides] = useState<
+    Record<string, { status: LabelAdvanceStatus; adminMessage: string; receiptRef?: string }>
+  >({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const closeMenu = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.closest('[data-advance-row-menu="true"]')) return;
+      setMenuOpenForId(null);
+    };
+
+    document.addEventListener('mousedown', closeMenu);
+    return () => document.removeEventListener('mousedown', closeMenu);
+  }, []);
 
   const displayName = [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim();
   const artistName = user?.first_name?.trim() || 'Diamond';
@@ -216,25 +248,71 @@ export default function LabelArtistAdvance() {
   const apiRows = useMemo<AdvanceRow[]>(() => {
     if (!advances?.length) return [];
 
-    return advances.map((advance, index) => ({
-      id: advance._id || `ADV-${index + 1}`,
+    return advances.map((advance, index) => {
+      const rowId = advance._id || `ADV-${index + 1}`;
+      const override = rowStatusOverrides[rowId];
+      return {
+      id: rowId,
       date: new Date((advance.createdAt || advance.created_at || new Date()).toString())
         .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
         .replace(/ /g, '-'),
       amount: Number(advance.amount) || 0,
       currency: (advance.currency || 'USD').toUpperCase(),
       type: normalizeType(advance.advance_type || ''),
-      status: normalizeStatus(advance.repayment_status || ''),
+      status: override?.status || normalizeStatus(advance.repayment_status || ''),
       purpose: advance.purpose || 'No purpose was provided for this request.',
       accountNumber: '0432568913',
       bank: 'GTBank',
       accountName: displayName || 'Samuel Oyebowo',
       adminInCharge: 'Joseph Nasiu',
-      adminMessage:
+      adminMessage: override?.adminMessage ||
         'Request approved. The payment will be initiated within 24 hours after compliance checks.',
-      receiptRef: 'Transaction Receipt',
+      receiptRef: override?.receiptRef || 'Transaction Receipt',
+    }});
+  }, [advances, displayName, rowStatusOverrides]);
+
+  const openUpdateStatusModal = (row: AdvanceRow) => {
+    setStatusTargetRow(row);
+    setStatusToSet('');
+    setStatusDescription('');
+    setStatusReceiptFiles([]);
+    setMenuOpenForId(null);
+  };
+
+  const submitStatusUpdate = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!statusTargetRow) return;
+    if (!statusToSet) {
+      toast.error('Select status');
+      return;
+    }
+    if (!statusDescription.trim()) {
+      toast.error('Description is required');
+      return;
+    }
+    if (statusToSet === 'rejected' && statusReceiptFiles.length === 0) {
+      toast.error('Upload receipt is required when rejecting');
+      return;
+    }
+
+    const nextStatus: LabelAdvanceStatus = statusToSet === 'approved' ? 'Approved' : 'Rejected';
+    const nextReceipt = statusToSet === 'rejected' ? statusReceiptFiles[0]?.name : undefined;
+
+    setRowStatusOverrides((prev) => ({
+      ...prev,
+      [statusTargetRow.id]: {
+        status: nextStatus,
+        adminMessage: statusDescription.trim(),
+        receiptRef: nextReceipt,
+      },
     }));
-  }, [advances, displayName]);
+
+    setStatusTargetRow(null);
+    setStatusToSet('');
+    setStatusDescription('');
+    setStatusReceiptFiles([]);
+    toast.success('Status updated successfully');
+  };
 
   const rows = apiRows;
   const rowCurrency = useMemo(
@@ -378,7 +456,7 @@ export default function LabelArtistAdvance() {
         advance_source_phn: 'N/A',
         advance_source_email: user?.email || 'labelartist@haudit.dev',
         advance_type: requestForm.advanceType,
-        repayment_status: 'pending',
+        repayment_status: requestForm.repaymentStatus,
         purpose: requestForm.purpose.trim(),
       });
       setOpenRequestModal(false);
@@ -569,7 +647,7 @@ export default function LabelArtistAdvance() {
                           <StatusPill label={row.status} />
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-2 text-neutral-500">
+                          <div className="relative flex items-center justify-end gap-2 text-neutral-500">
                             <button
                               type="button"
                               aria-label="View request details"
@@ -580,12 +658,39 @@ export default function LabelArtistAdvance() {
                             </button>
                             <button
                               type="button"
-                              aria-label="View request details"
+                              aria-label="Open row menu"
                               className="hover:text-[#7B00D4]"
-                              onClick={() => setSelectedRow(row)}
+                              onClick={() =>
+                                setMenuOpenForId((prev) => (prev === row.id ? null : row.id))
+                              }
                             >
                               <MoreVertical className="h-4 w-4" />
                             </button>
+
+                            {menuOpenForId === row.id && (
+                              <div
+                                data-advance-row-menu="true"
+                                className="absolute right-0 top-7 z-30 w-56 rounded-xl border border-[#E3E3E3] bg-white p-2 shadow-lg"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedRow(row);
+                                    setMenuOpenForId(null);
+                                  }}
+                                  className="w-full rounded-lg px-3 py-2 text-left text-sm text-[#4A4A4A] hover:bg-[#F5F5F5]"
+                                >
+                                  Advance details
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openUpdateStatusModal(row)}
+                                  className="mt-1 w-full rounded-lg px-3 py-2 text-left text-sm text-[#4A4A4A] hover:bg-[#F5F5F5]"
+                                >
+                                  Update status
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -714,6 +819,23 @@ export default function LabelArtistAdvance() {
               </div>
 
               <div>
+                <label className="text-xs font-medium text-[#2D2D2D]">Repayment status</label>
+                <div className="mt-1">
+                  <Select
+                    value={requestForm.repaymentStatus}
+                    onChange={(value) =>
+                      setRequestForm((prev) => ({
+                        ...prev,
+                        repaymentStatus: value as RequestFormState['repaymentStatus'],
+                      }))
+                    }
+                    options={REPAYMENT_STATUS_OPTIONS}
+                    className="h-10 rounded-xl border border-[#B9B9B9] bg-white text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
                 <label className="text-xs font-medium text-[#2D2D2D]">Purpose</label>
                 <textarea
                   rows={5}
@@ -735,6 +857,74 @@ export default function LabelArtistAdvance() {
               </button>
             </form>
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(statusTargetRow)}
+        onClose={() => {
+          setStatusTargetRow(null);
+          setStatusToSet('');
+          setStatusDescription('');
+          setStatusReceiptFiles([]);
+        }}
+        headerVariant="none"
+        closeVariant="island"
+        size="md"
+      >
+        <div className="rounded-[24px] border border-[#D5D5D5] bg-white px-6 py-6">
+          <div className="flex flex-col items-center text-center">
+            <Image src="/haudit-logo.svg" alt="Haudit" width={40} height={40} />
+            <p className="mt-2 text-[32px] font-medium text-[#2D2D2D]">Status Update</p>
+            <p className="mt-1 text-sm text-[#959595]">
+              Fill out form to update artist advance request.
+            </p>
+          </div>
+
+          <form className="mt-5 space-y-4" onSubmit={submitStatusUpdate}>
+            <div>
+              <label className="text-xs font-medium text-[#2D2D2D]">Status</label>
+              <div className="mt-1">
+                <Select
+                  value={statusToSet}
+                  onChange={(value) => setStatusToSet(value as 'approved' | 'rejected')}
+                  options={UPDATE_STATUS_OPTIONS}
+                  placeholder="Select status"
+                  className="h-10 rounded-xl border border-[#B9B9B9] bg-white text-sm"
+                />
+              </div>
+            </div>
+
+            {statusToSet === 'rejected' && (
+              <div>
+                <label className="text-xs font-medium text-[#2D2D2D]">Upload receipt</label>
+                <div className="mt-1">
+                  <FileDropzone
+                    onFiles={(files) => setStatusReceiptFiles(files)}
+                    className="bg-white"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-medium text-[#2D2D2D]">Description</label>
+              <textarea
+                rows={5}
+                placeholder="Enter expenses description"
+                className="mt-1 w-full resize-none rounded-xl border border-[#B9B9B9] bg-white px-3 py-2 text-sm text-[#3C3C3C] outline-none placeholder:text-[#B0B0B0]"
+                value={statusDescription}
+                onChange={(event) => setStatusDescription(event.target.value)}
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="mt-1 h-10 w-full rounded-xl bg-[#7B00D4] text-sm font-medium text-white"
+            >
+              Submit
+            </button>
+          </form>
         </div>
       </Modal>
 
@@ -821,7 +1011,9 @@ export default function LabelArtistAdvance() {
                     Admin Message
                   </p>
                   <div className="px-4 py-3">
-                    <p className="text-sm font-semibold text-[#A0A0A0]">Request approved</p>
+                    <p className="text-sm font-semibold text-[#A0A0A0]">
+                      Request {selectedRow.status.toLowerCase()}
+                    </p>
                     <p className="mt-2 text-[13px] leading-5 text-[#4E4E4E]">
                       • {selectedRow.adminMessage}
                     </p>

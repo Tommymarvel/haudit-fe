@@ -39,8 +39,8 @@ const parseAmountForValidation = (originalValue: unknown) => {
 
 function createSchema(requireArtistName: boolean) {
   return Yup.object({
-    artist_name: requireArtistName
-      ? Yup.string().trim().required('Artist name is required')
+    artistId: requireArtistName
+      ? Yup.string().trim().required('Artist is required')
       : Yup.string().optional(),
     expense_date: Yup.string().required('Date is required'),
     category: Yup.mixed<Category>()
@@ -59,7 +59,7 @@ function createSchema(requireArtistName: boolean) {
 }
 
 export type NewExpensesPayload = {
-  artist_name?: string;
+  artistId?: string;
   expense_date: string;
   category: Category;
   amount: number;
@@ -69,12 +69,17 @@ export type NewExpensesPayload = {
   proofs?: File[];
 };
 
+type ArtistOption = {
+  id: string;
+  name: string;
+};
+
 export default function AddExpensesModal({
   open,
   onClose,
   onSubmit,
   recordLabelFields = false,
-  initialArtistName = '',
+  initialArtistId = '',
   artistOptions = [],
   submitLabel = 'Save expense',
 }: {
@@ -82,22 +87,25 @@ export default function AddExpensesModal({
   onClose: () => void;
   onSubmit: (data: NewExpensesPayload) => Promise<void> | void;
   recordLabelFields?: boolean;
-  initialArtistName?: string;
-  artistOptions?: string[];
+  initialArtistId?: string;
+  artistOptions?: ArtistOption[];
   submitLabel?: string;
 }) {
   const normalizedArtistOptions = useMemo(() => {
-    const names = artistOptions
-      .map((name) => name.trim())
-      .filter(Boolean);
+    const uniqueById = new Map<string, string>();
+    artistOptions.forEach((option) => {
+      const id = option.id.trim();
+      const name = option.name.trim();
+      if (!id || !name) return;
+      if (!uniqueById.has(id)) uniqueById.set(id, name);
+    });
 
-    const initial = initialArtistName.trim();
-    if (initial) names.push(initial);
-
-    return Array.from(new Set(names)).sort((left, right) =>
-      left.localeCompare(right, undefined, { sensitivity: 'base' })
-    );
-  }, [artistOptions, initialArtistName]);
+    return Array.from(uniqueById.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((left, right) =>
+        left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
+      );
+  }, [artistOptions]);
 
   const shouldRequireArtistName = recordLabelFields;
   const validationSchema = useMemo(
@@ -125,7 +133,7 @@ export default function AddExpensesModal({
 
         <Formik
           initialValues={{
-            artist_name: initialArtistName || '',
+            artistId: initialArtistId || '',
             expense_date: '',
             category: '',
             amount: '',
@@ -139,7 +147,7 @@ export default function AddExpensesModal({
             try {
               const parsedAmount = parseAmountInput(vals.amount);
               await onSubmit({
-                artist_name: vals.artist_name?.trim() || undefined,
+                artistId: vals.artistId?.trim() || undefined,
                 expense_date: vals.expense_date,
                 category: vals.category as Category,
                 amount: Number.isFinite(parsedAmount) ? parsedAmount : 0,
@@ -163,22 +171,22 @@ export default function AddExpensesModal({
                       Artist Name
                     </label>
                     <Select
-                      value={values.artist_name}
-                      onChange={(value) => setFieldValue('artist_name', value)}
+                      value={values.artistId}
+                      onChange={(value) => setFieldValue('artistId', value)}
                       placeholder={
                         normalizedArtistOptions.length > 0
                           ? 'Select artist name'
                           : 'No artists available'
                       }
                       className="h-12 rounded-2xl border-neutral-300 bg-white pr-10 text-sm focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                      options={normalizedArtistOptions.map((name) => ({
-                        label: name,
-                        value: name,
+                      options={normalizedArtistOptions.map((artist) => ({
+                        label: artist.name,
+                        value: artist.id,
                       }))}
                       disabled={normalizedArtistOptions.length === 0}
                     />
                     <ErrorMessage
-                      name="artist_name"
+                      name="artistId"
                       component="p"
                       className="mt-1 text-xs text-rose-600"
                     />

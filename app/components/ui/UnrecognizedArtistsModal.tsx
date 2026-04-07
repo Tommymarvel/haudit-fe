@@ -51,7 +51,6 @@ export default function UnrecognizedArtistsModal({
             [name]: {
                 ...prev[name],
                 checked: !prev[name]?.checked,
-                artistId: prev[name]?.checked ? '' : prev[name]?.artistId || '',
             },
         }));
     };
@@ -168,14 +167,13 @@ export default function UnrecognizedArtistsModal({
                                         onChange={() => toggleCheck(name)}
                                         className="h-4 w-4 rounded border-neutral-300 text-[#7B00D4] focus:ring-[#7B00D4]"
                                     />
-                                    <span className="truncate text-[15px] text-[#3C3C3C]">{name}</span>
+                                    <span className="text-[15px] leading-5 text-[#3C3C3C] whitespace-normal break-words">{name}</span>
                                 </div>
 
                                 <div>
                                     <Select
                                         value={currentArtistId}
                                         onChange={(value) => handleSelectArtist(name, value)}
-                                        disabled={!isChecked}
                                         className="w-full rounded-xl border-neutral-300 bg-white text-sm disabled:bg-[#F7F7F7]"
                                         placeholder="Select artist to assign data to"
                                         options={systemArtists.map((artist) => ({

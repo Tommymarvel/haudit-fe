@@ -18,10 +18,13 @@ import { useUnrecognizedArtists } from "@/hooks/useUnrecognizedArtists";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRecordLabelArtists } from "@/hooks/useRecordLabelArtists";
 import SoloUnrecognizedArtistsModal from "@/components/ui/SoloUnrecognizedArtistsModal";
+import UnrecognizedArtistsModal from "@/components/ui/UnrecognizedArtistsModal";
 import IgnoreUnrecognizedConfirmModal from "@/components/ui/IgnoreUnrecognizedConfirmModal";
 import YearFilterCalendar from "@/components/ui/YearFilterCalendar";
+import TerritoryWorldMap from "@/components/royalty/TerritoryWorldMap";
 import { appendQueryParam } from "@/lib/utils/query";
 import { getRecordLabelArtistName } from "@/lib/utils/recordLabelArtist";
+import { getCountryDisplayName } from "@/lib/utils/country";
 
 const PURPLE = "#7B00D4";
 
@@ -45,9 +48,10 @@ type FilterKey = "all_months" | "last_30_days" | "this_year";
 
 const fetcher = (url: string) => axiosInstance.get(url).then((res) => res.data);
 
-function buildFilterQuery(filterKey: FilterKey, year: number, includeMonthly = false) {
+function buildFilterQuery(filterKey: FilterKey, year: number | null, includeMonthly = false) {
+  const normalizedYear = year ?? new Date().getFullYear();
   const params = new URLSearchParams();
-  params.set("year", String(year));
+  params.set("year", String(normalizedYear));
 
   if (includeMonthly) {
     params.set("monthly", "false");
@@ -98,6 +102,7 @@ const MAX_PILL_SEGMENTS = 32;
 
 type Territory = {
   name: string;
+  displayName: string;
   streams: number;
   revenue: number;
 };
@@ -113,7 +118,7 @@ function getCappedSegmentCount(value: number, maxValue: number) {
 export default function SoloArtistRoyalty() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
-  const selectedArtistId = (searchParams.get("artistId") || "").trim();
+  const selectedArtistId = (searchParams.get("artistId") || searchParams.get("id") || "").trim();
   const { artists: recordLabelArtistsApi } = useRecordLabelArtists();
   const canUploadRoyalty = user?.user_type !== "label_artist";
   const { 
@@ -132,7 +137,7 @@ export default function SoloArtistRoyalty() {
   const [activeTab, setActiveTab] = useState<"analytics" | "files">(
     "analytics"
   );
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const [isExporting, setIsExporting] = useState(false);
   const [filter1, setFilter1] = useState("all_months");
   const [filter2, setFilter2] = useState("all_months");
@@ -182,6 +187,16 @@ export default function SoloArtistRoyalty() {
     fetcher,
   );
 
+  const {
+    data: territoryAnalysisFiltered,
+    isLoading: isTerritoryAnalysisFilteredLoading,
+  } = useSWR<Array<{ territory: string; streams: number; totalRevenueUSD: number }>>(
+    withArtistId(
+      `/royalties/territory-analysis?${buildFilterQuery(filter as FilterKey, selectedYear)}`,
+    ),
+    fetcher,
+  );
+
   const handleExportPdf = async () => {
     if (!exportRef.current) return;
 
@@ -201,26 +216,31 @@ export default function SoloArtistRoyalty() {
   const effectiveTrackStreamsDsp = trackStreamsDspFiltered ?? trackStreamsDsp;
   const effectiveAlbumRevenue = albumRevenueFiltered ?? albumRevenue;
   const effectiveDashboardMetrics = dashboardMetricsFiltered ?? dashboardMetrics;
+  const effectiveTerritoryAnalysis = territoryAnalysisFiltered ?? territoryAnalysis;
+  const isEffectiveTerritoryLoading =
+    isTerritoryAnalysisFilteredLoading && !effectiveTerritoryAnalysis;
   const filteredUploads = useMemo(
     () =>
-      (uploads?.data ?? []).filter(
-        (file) => new Date(file.uploadedAt).getFullYear() === selectedYear,
-      ),
+      (uploads?.data ?? []).filter((file) => {
+        return new Date(file.uploadedAt).getFullYear() === selectedYear;
+      }),
     [uploads, selectedYear],
   );
 
   const territoryRows = useMemo<Territory[]>(
     () =>
-      (territoryAnalysis ?? []).map((entry) => ({
+      (effectiveTerritoryAnalysis ?? []).map((entry) => ({
         name: entry.territory || '-',
+        displayName: getCountryDisplayName(entry.territory || '-'),
         streams: Number(entry.streams ?? 0),
         revenue: Number(entry.totalRevenueUSD ?? 0),
       })),
-    [territoryAnalysis],
+    [effectiveTerritoryAnalysis],
   );
 
-  const data = [...territoryRows].sort((a, b) => b.streams - a.streams);
-  const totalTerritories = data.length;
+  const sortedTerritories = [...territoryRows].sort((a, b) => b.streams - a.streams);
+  const data = sortedTerritories.slice(0, 5);
+  const totalTerritories = sortedTerritories.length;
 
   const handleDownload = (fileUrl: string) => {
     window.open(fileUrl, '_blank');
@@ -231,9 +251,14 @@ export default function SoloArtistRoyalty() {
     setIsUploadModalOpen(true);
   };
 
-const handleUpload = async (file: File, organization: string, onProgress: (msg: string) => void) => {
+const handleUpload = async (
+  file: File,
+  organization: string,
+  onProgress: (msg: string) => void,
+  artistIds?: string[],
+) => {
   try {
-    const result = await uploadRoyaltyFile(file, organization, onProgress);
+    const result = await uploadRoyaltyFile(file, organization, onProgress, artistIds);
       setIsUploadModalOpen(false);
       if (result.unmatchedArtists && result.unmatchedArtists.length > 0) {
         setPendingUnmatchedArtists(result.unmatchedArtists);
@@ -245,14 +270,16 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
   };
 
   const recordLabelArtists = useMemo(() => {
-    const uniqueNames = new Set<string>();
+    const uniqueById = new Map<string, { id: string; name: string }>();
     recordLabelArtistsApi.forEach((artist) => {
+      const artistId = artist.id || artist._id;
       const name = getRecordLabelArtistName(artist);
-      if (name) uniqueNames.add(name);
+      if (!artistId || !name || uniqueById.has(artistId)) return;
+      uniqueById.set(artistId, { id: artistId, name });
     });
 
-    return Array.from(uniqueNames).sort((left, right) =>
-      left.localeCompare(right, undefined, { sensitivity: "base" }),
+    return Array.from(uniqueById.values()).sort((left, right) =>
+      left.name.localeCompare(right.name, undefined, { sensitivity: "base" }),
     );
   }, [recordLabelArtistsApi]);
 
@@ -494,7 +521,9 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                   <polyline points="13 2 13 9 20 9" />
                 </svg>
               </div>
-              <p className="text-sm text-neutral-500">No files uploaded for {selectedYear}</p>
+              <p className="text-sm text-neutral-500">
+                {`No files uploaded for ${selectedYear}`}
+              </p>
             </div>
           ) : (
             filteredUploads.map((file) => (
@@ -799,7 +828,7 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
               <div className="bg-white p-4 pb-12">
                 <div className="mb-3 flex items-baseline gap-2">
                   <div className="text-4xl font-semibold">
-                    ${Math.floor((dashboardMetrics?.totalRevenue ?? 0) * 1000) / 1000}
+                    ${Math.floor((effectiveDashboardMetrics?.totalRevenue ?? 0) * 1000) / 1000}
                   </div>
                   <div className="text-sm text-neutral-500">Total Revenue</div>
                 </div>
@@ -907,7 +936,7 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
 
               {/* Body */}
               <div className="bg-neutral-100 px-4 pb-4 pt-3">
-                {isTerritoryAnalysisLoading ? (
+                {isEffectiveTerritoryLoading ? (
                   <div className="rounded-2xl bg-white p-6">
                     <ChartEmptyState
                       title="Loading territory analysis"
@@ -941,8 +970,10 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
 
                         return data.map((t) => {
                           // Calculate percentages
-                          const streamsWidth = (t.streams / maxStreams) * 100;
-                          const revenueWidth = (t.revenue / maxRevenue) * 100;
+                          const streamsWidth = maxStreams > 0 ? (t.streams / maxStreams) * 100 : 0;
+                          const revenueWidth = maxRevenue > 0 ? (t.revenue / maxRevenue) * 100 : 0;
+                          const showStreamsInside = streamsWidth >= 32;
+                          const showRevenueInside = revenueWidth >= 32;
 
                           return (
                             <div
@@ -950,41 +981,55 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                               className="grid grid-cols-[1fr_auto_1fr] items-center gap-4"
                             >
                               {/* Left: Streams (Right aligned, growing left) */}
-                              <div className="flex justify-end items-center">
+                              <div className="flex justify-end items-center gap-1">
+                                {!showStreamsInside && (
+                                  <span className="text-[11px] font-semibold text-[#3C3C3C] whitespace-nowrap">
+                                    {t.streams.toLocaleString()}
+                                  </span>
+                                )}
                                 <div
-                                  className="flex items-center justify-end rounded-[4px] px-2 py-1 h-6 min-w-[2px]"
+                                  className="flex items-center justify-end rounded-[4px] px-2 py-1 h-6 min-w-[2px] overflow-hidden"
                                   style={{
                                     width: `${streamsWidth}%`,
                                     backgroundColor: PRIMARY,
                                   }}
                                 >
-                                  <span className="text-[11px] font-semibold text-white whitespace-nowrap">
-                                    {t.streams.toLocaleString()}
-                                  </span>
+                                  {showStreamsInside && (
+                                    <span className="text-[11px] font-semibold text-white whitespace-nowrap">
+                                      {t.streams.toLocaleString()}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
 
                               {/* Center: Country Name */}
                               <div
                                 className="w-[100px] text-center text-xs text-neutral-700 truncate"
-                                title={t.name}
+                                title={t.displayName}
                               >
-                                {t.name}
+                                {t.displayName}
                               </div>
 
                               {/* Right: Revenue (Left aligned, growing right) */}
-                              <div className="flex justify-start items-center">
+                              <div className="flex justify-start items-center gap-1">
                                 <div
-                                  className="flex items-center justify-start rounded-[4px] px-2 py-1 h-6 min-w-[2px]"
+                                  className="flex items-center justify-start rounded-[4px] px-2 py-1 h-6 min-w-[2px] overflow-hidden"
                                   style={{
                                     width: `${revenueWidth}%`,
                                     backgroundColor: PRIMARY_SOFT,
                                   }}
                                 >
+                                  {showRevenueInside && (
+                                    <span className="text-[11px] font-semibold text-[#7B00D4] whitespace-nowrap">
+                                      ${t.revenue.toLocaleString()}
+                                    </span>
+                                  )}
+                                </div>
+                                {!showRevenueInside && (
                                   <span className="text-[11px] font-semibold text-[#7B00D4] whitespace-nowrap">
                                     ${t.revenue.toLocaleString()}
                                   </span>
-                                </div>
+                                )}
                               </div>
                             </div>
                           );
@@ -1004,9 +1049,8 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
                       </span>
                     </div>
 
-                    {/* Map placeholder – swap with real map/image when ready */}
-                    <div className="mt-4 flex h-40 items-center justify-center rounded-xl border border-dashed border-neutral-200 bg-neutral-50 text-[11px] text-neutral-400">
-                      World map with territory markers
+                    <div className="mt-4 h-52 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50">
+                      <TerritoryWorldMap territories={sortedTerritories} maxMarkers={8} className="h-full w-full" />
                     </div>
 
                     <div className="mt-3 flex justify-end">
@@ -1069,8 +1113,16 @@ const handleUpload = async (file: File, organization: string, onProgress: (msg: 
           onUpload={handleUpload}
         />
       )}
+      <UnrecognizedArtistsModal
+        isOpen={openUnrecognizedModal && user?.user_type === "record_label"}
+        onClose={() => setOpenUnrecognizedModal(false)}
+        unrecognizedNames={pendingUnmatchedArtists}
+        systemArtists={recordLabelArtists}
+        onFinish={handleResolveUnrecognizedArtists}
+        onIgnore={() => setOpenIgnoreConfirm(true)}
+      />
       <SoloUnrecognizedArtistsModal
-        isOpen={openUnrecognizedModal}
+        isOpen={openUnrecognizedModal && user?.user_type !== "record_label"}
         onClose={() => setOpenUnrecognizedModal(false)}
         unrecognizedNames={pendingUnmatchedArtists}
         currentArtistId={user?.id || ''}

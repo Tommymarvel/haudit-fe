@@ -55,6 +55,11 @@ export interface TerritoryAnalysisItem {
   totalRevenueUSD: number;
 }
 
+export interface AlbumInteractionItem {
+  count: number;
+  saleType: string;
+}
+
 // Assuming structure for other endpoints based on descriptions
 export interface TrackRevenueDsp {
   // Structure not fully visible in screenshot, assuming generic for now

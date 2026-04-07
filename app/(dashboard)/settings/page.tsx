@@ -1,6 +1,7 @@
 'use client';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import Image from 'next/image';
+import { useSearchParams } from 'next/navigation';
 import { useDropzone } from 'react-dropzone';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
@@ -13,12 +14,14 @@ import { toast } from 'react-toastify';
 import { auth } from '@/lib/auth/firebase';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { TagInput } from '@/components/ui/TagInput';
+import { useRecordLabelArtists } from '@/hooks/useRecordLabelArtists';
+import type { RecordLabelArtistName } from '@/lib/types/record-label';
 
 const BRAND_PURPLE = '#7B00D4';
 
 const ProfileSchema = Yup.object({
-    firstName: Yup.string().required('First name is required'),
-    lastName: Yup.string().required('Last name is required'),
+    firstName: Yup.string(),
+    lastName: Yup.string(),
     other_names: Yup.array().of(Yup.string()),
 });
 
@@ -33,6 +36,20 @@ type PhotoFormValues = {
 };
 
 const normalizeName = (name: string) => name.trim().toLowerCase();
+
+function getArtistNameEntries(names: unknown): RecordLabelArtistName[] {
+    if (!names) return [];
+    const list = Array.isArray(names) ? names : [names];
+    return list
+        .filter((entry) => typeof entry === 'object' && entry !== null)
+        .map((entry) => entry as RecordLabelArtistName);
+}
+
+function readArtistNameByType(entries: RecordLabelArtistName[], type: string): string {
+    return (
+        entries.find((entry) => (entry.name_type || '').trim().toLowerCase() === type)?.name?.trim() || ''
+    );
+}
 
 function AvatarDropzone({
     value,
@@ -176,11 +193,40 @@ function InputWithIcon({ name, placeholder, type = 'text' }: { name: string; pla
 
 export default function SettingsPage() {
     const { user, refreshUser } = useAuth();
+    const searchParams = useSearchParams();
+    const selectedArtistId = (searchParams.get('artistId') || searchParams.get('id') || '').trim();
+    const { artists: recordLabelArtists } = useRecordLabelArtists();
+
+    const selectedArtist = useMemo(
+        () => recordLabelArtists.find((artist) => (artist.id || artist._id) === selectedArtistId),
+        [recordLabelArtists, selectedArtistId],
+    );
+
+    const selectedArtistNameEntries = useMemo(
+        () => getArtistNameEntries(selectedArtist?.names),
+        [selectedArtist?.names],
+    );
+
+    const isArtistScopedSettings = Boolean(selectedArtistId && selectedArtist);
+
+    const fallbackArtistName = (selectedArtist?.name || '').trim();
+    const [fallbackFirstName = '', ...fallbackLastNameParts] = fallbackArtistName
+        .split(/\s+/)
+        .filter(Boolean);
     
     const profileInitialValues: ProfileFormValues = {
-        firstName: user?.first_name || '',
-        lastName: user?.last_name || '',
-        other_names: (user?.other_names || []) as string[],
+        firstName: isArtistScopedSettings
+            ? readArtistNameByType(selectedArtistNameEntries, 'first_name') || fallbackFirstName
+            : user?.first_name || '',
+        lastName: isArtistScopedSettings
+            ? readArtistNameByType(selectedArtistNameEntries, 'last_name') || fallbackLastNameParts.join(' ')
+            : user?.last_name || '',
+        other_names: isArtistScopedSettings
+            ? selectedArtistNameEntries
+                  .filter((entry) => (entry.name_type || '').trim().toLowerCase() === 'other_names')
+                  .map((entry) => (entry.name || '').trim())
+                  .filter(Boolean)
+            : ((user?.other_names || []) as string[]),
     };
 
     const photoInitialValues: PhotoFormValues = {
@@ -217,8 +263,16 @@ export default function SettingsPage() {
 
                                 try {
                                     const avatarUrl = await uploadFile(vals.avatar, 'profile');
-                                    await axiosInstance.patch('/auth/profile', { avatar: avatarUrl });
-                                    await refreshUser();
+                                    if (isArtistScopedSettings && selectedArtistId) {
+                                        await axiosInstance.patch(
+                                            '/auth/profile',
+                                            { avatar: avatarUrl },
+                                            { params: { artistId: selectedArtistId } },
+                                        );
+                                    } else {
+                                        await axiosInstance.patch('/auth/profile', { avatar: avatarUrl });
+                                        await refreshUser();
+                                    }
                                     helpers.resetForm();
                                     toast.success('Profile photo updated successfully');
                                 } catch (err: unknown) {
@@ -235,13 +289,15 @@ export default function SettingsPage() {
                                     <div className="space-y-2">
                                         <FormRow
                                             label="Your photo"
-                                            required
                                             helpText="This will be displayed on your profile."
                                         >
                                             <AvatarDropzone
                                                 value={values.avatar ?? null}
                                                 onChange={(file) => setFieldValue('avatar', file)}
-                                                currentAvatar={user?.avatar}
+                                                currentAvatar={
+                                                    (selectedArtist as unknown as { avatar?: string } | undefined)?.avatar ||
+                                                    user?.avatar
+                                                }
                                             />
                                         </FormRow>
                                     </div>
@@ -266,21 +322,27 @@ export default function SettingsPage() {
                             validationSchema={ProfileSchema}
                             onSubmit={async (vals, helpers) => {
                                 try {
-                                    const payload = {
-                                        first_name: vals.firstName.trim(),
-                                        last_name: vals.lastName.trim(),
-                                    };
+                                    const trimmedFirstName = vals.firstName.trim();
+                                    const trimmedLastName = vals.lastName.trim();
+
+                                    const payload: { first_name?: string; last_name?: string } = {};
+                                    if (trimmedFirstName) payload.first_name = trimmedFirstName;
+                                    if (trimmedLastName) payload.last_name = trimmedLastName;
 
                                     const desiredOtherNames = Array.from(
                                         new Set(vals.other_names.map((name) => name.trim()).filter(Boolean))
                                     );
 
-                                    const existingOtherNameEntries = (user?.names ?? []).filter(
-                                        (entry) => entry.name_type === 'other_names'
+                                    const existingNameEntries = isArtistScopedSettings
+                                        ? selectedArtistNameEntries
+                                        : (user?.names ?? []);
+
+                                    const existingOtherNameEntries = existingNameEntries.filter(
+                                        (entry) => (entry.name_type || '').trim().toLowerCase() === 'other_names'
                                     );
 
                                     const existingByNormalized = new Map(
-                                        existingOtherNameEntries.map((entry) => [normalizeName(entry.name), entry])
+                                        existingOtherNameEntries.map((entry) => [normalizeName(entry.name || ''), entry])
                                     );
 
                                     const desiredByNormalized = new Map<string, string>();
@@ -292,9 +354,58 @@ export default function SettingsPage() {
                                     });
 
                                     const otherNameRequests: Promise<unknown>[] = [];
+                                    const artistScopedRequestConfig =
+                                        isArtistScopedSettings && selectedArtistId
+                                            ? { params: { artistId: selectedArtistId } }
+                                            : undefined;
+
+                                    if (isArtistScopedSettings && selectedArtistId) {
+                                        existingOtherNameEntries.forEach((entry) => {
+                                            const normalized = normalizeName(entry.name || '');
+                                            if (!desiredByNormalized.has(normalized)) {
+                                                otherNameRequests.push(
+                                                    axiosInstance.delete(
+                                                        `/auth/user-names/${entry._id}`,
+                                                        artistScopedRequestConfig,
+                                                    )
+                                                );
+                                            }
+                                        });
+
+                                        desiredByNormalized.forEach((name, normalized) => {
+                                            const existing = existingByNormalized.get(normalized);
+                                            if (!existing) {
+                                                otherNameRequests.push(
+                                                    axiosInstance.post(
+                                                        '/auth/user-names',
+                                                        { names: [name], name_type: 'other_names' },
+                                                        artistScopedRequestConfig,
+                                                    )
+                                                );
+                                                return;
+                                            }
+
+                                            if (existing.name !== name) {
+                                                otherNameRequests.push(
+                                                    axiosInstance.patch(
+                                                        `/auth/user-names/${existing._id}`,
+                                                        { name, name_type: 'other_names' },
+                                                        artistScopedRequestConfig,
+                                                    )
+                                                );
+                                            }
+                                        });
+
+                                        if (Object.keys(payload).length > 0) {
+                                            await axiosInstance.patch('/auth/profile', payload, artistScopedRequestConfig);
+                                        }
+                                        await Promise.all(otherNameRequests);
+                                        toast.success('Profile updated successfully');
+                                        return;
+                                    }
 
                                     existingOtherNameEntries.forEach((entry) => {
-                                        const normalized = normalizeName(entry.name);
+                                        const normalized = normalizeName(entry.name || '');
                                         if (!desiredByNormalized.has(normalized)) {
                                             otherNameRequests.push(
                                                 axiosInstance.delete(`/auth/user-names/${entry._id}`)
@@ -307,7 +418,7 @@ export default function SettingsPage() {
                                         if (!existing) {
                                             otherNameRequests.push(
                                                 axiosInstance.post('/auth/user-names', {
-                                                    name,
+                                                    names: [name],
                                                     name_type: 'other_names',
                                                 })
                                             );
@@ -324,7 +435,9 @@ export default function SettingsPage() {
                                         }
                                     });
 
-                                    await axiosInstance.patch('/auth/profile', payload);
+                                    if (Object.keys(payload).length > 0) {
+                                        await axiosInstance.patch('/auth/profile', payload);
+                                    }
                                     await Promise.all(otherNameRequests);
                                     await refreshUser();
                                     toast.success('Profile updated successfully');
@@ -340,17 +453,16 @@ export default function SettingsPage() {
                             {({ isSubmitting, setFieldValue, values }) => (
                                 <Form>
                                     <div className="space-y-2">
-                                        <FormRow label="First name" required>
+                                        <FormRow label="First name">
                                             <InputWithIcon name="firstName" placeholder="Enter your first name" />
                                         </FormRow>
 
-                                        <FormRow label="Last name" required>
+                                        <FormRow label="Last name">
                                             <InputWithIcon name="lastName" placeholder="Enter your last name" />
                                         </FormRow>
 
                                         <FormRow 
                                             label="Other Names" 
-                                            required
                                             helpText="This will be displayed on your profile."
                                         >
                                             <div className="space-y-2">

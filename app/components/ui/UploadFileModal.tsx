@@ -8,12 +8,12 @@ interface UploadFileModalProps {
   isOpen: boolean;
   onClose: () => void;
   showArtistSelect?: boolean;
-  artistOptions?: string[];
+  artistOptions?: Array<{ id: string; name: string }>;
   onUpload?: (
     file: File,
     organization: string,
     onProgress: (message: string) => void,
-    artistName?: string,
+    artistIds?: string[],
   ) => Promise<{ unmatchedArtists?: string[] } | void>;
 }
 
@@ -40,7 +40,8 @@ export default function UploadFileModal({
   onUpload,
 }: UploadFileModalProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedArtist, setSelectedArtist] = useState('');
+  const [selectedArtistIds, setSelectedArtistIds] = useState<string[]>([]);
+  const [artistSearch, setArtistSearch] = useState('');
   const [selectedOrganization, setSelectedOrganization] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [showArtistDropdown, setShowArtistDropdown] = useState(false);
@@ -53,8 +54,18 @@ export default function UploadFileModal({
   const canSubmit =
     !!selectedFile &&
     !!selectedOrganization &&
-    (!shouldShowArtistSelect || !hasArtistOptions || !!selectedArtist) &&
+    (!shouldShowArtistSelect || !hasArtistOptions || selectedArtistIds.length > 0) &&
     !isUploading;
+
+  const selectedArtistNames = selectedArtistIds
+    .map((artistId) => artistOptions.find((artist) => artist.id === artistId)?.name)
+    .filter((name): name is string => !!name);
+
+  const filteredArtistOptions = artistOptions.filter((artist) => {
+    if (selectedArtistIds.includes(artist.id)) return false;
+    if (!artistSearch.trim()) return true;
+    return artist.name.toLowerCase().includes(artistSearch.toLowerCase());
+  });
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -110,7 +121,7 @@ export default function UploadFileModal({
           selectedFile,
           selectedOrganization,
           handleProgress,
-          selectedArtist || undefined,
+          selectedArtistIds.length > 0 ? selectedArtistIds : undefined,
         );
         handleClose();
       } catch (error) {
@@ -124,7 +135,8 @@ export default function UploadFileModal({
   const handleClose = () => {
     if (isUploading) return; // Prevent closing during upload
     setSelectedFile(null);
-    setSelectedArtist('');
+    setSelectedArtistIds([]);
+    setArtistSearch('');
     setSelectedOrganization('');
     setShowArtistDropdown(false);
     setShowOrgDropdown(false);
@@ -142,6 +154,16 @@ export default function UploadFileModal({
       month: 'short',
       year: 'numeric',
     });
+  };
+
+  const handleArtistSelect = (artistId: string) => {
+    if (selectedArtistIds.includes(artistId)) return;
+    setSelectedArtistIds((prev) => [...prev, artistId]);
+    setArtistSearch('');
+  };
+
+  const handleArtistRemove = (artistId: string) => {
+    setSelectedArtistIds((prev) => prev.filter((item) => item !== artistId));
   };
 
   return (
@@ -248,19 +270,23 @@ export default function UploadFileModal({
             {shouldShowArtistSelect && (
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <label className="text-sm font-medium text-neutral-700">
-                  Select artist
+                  Select artists
                 </label>
                 <div className="relative w-full sm:w-[68%]">
                   <button
                     type="button"
                     disabled={!hasArtistOptions}
                     onClick={() => {
-                      setShowArtistDropdown(!showArtistDropdown);
+                      setShowArtistDropdown((prev) => !prev);
                       setShowOrgDropdown(false);
                     }}
-                    className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-[#7B00D4]/20 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+                    className="relative w-full rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-[#7B00D4]/20 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
                   >
-                    {selectedArtist || (hasArtistOptions ? 'Select artist' : 'No artists available')}
+                    {selectedArtistIds.length > 0
+                      ? `${selectedArtistIds.length} artist${selectedArtistIds.length > 1 ? 's' : ''} selected`
+                      : hasArtistOptions
+                        ? 'Select artists'
+                        : 'No artists available'}
                     <svg
                       className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
                       fill="none"
@@ -275,21 +301,58 @@ export default function UploadFileModal({
                       />
                     </svg>
                   </button>
+
+                  {selectedArtistNames.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2 rounded-xl border border-neutral-200 bg-neutral-50 p-2">
+                      {selectedArtistNames.map((artistName, index) => {
+                        const artistId = selectedArtistIds[index];
+                        return (
+                        <span
+                          key={artistId}
+                          className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-neutral-700 border border-neutral-200"
+                        >
+                          {artistName}
+                          <button
+                            type="button"
+                            onClick={() => handleArtistRemove(artistId)}
+                            className="text-neutral-500 hover:text-neutral-700"
+                            aria-label={`Remove ${artistName}`}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </span>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {showArtistDropdown && hasArtistOptions && (
                     <div className="absolute z-10 mt-1 w-full rounded-xl border border-neutral-200 bg-white shadow-lg">
-                      {artistOptions.map((artist) => (
-                        <button
-                          key={artist}
-                          type="button"
-                          onClick={() => {
-                            setSelectedArtist(artist);
-                            setShowArtistDropdown(false);
-                          }}
-                          className="w-full px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50 first:rounded-t-xl last:rounded-b-xl"
-                        >
-                          {artist}
-                        </button>
-                      ))}
+                      <div className="border-b border-neutral-100 p-2">
+                        <input
+                          type="text"
+                          value={artistSearch}
+                          onChange={(event) => setArtistSearch(event.target.value)}
+                          placeholder="Search artists"
+                          className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-700 outline-none focus:border-[#7B00D4]"
+                        />
+                      </div>
+                      <div className="max-h-52 overflow-y-auto py-1">
+                        {filteredArtistOptions.length === 0 ? (
+                          <p className="px-3 py-2 text-xs text-neutral-400">No artist matches</p>
+                        ) : (
+                          filteredArtistOptions.map((artist) => (
+                            <button
+                              key={artist.id}
+                              type="button"
+                              onClick={() => handleArtistSelect(artist.id)}
+                              className="w-full px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50"
+                            >
+                              {artist.name}
+                            </button>
+                          ))
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

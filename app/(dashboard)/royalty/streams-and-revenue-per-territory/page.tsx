@@ -8,20 +8,15 @@ import { ReportInsightDropdown } from '@/components/report-insight/ReportInsight
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 import { ChartEmptyState } from '@/components/dashboard/ChartEmptyState';
 import { useRoyalty } from '@/hooks/useRoyalty';
+import TerritoryWorldMap from '@/components/royalty/TerritoryWorldMap';
+import { getCountryDisplayName } from '@/lib/utils/country';
 
 type TerritoryRow = {
   name: string;
+  displayName: string;
   streams: number;
   revenue: number;
 };
-
-function WorldMapPlaceholder() {
-  return (
-    <div className="relative flex h-[340px] w-full items-center justify-center overflow-hidden rounded-xl bg-white">
-      <div className="text-xs text-neutral-400">World map with territory markers</div>
-    </div>
-  );
-}
 
 export default function StreamsAndRevenuePerTerritory() {
   const { territoryAnalysis, isTerritoryAnalysisLoading } = useRoyalty();
@@ -31,6 +26,7 @@ export default function StreamsAndRevenuePerTerritory() {
       (territoryAnalysis ?? [])
         .map((entry) => ({
           name: entry.territory || '-',
+          displayName: getCountryDisplayName(entry.territory || '-'),
           streams: Number(entry.streams ?? 0),
           revenue: Number(entry.totalRevenueUSD ?? 0),
         }))
@@ -65,7 +61,9 @@ export default function StreamsAndRevenuePerTerritory() {
           <span className="text-sm text-neutral-500">Total Territory</span>
         </div>
 
-        <WorldMapPlaceholder />
+        <div className="h-[440px] w-full overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50">
+          <TerritoryWorldMap territories={rows} maxMarkers={20} className="h-full w-full" />
+        </div>
 
         {isTerritoryAnalysisLoading ? (
           <div className="rounded-2xl bg-white p-6">
@@ -97,7 +95,7 @@ export default function StreamsAndRevenuePerTerritory() {
                   </div>
                 </div>
 
-                <div className="text-center text-sm font-medium text-neutral-700">{row.name}</div>
+                <div className="text-center text-sm font-medium text-neutral-700">{row.displayName}</div>
 
                 <div className="flex justify-start">
                   <div

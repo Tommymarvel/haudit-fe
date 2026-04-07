@@ -21,6 +21,8 @@ import { useUnrecognizedArtists } from '@/hooks/useUnrecognizedArtists';
 import { useAuth } from '@/contexts/AuthContext';
 import { uploadFile } from '@/lib/utils/upload';
 
+const ALBUM_INTERACTION_COLORS = ['#7B00D4', '#00D447', '#3B82F6', '#F59E0B', '#EF4444'];
+
 export default function SoloArtistDashboard() {
   const { user } = useAuth();
   const { dashboardMetrics, albumPerformance, albumRevenue, albumInteractions, uploadRoyaltyFile } = useRoyalty();
@@ -164,13 +166,14 @@ export default function SoloArtistDashboard() {
   );
 
   const albumInteractionData: DonutSlice[] = useMemo(
-    () => [
-      { 
-        name: 'Stream', 
-        value: albumInteractions?.totalStreams ?? 0, 
-        color: '#7B00D4' 
-      },
-    ],
+    () =>
+      (albumInteractions ?? [])
+        .map((item, index) => ({
+          name: item.saleType,
+          value: Number(item.count ?? 0),
+          color: ALBUM_INTERACTION_COLORS[index % ALBUM_INTERACTION_COLORS.length],
+        }))
+        .filter((item) => item.value > 0),
     [albumInteractions]
   );
 

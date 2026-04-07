@@ -31,6 +31,8 @@ import { Expense } from '@/lib/types/expenses';
 import { BRAND } from '@/lib/brand';
 import { deriveSingleCurrency, formatCurrencyAmount } from '@/lib/utils/currency';
 
+const ALBUM_INTERACTION_COLORS = ['#00D447', '#7B00D4', '#3B82F6', '#F59E0B', '#EF4444'];
+
 type DashboardTab = 'Track' | 'Album' | 'Advance' | 'Expenses';
 
 type PerformanceRow = {
@@ -298,9 +300,13 @@ export default function LabelArtistDashboard() {
   }, [trackStreamsDsp]);
 
   const albumInteractionSeries = useMemo<DonutSlice[]>(() => {
-    const totalStreams = Number(albumInteractions?.totalStreams ?? 0);
-    if (totalStreams <= 0) return [];
-    return [{ name: 'Stream', value: totalStreams, color: '#00D447' }];
+    return (albumInteractions ?? [])
+      .map((item, index) => ({
+        name: item.saleType,
+        value: Number(item.count ?? 0),
+        color: ALBUM_INTERACTION_COLORS[index % ALBUM_INTERACTION_COLORS.length],
+      }))
+      .filter((item) => item.value > 0);
   }, [albumInteractions]);
 
   const advanceRows = useMemo<AdvanceRow[]>(
