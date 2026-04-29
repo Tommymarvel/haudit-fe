@@ -1,6 +1,7 @@
 'use client';
 import Modal from '@/components/ui/Modal';
 import FileDropzone from '@/components/ui/FIleDropzone';
+import { Select } from '@/components/ui/Select';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
 import Image from 'next/image';
@@ -27,7 +28,7 @@ const Schema = Yup.object({
   phone: Yup.string().min(7, 'Too short').required('Phone is required'),
   email: Yup.string().email('Invalid email').required('Email is required'),
   advanceType: Yup.string()
-    .oneOf(['personal', 'marketting'], 'Select a valid advance type')
+    .oneOf(['personal', 'marketting', 'Signing advance', 'Artist Personal advance', 'Album/project advance', 'Single advance', 'Renewal/extension advance', 'Recording fund advance', 'Production advance', 'Producer advance', 'Studio advance', 'Marketing advance', 'Promotion advance', 'Digital marketing / ad-spend advance', 'PR advance', 'Music video advance', 'Content creation advance', 'Distribution advance', 'Label services advance', 'Advance against royalties', 'Royalty advance', 'Show guarantee (advance payment)', 'Performance advance', 'Tour support advance', 'Sponsorship advance', 'Brand partnership advance', 'Endorsement advance', 'Recoupable advance', 'others'], 'Select a valid advance type')
     .required('Advance type is required'),
   repaymentStatus: Yup.string()
     .oneOf(['repaid', 'outstanding'], 'Select a valid repayment status')
@@ -44,7 +45,7 @@ export type NewAdvancePayload = {
   sourceName: string;
   phone: string;
   email: string;
-  advanceType: 'personal' | 'marketting';
+  advanceType: string;
   repaymentStatus: 'repaid' | 'outstanding';
   currency: (typeof Currencies)[number];
   purpose?: string;
@@ -102,7 +103,7 @@ export default function AddAdvanceModal({
                 sourceName: vals.sourceName.trim(),
                 phone: vals.phone.trim(),
                 email: vals.email.trim(),
-                advanceType: vals.advanceType as 'personal' | 'marketting',
+                advanceType: vals.advanceType,
                 repaymentStatus: vals.repaymentStatus as 'repaid' | 'outstanding',
                 currency: vals.currency as (typeof Currencies)[number],
                 purpose: vals.purpose?.trim() || undefined,
@@ -144,18 +145,12 @@ export default function AddAdvanceModal({
                   <label className="mb-3 block text-sm font-medium text-neutral-700">
                     Currency
                   </label>
-                  <Field
-                    as="select"
-                    name="currency"
-                    className="w-full rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none
-                           focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                  >
-                    {Currencies.map((currency) => (
-                      <option key={currency} value={currency}>
-                        {currency}
-                      </option>
-                    ))}
-                  </Field>
+                  <Select
+                    value={values.currency}
+                    onChange={(val) => setFieldValue('currency', val)}
+                    options={Currencies.map((c) => ({ value: c, label: c }))}
+                    className="h-12 rounded-2xl"
+                  />
                   <ErrorMessage
                     name="currency"
                     component="p"
@@ -220,15 +215,43 @@ export default function AddAdvanceModal({
                   <label className="mb-3 block text-sm font-medium text-neutral-700">
                     Advance type
                   </label>
-                  <Field
-                    as="select"
+                  <Select
+                    value={values.advanceType}
+                    onChange={(val) => setFieldValue('advanceType', val)}
+                    placeholder="Select advance type"
+                    options={[
+                      { value: 'personal', label: 'Personal' },
+                      { value: 'marketting', label: 'Marketing' },
+                      { value: 'Signing advance', label: 'Signing advance' },
+                      { value: 'Artist Personal advance', label: 'Artist Personal advance' },
+                      { value: 'Album/project advance', label: 'Album/project advance' },
+                      { value: 'Single advance', label: 'Single advance' },
+                      { value: 'Renewal/extension advance', label: 'Renewal/extension advance' },
+                      { value: 'Recording fund advance', label: 'Recording fund advance' },
+                      { value: 'Production advance', label: 'Production advance' },
+                      { value: 'Producer advance', label: 'Producer advance' },
+                      { value: 'Studio advance', label: 'Studio advance' },
+                      { value: 'Marketing advance', label: 'Marketing advance' },
+                      { value: 'Promotion advance', label: 'Promotion advance' },
+                      { value: 'Digital marketing / ad-spend advance', label: 'Digital marketing / ad-spend advance' },
+                      { value: 'PR advance', label: 'PR advance' },
+                      { value: 'Music video advance', label: 'Music video advance' },
+                      { value: 'Content creation advance', label: 'Content creation advance' },
+                      { value: 'Distribution advance', label: 'Distribution advance' },
+                      { value: 'Label services advance', label: 'Label services advance' },
+                      { value: 'Advance against royalties', label: 'Advance against royalties' },
+                      { value: 'Royalty advance', label: 'Royalty advance' },
+                      { value: 'Show guarantee (advance payment)', label: 'Show guarantee (advance payment)' },
+                      { value: 'Performance advance', label: 'Performance advance' },
+                      { value: 'Tour support advance', label: 'Tour support advance' },
+                      { value: 'Sponsorship advance', label: 'Sponsorship advance' },
+                      { value: 'Brand partnership advance', label: 'Brand partnership advance' },
+                      { value: 'Endorsement advance', label: 'Endorsement advance' },
+                      { value: 'Recoupable advance', label: 'Recoupable advance' },
+                      { value: 'others', label: 'Others' },
+                    ]}
                     name="advanceType"
-                    className="w-full rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none
-                           focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                  >
-                    <option value="personal">Personal</option>
-                    <option value="marketting">Marketing</option>
-                  </Field>
+                  />
                   <ErrorMessage
                     name="advanceType"
                     component="p"
@@ -240,15 +263,15 @@ export default function AddAdvanceModal({
                   <label className="mb-3 block text-sm font-medium text-neutral-700">
                     Repayment status
                   </label>
-                  <Field
-                    as="select"
-                    name="repaymentStatus"
-                    className="w-full rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none
-                           focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                  >
-                    <option value="outstanding">Outstanding</option>
-                    <option value="repaid">Repaid</option>
-                  </Field>
+                  <Select
+                    value={values.repaymentStatus}
+                    onChange={(val) => setFieldValue('repaymentStatus', val)}
+                    options={[
+                      { value: 'outstanding', label: 'Outstanding' },
+                      { value: 'repaid', label: 'Repaid' },
+                    ]}
+                    className="h-12 rounded-2xl"
+                  />
                   <ErrorMessage
                     name="repaymentStatus"
                     component="p"

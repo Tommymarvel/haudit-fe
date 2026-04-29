@@ -729,7 +729,7 @@ const RecordLabelAdvance = () => {
 
             {statusUpdate === 'rejected' && (
               <div>
-                <label className="text-xs font-medium text-[#2D2D2D]">Upload receipt</label>
+                <label className="text-xs font-medium text-[#2D2D2D]">Upload Support Document</label>
                 <div className="mt-1">
                   <FileDropzone onFiles={(files) => setStatusReceiptFiles(files)} className="bg-white" />
                 </div>

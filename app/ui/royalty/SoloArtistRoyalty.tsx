@@ -395,7 +395,7 @@ const handleUpload = async (
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-neutral-900">
-            {activeTab === "files" ? "My Files" : "Analytics"}
+            {activeTab === "files" ? "My Files" : "Royalty Analytics"}
           </h1>
           <p className="text-sm text-neutral-500">
             Monitor your music performance and royalty earnings.

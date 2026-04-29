@@ -12,7 +12,7 @@ export default function Topbar() {
           Welcome back, {user ? user.first_name : 'User'}
         </h1>
         <p className=" text-[#777777]">
-          Track, manage and forecast your customers and orders.
+          Your financial records and revenue in one place.
         </p>
       </div>
       <div className="flex items-center gap-3">

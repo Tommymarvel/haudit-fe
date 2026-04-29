@@ -423,6 +423,7 @@ export default function RecordLabelArtists() {
   const [pendingArtistActionId, setPendingArtistActionId] = useState<string | null>(null);
   const [nameSortDirection, setNameSortDirection] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<'all' | ArtistStatus>('all');
   const [profileOtherNames, setProfileOtherNames] = useState<string[]>([]);
   const [profileForm, setProfileForm] = useState({
     firstName: '',
@@ -438,7 +439,10 @@ export default function RecordLabelArtists() {
   );
 
   const sortedArtists = useMemo(() => {
-    return [...artists].sort((a, b) => {
+    const filtered = statusFilter === 'all'
+      ? artists
+      : artists.filter((a) => a.status === statusFilter);
+    return [...filtered].sort((a, b) => {
       const nameComparison = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
       if (nameComparison !== 0) {
         return nameSortDirection === 'asc' ? nameComparison : -nameComparison;
@@ -446,7 +450,7 @@ export default function RecordLabelArtists() {
       const idComparison = a.id.localeCompare(b.id, undefined, { sensitivity: 'base' });
       return nameSortDirection === 'asc' ? idComparison : -idComparison;
     });
-  }, [artists, nameSortDirection]);
+  }, [artists, nameSortDirection, statusFilter]);
 
   const totalPages = useMemo(
     () => Math.max(1, Math.ceil(sortedArtists.length / ARTISTS_PAGE_SIZE)),
@@ -943,6 +947,23 @@ export default function RecordLabelArtists() {
           </div>
 
           <div className="mt-6 overflow-visible">
+            {/* Status filter tabs */}
+            <div className="mb-4 flex gap-1 border-b border-neutral-200">
+              {(['all', 'active', 'inactive', 'archived'] as const).map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => { setStatusFilter(status); setCurrentPage(1); }}
+                  className={`px-4 py-2.5 text-sm font-medium capitalize transition-colors ${
+                    statusFilter === status
+                      ? 'border-b-2 border-[#7B00D4] text-[#7B00D4]'
+                      : 'text-[#8A8A8A] hover:text-[#3C3C3C]'
+                  }`}
+                >
+                  {status === 'inactive' ? 'Deactivated' : status === 'all' ? 'All Artists' : status.charAt(0).toUpperCase() + status.slice(1)}
+                </button>
+              ))}
+            </div>
             <div className="overflow-x-auto overflow-y-visible">
               <table className="w-full min-w-[880px] text-sm ">
                 <thead className="bg-[#F4F4F4] text-left text-[#666666]">

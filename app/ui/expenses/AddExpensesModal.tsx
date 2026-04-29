@@ -5,14 +5,11 @@ import { Select } from '@/components/ui/Select';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
 import Image from 'next/image';
-import { ChevronDown, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { formatAmountInput, parseAmountInput } from '@/lib/utils/currency';
 
 const BRAND_PURPLE = '#7B00D4';
-
-const Categories = ['marketting', 'production', 'personal'] as const;
-type Category = (typeof Categories)[number];
 
 const Currencies = ['NGN', 'USD'] as const;
 const RecoupableValues = ['Yes', 'No'] as const;
@@ -23,12 +20,43 @@ const CurrencyPrefix: Record<(typeof Currencies)[number], string> = {
   USD: '$',
 };
 
-// Display names for categories
-const CategoryDisplay: Record<Category, string> = {
-  marketting: 'Marketing',
-  production: 'Production',
-  personal: 'Personal',
-};
+const CategoryOptions = [
+  { value: 'marketting', label: 'Marketing' },
+  { value: 'production', label: 'Production' },
+  { value: 'personal', label: 'Personal' },
+  { value: 'Recording costs', label: 'Recording costs' },
+  { value: 'Production costs', label: 'Production costs' },
+  { value: 'Mixing & mastering', label: 'Mixing & mastering' },
+  { value: 'Marketing spend', label: 'Marketing spend' },
+  { value: 'Promotion spend', label: 'Promotion spend' },
+  { value: 'Digital ads', label: 'Digital ads' },
+  { value: 'Radio', label: 'Radio' },
+  { value: 'PR & media runs', label: 'PR & media runs' },
+  { value: 'Content creation', label: 'Content creation' },
+  { value: 'Music video production', label: 'Music video production' },
+  { value: 'Artwork/Design', label: 'Artwork/Design' },
+  { value: 'Distribution', label: 'Distribution' },
+  { value: 'Management fees', label: 'Management fees' },
+  { value: 'Legal fees', label: 'Legal fees' },
+  { value: 'Travel & logistics', label: 'Travel & logistics' },
+  { value: 'Accommodation', label: 'Accommodation' },
+  { value: 'Show/tour costs', label: 'Show/tour costs' },
+  { value: 'Styling', label: 'Styling' },
+  { value: 'Photography', label: 'Photography' },
+  { value: 'Social media management', label: 'Social media management' },
+  { value: 'Branding', label: 'Branding' },
+  { value: 'Equipment', label: 'Equipment' },
+  { value: 'Miscellaneous', label: 'Miscellaneous' },
+  { value: 'Food & Entertainment', label: 'Food & Entertainment' },
+  { value: 'Accounting services fees', label: 'Accounting services fees' },
+  { value: 'Marketing services fees', label: 'Marketing services fees' },
+  { value: 'Agency fees', label: 'Agency fees' },
+  { value: 'Health', label: 'Health' },
+  { value: 'Insurance Fees', label: 'Insurance Fees' },
+  { value: 'Cash at Hand', label: 'Cash at Hand' },
+  { value: 'others', label: 'Others' },
+];
+const CategoryValues = CategoryOptions.map((o) => o.value);
 
 const parseAmountForValidation = (originalValue: unknown) => {
   if (originalValue === undefined || originalValue === null) return undefined;
@@ -43,8 +71,8 @@ function createSchema(requireArtistName: boolean) {
       ? Yup.string().trim().required('Artist is required')
       : Yup.string().optional(),
     expense_date: Yup.string().required('Date is required'),
-    category: Yup.mixed<Category>()
-      .oneOf([...Categories] as readonly Category[], 'Select a valid category')
+    category: Yup.string()
+      .oneOf(CategoryValues, 'Select a valid category')
       .required('Category is required'),
     currency: Yup.string().required('Currency is required'),
     amount: Yup.number()
@@ -61,7 +89,7 @@ function createSchema(requireArtistName: boolean) {
 export type NewExpensesPayload = {
   artistId?: string;
   expense_date: string;
-  category: Category;
+  category: string;
   amount: number;
   currency: string;
   recoupable?: string;
@@ -149,7 +177,7 @@ export default function AddExpensesModal({
               await onSubmit({
                 artistId: vals.artistId?.trim() || undefined,
                 expense_date: vals.expense_date,
-                category: vals.category as Category,
+                category: vals.category,
                 amount: Number.isFinite(parsedAmount) ? parsedAmount : 0,
                 currency: vals.currency,
                 recoupable: vals.recoupable || undefined,
@@ -220,10 +248,7 @@ export default function AddExpensesModal({
                     onChange={(value) => setFieldValue('category', value)}
                     placeholder="Select category"
                     className="h-12 rounded-2xl border-neutral-300 bg-white pr-10 text-sm focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                    options={Categories.map((c) => ({
-                      value: c,
-                      label: CategoryDisplay[c],
-                    }))}
+                    options={CategoryOptions}
                   />
                   <ErrorMessage
                     name="category"
@@ -237,23 +262,13 @@ export default function AddExpensesModal({
                   <label className="mb-3 block text-sm font-medium text-neutral-700">
                     Amount
                   </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3">
-                      <div className="relative">
-                        <Field
-                          as="select"
-                          name="currency"
-                          className="appearance-none bg-transparent pr-6 text-sm font-medium text-neutral-700 outline-none"
-                        >
-                          {Currencies.map((c) => (
-                            <option key={c} value={c}>
-                              {CurrencyPrefix[c]} {c}
-                            </option>
-                          ))}
-                        </Field>
-                        <ChevronDown className="pointer-events-none absolute right-0 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
-                      </div>
-                    </div>
+                  <div className="flex items-center rounded-2xl border border-neutral-300 bg-white focus-within:border-neutral-400 focus-within:ring-2 focus-within:ring-neutral-100">
+                    <Select
+                      value={values.currency}
+                      onChange={(val) => setFieldValue('currency', val)}
+                      options={Currencies.map((c) => ({ value: c, label: `${CurrencyPrefix[c]} ${c}` }))}
+                      className="h-full w-[5.5rem] rounded-l-2xl rounded-r-none border-0 border-r border-neutral-200 bg-neutral-50 px-2 focus:ring-0 focus:border-none"
+                    />
                     <input
                       name="amount"
                       inputMode="decimal"
@@ -262,7 +277,7 @@ export default function AddExpensesModal({
                       onChange={(event) =>
                         setFieldValue('amount', formatAmountInput(event.target.value))
                       }
-                      className="w-full rounded-2xl border border-neutral-300 bg-white py-3 pl-23  text-sm outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
+                      className="min-w-0 flex-1 bg-transparent py-3 pl-3 pr-4 text-sm outline-none"
                     />
                   </div>
                   <ErrorMessage
@@ -298,7 +313,7 @@ export default function AddExpensesModal({
                 {/* Receipts / Proofs */}
                 <div>
                   <label className="mb-3 block text-sm font-medium text-neutral-700">
-                    Upload receipt
+                    Upload Support Document
                   </label>
                   <FileDropzone
                     onFiles={(files) => setFieldValue('proofs', files)}

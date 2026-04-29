@@ -1,6 +1,7 @@
 'use client';
 import Modal from '@/components/ui/Modal';
 import FileDropzone from '@/components/ui/FIleDropzone';
+import { Select } from '@/components/ui/Select';
 import * as Yup from 'yup';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import Image from 'next/image';
@@ -92,19 +93,16 @@ export default function RepaymentModal({
                 <label className="mb-1 block text-sm font-medium text-neutral-700">
                   Select Advance
                 </label>
-                <Field
-                  as="select"
-                  name="advanceId"
-                  className="w-full rounded-2xl border border-neutral-300 bg-white px-3 py-3 text-sm outline-none
-                             focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100"
-                >
-                  <option value="">Select an advance to repay</option>
-                  {advances.map((adv) => (
-                  <option key={adv.id} value={adv.id}>
-                      {adv.source} - {formatCurrencyAmount(adv.amount, adv.currency)} (Balance: {formatCurrencyAmount(adv.balance, adv.currency)})
-                    </option>
-                  ))}
-                </Field>
+                <Select
+                  value={values.advanceId}
+                  onChange={(val) => setFieldValue('advanceId', val)}
+                  placeholder="Select an advance to repay"
+                  options={(advances ?? []).map((adv) => ({
+                    value: adv.id,
+                    label: `${adv.source} - ${formatCurrencyAmount(adv.amount, adv.currency)} (Balance: ${formatCurrencyAmount(adv.balance, adv.currency)})`,
+                  }))}
+                  className="h-12 rounded-2xl"
+                />
                 <ErrorMessage
                   name="advanceId"
                   component="p"

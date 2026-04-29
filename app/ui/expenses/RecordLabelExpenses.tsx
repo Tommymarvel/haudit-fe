@@ -10,11 +10,12 @@ import { BRAND } from '@/lib/brand';
 import { getRecordLabelArtistName } from '@/lib/utils/recordLabelArtist';
 import { uploadFile } from '@/lib/utils/upload';
 import { deriveSingleCurrency, formatCurrencyAmount } from '@/lib/utils/currency';
-import { ArrowUpDown, CalendarDays, MoreVertical, Search, UserRound } from 'lucide-react';
+import { ArrowUpDown, MoreVertical, Search, UserRound } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import React, { useMemo, useState } from 'react';
 import AddExpensesModal, { NewExpensesPayload } from './AddExpensesModal';
 import { StatusPill } from '@/components/ui/StatusPill';
+import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 
 type ExpenseStatus = 'Approved' | 'Pending' | 'Rejected';
 
@@ -58,6 +59,7 @@ const RecordLabelExpenses = () => {
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('all');
   const [openAdd, setOpenAdd] = useState(false);
+  const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const { expenses, trend, createExpense } = useExpenses();
   const { artists } = useRecordLabelArtists();
   const searchParams = useSearchParams();
@@ -132,12 +134,43 @@ const RecordLabelExpenses = () => {
     [artistOptions]
   );
 
-  const categoryOptions = useMemo(() => {
-    const categories = Array.from(new Set(rows.map((item) => item.category).filter(Boolean)));
-    return [{ label: 'All categories', value: 'all' }].concat(
-      categories.map((cat) => ({ label: cat, value: cat }))
-    );
-  }, [rows]);
+  const categoryOptions = [
+    { label: 'All categories', value: 'all' },
+    { label: 'Marketing', value: 'marketting' },
+    { label: 'Production', value: 'production' },
+    { label: 'Personal', value: 'personal' },
+    { label: 'Recording costs', value: 'Recording costs' },
+    { label: 'Production costs', value: 'Production costs' },
+    { label: 'Mixing & mastering', value: 'Mixing & mastering' },
+    { label: 'Marketing spend', value: 'Marketing spend' },
+    { label: 'Promotion spend', value: 'Promotion spend' },
+    { label: 'Digital ads', value: 'Digital ads' },
+    { label: 'Radio', value: 'Radio' },
+    { label: 'PR & media runs', value: 'PR & media runs' },
+    { label: 'Content creation', value: 'Content creation' },
+    { label: 'Music video production', value: 'Music video production' },
+    { label: 'Artwork/Design', value: 'Artwork/Design' },
+    { label: 'Distribution', value: 'Distribution' },
+    { label: 'Management fees', value: 'Management fees' },
+    { label: 'Legal fees', value: 'Legal fees' },
+    { label: 'Travel & logistics', value: 'Travel & logistics' },
+    { label: 'Accommodation', value: 'Accommodation' },
+    { label: 'Show/tour costs', value: 'Show/tour costs' },
+    { label: 'Styling', value: 'Styling' },
+    { label: 'Photography', value: 'Photography' },
+    { label: 'Social media management', value: 'Social media management' },
+    { label: 'Branding', value: 'Branding' },
+    { label: 'Equipment', value: 'Equipment' },
+    { label: 'Miscellaneous', value: 'Miscellaneous' },
+    { label: 'Food & Entertainment', value: 'Food & Entertainment' },
+    { label: 'Accounting services fees', value: 'Accounting services fees' },
+    { label: 'Marketing services fees', value: 'Marketing services fees' },
+    { label: 'Agency fees', value: 'Agency fees' },
+    { label: 'Health', value: 'Health' },
+    { label: 'Insurance Fees', value: 'Insurance Fees' },
+    { label: 'Cash at Hand', value: 'Cash at Hand' },
+    { label: 'Others', value: 'others' },
+  ];
 
   const filteredExpenses = useMemo(() => {
     const search = q.trim().toLowerCase();
@@ -171,12 +204,19 @@ const RecordLabelExpenses = () => {
         </div>
 
         <div className="flex w-full gap-3 lg:w-auto">
+          <YearFilterCalendar
+            value={selectedYear}
+            onChange={setSelectedYear}
+            label="Year"
+            showYear={true}
+            buttonClassName="inline-flex items-center gap-2 rounded-2xl bg-[#E9E9E9] px-3 py-2 text-[14px] font-medium text-[#5A5A5A] cursor-pointer hover:bg-[#DCDCDC] transition-colors"
+          />
+
           <button
             type="button"
-            className="inline-flex items-center gap-2 rounded-2xl bg-[#E9E9E9] px-3 py-1 text-[14px] font-medium text-[#5A5A5A]"
+            className="inline-flex items-center gap-2 rounded-2xl bg-[#E9E9E9] px-3 py-2 text-[14px] font-medium text-[#5A5A5A] cursor-pointer hover:bg-[#DCDCDC] transition-colors"
           >
-            <CalendarDays className="h-4 w-4" />
-            Year
+            Export
           </button>
 
           <Button
@@ -318,6 +358,7 @@ const RecordLabelExpenses = () => {
         onClose={() => setOpenAdd(false)}
         recordLabelFields
         artistOptions={artistSelectOptions}
+
         onSubmit={async (payload: NewExpensesPayload) => {
           try {
             let receiptUrl = '';

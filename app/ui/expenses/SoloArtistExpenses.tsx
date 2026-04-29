@@ -12,12 +12,6 @@ import { Select } from '@/components/ui/Select';
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 import { formatCurrencyAmount } from '@/lib/utils/currency';
 
-const CategoryDisplay: Record<string, string> = {
-  marketting: 'Marketing',
-  production: 'Production',
-  personal: 'Personal',
-};
-
 const SoloArtistExpenses = () => {
   const { expenses, trend, createExpense } = useExpenses();
   const [q, setQ] = useState('');
@@ -131,12 +125,43 @@ const SoloArtistExpenses = () => {
             <Select
               value={category}
               onChange={setCategory}
-              className="w-[170px]"
+              className="w-[200px]"
               options={[
                 { label: 'All Categories', value: 'All Categories' },
                 { label: 'Marketing', value: 'marketting' },
                 { label: 'Production', value: 'production' },
                 { label: 'Personal', value: 'personal' },
+                { label: 'Recording costs', value: 'Recording costs' },
+                { label: 'Production costs', value: 'Production costs' },
+                { label: 'Mixing & mastering', value: 'Mixing & mastering' },
+                { label: 'Marketing spend', value: 'Marketing spend' },
+                { label: 'Promotion spend', value: 'Promotion spend' },
+                { label: 'Digital ads', value: 'Digital ads' },
+                { label: 'Radio', value: 'Radio' },
+                { label: 'PR & media runs', value: 'PR & media runs' },
+                { label: 'Content creation', value: 'Content creation' },
+                { label: 'Music video production', value: 'Music video production' },
+                { label: 'Artwork/Design', value: 'Artwork/Design' },
+                { label: 'Distribution', value: 'Distribution' },
+                { label: 'Management fees', value: 'Management fees' },
+                { label: 'Legal fees', value: 'Legal fees' },
+                { label: 'Travel & logistics', value: 'Travel & logistics' },
+                { label: 'Accommodation', value: 'Accommodation' },
+                { label: 'Show/tour costs', value: 'Show/tour costs' },
+                { label: 'Styling', value: 'Styling' },
+                { label: 'Photography', value: 'Photography' },
+                { label: 'Social media management', value: 'Social media management' },
+                { label: 'Branding', value: 'Branding' },
+                { label: 'Equipment', value: 'Equipment' },
+                { label: 'Miscellaneous', value: 'Miscellaneous' },
+                { label: 'Food & Entertainment', value: 'Food & Entertainment' },
+                { label: 'Accounting services fees', value: 'Accounting services fees' },
+                { label: 'Marketing services fees', value: 'Marketing services fees' },
+                { label: 'Agency fees', value: 'Agency fees' },
+                { label: 'Health', value: 'Health' },
+                { label: 'Insurance Fees', value: 'Insurance Fees' },
+                { label: 'Cash at Hand', value: 'Cash at Hand' },
+                { label: 'Others', value: 'others' },
               ]}
             />
           </div>
