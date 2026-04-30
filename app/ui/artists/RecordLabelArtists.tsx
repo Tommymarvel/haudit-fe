@@ -398,7 +398,7 @@ function ProfileInput({
 }
 
 export default function RecordLabelArtists() {
-  const { user, refreshUser } = useAuth();
+  const { user } = useAuth();
   const { dashboardMetrics, albumPerformance, albumRevenue } = useRoyalty();
   const { advances = [], overview } = useAdvance();
   const {

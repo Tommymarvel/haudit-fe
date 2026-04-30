@@ -130,7 +130,6 @@ export default function SoloArtistRoyalty() {
     trackRevenueDsp,
     trackStreamsDsp,
     territoryAnalysis,
-    isTerritoryAnalysisLoading,
   } = useRoyalty();
   const { assignPendingArtists, refreshPendingArtists } = useUnrecognizedArtists();
 

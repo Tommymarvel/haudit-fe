@@ -21,6 +21,8 @@ const CategoryDisplay: Record<string, string> = {
   personal: 'Personal',
 };
 
+type ExpenseStatus = 'Approved' | 'Pending' | 'Rejected';
+
 type SoloExpenseRow = {
   id: string;
   docId: string;
@@ -30,8 +32,24 @@ type SoloExpenseRow = {
   currency: string;
   description: string;
   receiptUrl: string;
-  status: string;
+  status: ExpenseStatus;
+  detailStatus: 'Paid' | ExpenseStatus;
 };
+
+function normalizeExpenseStatus(value?: string): ExpenseStatus {
+  const key = (value || '').trim().toLowerCase();
+  if (key === 'approved' || key === 'paid' || key === 'repaid') return 'Approved';
+  if (key === 'rejected') return 'Rejected';
+  return 'Pending';
+}
+
+function normalizeDetailStatus(value?: string): SoloExpenseRow['detailStatus'] {
+  const key = (value || '').trim().toLowerCase();
+  if (key === 'paid' || key === 'repaid') return 'Paid';
+  if (key === 'approved') return 'Approved';
+  if (key === 'rejected') return 'Rejected';
+  return 'Pending';
+}
 
 const SoloArtistExpenses = () => {
   const { expenses, trend, createExpense } = useExpenses();
@@ -55,7 +73,8 @@ const SoloArtistExpenses = () => {
         currency: (item.currency || 'USD').toUpperCase(),
         description: item.description || '',
         receiptUrl: item.receipt_url || '',
-        status: (item as { status?: string }).status || 'pending',
+        status: normalizeExpenseStatus((item as { status?: string }).status),
+        detailStatus: normalizeDetailStatus((item as { status?: string }).status),
       })),
     [expenses]
   );
@@ -329,7 +348,7 @@ const SoloArtistExpenses = () => {
                   <span className="mt-0.5 text-[#8E8E8E]"><FileText className="h-3.5 w-3.5" /></span>
                   <div className="flex items-start justify-between gap-3">
                     <span className="text-[14px] text-[#777777]">Status</span>
-                    <span className="text-[14px] font-medium text-[#2F2F2F]"><StatusPill label={selectedExpense.status} /></span>
+                    <span className="text-[14px] font-medium text-[#2F2F2F]"><StatusPill label={selectedExpense.detailStatus} /></span>
                   </div>
                 </div>
                 <div className="grid grid-cols-[16px_1fr] items-start gap-2">

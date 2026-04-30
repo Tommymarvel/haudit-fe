@@ -61,11 +61,12 @@ export default function YearFilterCalendar({
   align = "auto",
   buttonClassName = "",
 }: YearFilterCalendarProps) {
-  const today = new Date();
+  const today = useMemo(() => new Date(), []);
   const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth();
   const initialYear = value ?? today.getFullYear();
   const [isOpen, setIsOpen] = useState(false);
-  const [viewDate, setViewDate] = useState(new Date(initialYear, today.getMonth(), 1));
+  const [viewDate, setViewDate] = useState(new Date(initialYear, currentMonth, 1));
   const [startDate, setStartDate] = useState<Date | null>(
     typeof value === "number" ? new Date(value, 0, 1) : null,
   );
@@ -118,8 +119,8 @@ export default function YearFilterCalendar({
     setEndDate(nextEnd);
     setDraftStartDate(nextStart);
     setDraftEndDate(nextEnd);
-    setViewDate(new Date(currentYear, today.getMonth(), 1));
-  }, [currentYear, value]);
+    setViewDate(new Date(currentYear, currentMonth, 1));
+  }, [currentMonth, currentYear, value]);
 
   useEffect(() => {
     if (!isOpen) return;

@@ -250,7 +250,6 @@ export default function AddAdvanceModal({
                       { value: 'Recoupable advance', label: 'Recoupable advance' },
                       { value: 'others', label: 'Others' },
                     ]}
-                    name="advanceType"
                   />
                   <ErrorMessage
                     name="advanceType"

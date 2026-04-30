@@ -3,7 +3,7 @@ import Modal from '@/components/ui/Modal';
 import FileDropzone from '@/components/ui/FIleDropzone';
 import { Select } from '@/components/ui/Select';
 import * as Yup from 'yup';
-import { Formik, Form, Field, ErrorMessage } from 'formik';
+import { Formik, Form, ErrorMessage } from 'formik';
 import Image from 'next/image';
 import { formatAmountInput, formatCurrencyAmount, parseAmountInput } from '@/lib/utils/currency';
 
