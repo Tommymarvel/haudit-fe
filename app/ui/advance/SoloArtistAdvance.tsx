@@ -18,6 +18,7 @@ import { uploadFile } from "@/lib/utils/upload";
 import { Select } from "@/components/ui/Select";
 import YearFilterCalendar from "@/components/ui/YearFilterCalendar";
 import { formatCurrencyAmount } from "@/lib/utils/currency";
+import { Pagination } from "@/components/ui/Pagination";
 
 type Row = {
   id: string;
@@ -110,6 +111,14 @@ const SoloArtistAdvance = () => {
       ),
     [q, status, rows]
   );
+
+  const PAGE_SIZE = 10;
+  const [page1, setPage1] = useState(1);
+  const [page2, setPage2] = useState(1);
+  const totalPages1 = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages2 = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paged1 = filtered.slice((page1 - 1) * PAGE_SIZE, page1 * PAGE_SIZE);
+  const paged2 = filtered.slice((page2 - 1) * PAGE_SIZE, page2 * PAGE_SIZE);
 
   const openDetailsFor = async (r: Row) => {
     try {
@@ -395,7 +404,7 @@ const SoloArtistAdvance = () => {
                           </td>
                         </tr>
                       ) : (
-                        filtered.map((r, i) => (
+                        paged1.map((r, i) => (
                           <tr key={i} className="text-neutral-800">
                             <td className="py-3 pl-3 pr-4 whitespace-nowrap">
                               {r.date}
@@ -424,7 +433,9 @@ const SoloArtistAdvance = () => {
                     </tbody>
                   </table>
                 </div>
-              </CardBody>
+
+              <Pagination page={page1} totalPages={totalPages1} onChange={setPage1} />
+            </CardBody>
             </Card>
             <div className="xl:col-span-1">
               <ChartCard
@@ -493,7 +504,7 @@ const SoloArtistAdvance = () => {
                       </td>
                     </tr>
                   ) : (
-                    filtered.map((r, i) => (
+                    paged2.map((r, i) => (
                       <tr key={i} className="text-neutral-800">
                         <td className="py-3 pl-3 pr-4 whitespace-nowrap">
                           {r.source}
@@ -519,7 +530,9 @@ const SoloArtistAdvance = () => {
                 </tbody>
               </table>
             </div>
-          </CardBody>
+
+          <Pagination page={page2} totalPages={totalPages2} onChange={setPage2} />
+        </CardBody>
         </Card>
       )}
 

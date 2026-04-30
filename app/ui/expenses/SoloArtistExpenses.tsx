@@ -2,7 +2,7 @@ import { ChartCard } from '@/components/dashboard/ChartCard';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody } from '@/components/ui/Card';
 import { BRAND } from '@/lib/brand';
-import { Plus, ChevronDown, Table2 } from 'lucide-react';
+import { CalendarDays, ChevronDown, FileText, Plus, Table2 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import AddExpensesModal, { NewExpensesPayload } from './AddExpensesModal';
 import { useExpenses } from '@/hooks/useExpenses';
@@ -11,13 +11,71 @@ import { Menu } from '@/components/ui/Menu';
 import { Select } from '@/components/ui/Select';
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 import { formatCurrencyAmount } from '@/lib/utils/currency';
+import Modal from '@/components/ui/Modal';
+import { Pagination } from '@/components/ui/Pagination';
+import { StatusPill } from '@/components/ui/StatusPill';
+
+const CategoryDisplay: Record<string, string> = {
+  marketting: 'Marketing',
+  production: 'Production',
+  personal: 'Personal',
+};
+
+type SoloExpenseRow = {
+  id: string;
+  docId: string;
+  date: string;
+  category: string;
+  amount: number;
+  currency: string;
+  description: string;
+  receiptUrl: string;
+  status: string;
+};
 
 const SoloArtistExpenses = () => {
   const { expenses, trend, createExpense } = useExpenses();
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('All Categories');
   const [openAdd, setOpenAdd] = useState(false);
-  
+  const [selectedExpense, setSelectedExpense] = useState<SoloExpenseRow | null>(null);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
+
+  const rows = useMemo<SoloExpenseRow[]>(
+    () =>
+      (expenses ?? []).map((item, index) => ({
+        id: item.ref_id || item._id || `EXP-${index + 1}`,
+        docId: item._id || '',
+        date: new Date(item.expense_date || item.createdAt)
+          .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+          .replace(/ /g, '-'),
+        category: CategoryDisplay[item.category] || item.category || '-',
+        amount: Number(item.amount ?? 0),
+        currency: (item.currency || 'USD').toUpperCase(),
+        description: item.description || '',
+        receiptUrl: item.receipt_url || '',
+        status: (item as { status?: string }).status || 'pending',
+      })),
+    [expenses]
+  );
+
+  const filtered = useMemo(
+    () =>
+      rows.filter(
+        (r) =>
+          (category === 'All Categories' || r.category === category) &&
+          (q === '' ||
+            r.id.toLowerCase().includes(q.toLowerCase()) ||
+            r.category.toLowerCase().includes(q.toLowerCase()) ||
+            r.description.toLowerCase().includes(q.toLowerCase()))
+      ),
+    [q, category, rows]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   const trendData = useMemo(() => {
     if (!trend || trend.length === 0) return [];
     return trend.map((item) => ({
@@ -25,19 +83,7 @@ const SoloArtistExpenses = () => {
       value: item.amount,
     }));
   }, [trend]);
-  
-  const filtered = useMemo(
-    () =>
-      (expenses || []).filter(
-        (r) =>
-          (category === 'All Categories' || r.category === category) &&
-          (q === '' ||
-            r._id.toLowerCase().includes(q.toLowerCase()) ||
-            r.category.toLowerCase().includes(q.toLowerCase()) ||
-            r.description.toLowerCase().includes(q.toLowerCase()))
-      ),
-    [q, category, expenses]
-  );
+
   return (
     <div>
       <div className="flex flex-col items-start gap-3 lg:flex-row lg:items-center justify-between ">
@@ -176,12 +222,13 @@ const SoloArtistExpenses = () => {
                   <th className="py-3 pr-4 whitespace-nowrap">Amount</th>
                   <th className="py-3 pr-4 whitespace-nowrap">Description</th>
                   <th className="py-3 pr-3 whitespace-nowrap">Receipt</th>
+                  <th className="py-3 pr-3 whitespace-nowrap" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#EAEAEA]">
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-20">
+                    <td colSpan={7} className="py-20">
                       <div className="flex flex-col items-center justify-center text-center">
                         <Table2 className="h-5 w-5 text-[#7B00D4]" />
                         <p className="mt-2 text-sm font-medium text-neutral-700">No records yet</p>
@@ -192,25 +239,32 @@ const SoloArtistExpenses = () => {
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((r, i) => (
-                    <tr key={r.ref_id || r._id || i} className="text-neutral-800">
-                      <td className="py-3 pl-3 pr-4 whitespace-nowrap max-w-[150px] truncate">{r.ref_id}</td>
-                      <td className="py-3 pr-4 whitespace-nowrap">{new Date(r.expense_date || r.createdAt).toLocaleDateString()}</td>
+                  paged.map((r, i) => (
+                    <tr key={r.id || i} className="text-neutral-800">
+                      <td className="py-3 pl-3 pr-4 whitespace-nowrap max-w-[120px] truncate" title={r.id}>{r.id}</td>
+                      <td className="py-3 pr-4 whitespace-nowrap">{r.date}</td>
+                      <td className="py-3 pr-4 whitespace-nowrap">{r.category}</td>
                       <td className="py-3 pr-4 whitespace-nowrap">
-                        {CategoryDisplay[r.category] || r.category}
+                        {formatCurrencyAmount(r.amount, r.currency)}
                       </td>
-                      <td className="py-3 pr-4 whitespace-nowrap">
-                        {r.amount != null ? formatCurrencyAmount(r.amount, r.currency || 'USD') : 'N/A'}
-                      </td>
-                      <td className="py-3 pr-4 whitespace-nowrap">
+                      <td className="py-3 pr-4 max-w-[200px] truncate" title={r.description}>
                         {r.description || 'N/A'}
                       </td>
-                      <td className="py-3 pr-3 bg whitespace-nowrap">
-                        {r.receipt_url ? (
-                          <a href={r.receipt_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                      <td className="py-3 pr-3 whitespace-nowrap">
+                        {r.receiptUrl ? (
+                          <a href={r.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-[#1A6FD4] underline">
                             View Receipt
                           </a>
                         ) : 'N/A'}
+                      </td>
+                      <td className="py-3 pr-3 whitespace-nowrap text-right">
+                        <button
+                          type="button"
+                          className="text-[#1A6FD4] underline text-sm hover:opacity-80"
+                          onClick={() => setSelectedExpense(r)}
+                        >
+                          View Details
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -218,6 +272,8 @@ const SoloArtistExpenses = () => {
               </tbody>
             </table>
           </div>
+
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
         </CardBody>
       </Card>
       <AddExpensesModal
@@ -244,6 +300,83 @@ const SoloArtistExpenses = () => {
           }
         }}
       />
+
+      <Modal
+        open={Boolean(selectedExpense)}
+        onClose={() => setSelectedExpense(null)}
+        headerVariant="none"
+        closeVariant="island"
+        size="lg"
+      >
+        {selectedExpense && (
+          <div className="overflow-hidden rounded-2xl border border-[#D5D5D5]">
+            <div className="border-b border-[#D5D5D5] bg-[#FAFAFA] px-4 py-2 text-xs text-[#6F6F6F]">
+              Expenses / {selectedExpense.id}
+            </div>
+            <div className="p-4">
+              <p className="text-[36px] font-semibold leading-none text-[#2F2F2F]">
+                EXP-{selectedExpense.id.length > 8 ? `${selectedExpense.id.slice(0, 8)}…` : selectedExpense.id}
+              </p>
+              <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
+                <div className="grid grid-cols-[16px_1fr] items-start gap-2">
+                  <span className="mt-0.5 text-[#8E8E8E]"><CalendarDays className="h-3.5 w-3.5" /></span>
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-[14px] text-[#777777]">Date</span>
+                    <span className="text-[14px] font-medium text-[#2F2F2F]">{selectedExpense.date}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-[16px_1fr] items-start gap-2">
+                  <span className="mt-0.5 text-[#8E8E8E]"><FileText className="h-3.5 w-3.5" /></span>
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-[14px] text-[#777777]">Status</span>
+                    <span className="text-[14px] font-medium text-[#2F2F2F]"><StatusPill label={selectedExpense.status} /></span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-[16px_1fr] items-start gap-2">
+                  <span className="mt-0.5 text-[#8E8E8E]"><FileText className="h-3.5 w-3.5" /></span>
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-[14px] text-[#777777]">Amount</span>
+                    <span className="text-[14px] font-medium text-[#2F2F2F]">{formatCurrencyAmount(selectedExpense.amount, selectedExpense.currency)}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-[16px_1fr] items-start gap-2">
+                  <span className="mt-0.5 text-[#8E8E8E]"><FileText className="h-3.5 w-3.5" /></span>
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-[14px] text-[#777777]">Category</span>
+                    <span className="text-[14px] font-medium text-[#2F2F2F]">{selectedExpense.category}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-[16px_1fr] items-start gap-2">
+                  <span className="mt-0.5 text-[#8E8E8E]"><FileText className="h-3.5 w-3.5" /></span>
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-[14px] text-[#777777]">Support Document</span>
+                    <span className="text-[14px] font-medium text-[#2F2F2F]">
+                      {selectedExpense.receiptUrl ? (
+                        <a
+                          href={selectedExpense.receiptUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-md bg-[#EEEEEE] px-2 py-1 text-xs text-[#4E4E4E] underline hover:bg-[#E0E0E0]"
+                        >
+                          View Document
+                        </a>
+                      ) : (
+                        <span className="rounded-md bg-[#EEEEEE] px-2 py-1 text-xs text-[#4E4E4E]">-</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              {selectedExpense.description && (
+                <div className="mt-5 rounded-lg border border-[#D5D5D5] px-3 py-3">
+                  <p className="text-xs font-medium text-[#8A8A8A]">Description</p>
+                  <p className="mt-1 text-[13px] leading-5 text-[#4E4E4E]">{selectedExpense.description}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

@@ -24,6 +24,7 @@ import AddExpensesModal, {
 import UnrecognizedArtistsModal from "@/components/ui/UnrecognizedArtistsModal";
 import IgnoreUnrecognizedConfirmModal from "@/components/ui/IgnoreUnrecognizedConfirmModal";
 import QuickActionsBar from "@/components/dashboard/QuickActionsBar";
+import { Pagination } from "@/components/ui/Pagination";
 import { getRecordLabelArtistName } from "@/lib/utils/recordLabelArtist";
 
 type Tab = "Track" | "Album" | "Advance" | "Expenses";
@@ -69,6 +70,7 @@ export default function RecordLabelDashboard() {
   const [openUpload, setOpenUpload] = useState(false);
   const [openAdvance, setOpenAdvance] = useState(false);
   const [openExpense, setOpenExpense] = useState(false);
+  const [expensesPage, setExpensesPage] = useState(1);
   const [pendingUnmatchedArtists, setPendingUnmatchedArtists] = useState<
     string[]
   >([]);
@@ -398,6 +400,15 @@ export default function RecordLabelDashboard() {
       status: normalizeStatus(expense.status),
       amount: formatAmountWithCurrency(expense.amount, expense.currency),
     }),
+  );
+  const EXPENSES_PAGE_SIZE = 10;
+  const expensesTotalPages = Math.max(
+    1,
+    Math.ceil(topExpensesData.length / EXPENSES_PAGE_SIZE),
+  );
+  const pagedTopExpensesData = topExpensesData.slice(
+    (expensesPage - 1) * EXPENSES_PAGE_SIZE,
+    expensesPage * EXPENSES_PAGE_SIZE,
   );
   const activeInteractionPerformanceData =
     activeTab === "Album"
@@ -1067,7 +1078,7 @@ export default function RecordLabelDashboard() {
                         </td>
                       </tr>
                     ) : (
-                      topExpensesData.map((expense, idx) => (
+                      pagedTopExpensesData.map((expense, idx) => (
                         <tr key={idx} className="hover:bg-neutral-50/50">
                           <td className="px-6 py-4 text-[#3C3C3C] ">
                             {expense.id}
@@ -1093,6 +1104,12 @@ export default function RecordLabelDashboard() {
                   </tbody>
                 </table>
               </div>
+
+              <Pagination
+                page={expensesPage}
+                totalPages={expensesTotalPages}
+                onChange={setExpensesPage}
+              />
             </div>
           </div>
         )}

@@ -10,17 +10,20 @@ import { BRAND } from '@/lib/brand';
 import { getRecordLabelArtistName } from '@/lib/utils/recordLabelArtist';
 import { uploadFile } from '@/lib/utils/upload';
 import { deriveSingleCurrency, formatCurrencyAmount } from '@/lib/utils/currency';
-import { ArrowUpDown, MoreVertical, Search, UserRound } from 'lucide-react';
+import { ArrowUpDown, CalendarDays, FileText, Search, UserRound } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import React, { useMemo, useState } from 'react';
 import AddExpensesModal, { NewExpensesPayload } from './AddExpensesModal';
 import { StatusPill } from '@/components/ui/StatusPill';
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
+import Modal from '@/components/ui/Modal';
+import { Pagination } from '@/components/ui/Pagination';
 
 type ExpenseStatus = 'Approved' | 'Pending' | 'Rejected';
 
 type ExpenseRow = {
   id: string;
+  docId: string;
   date: string;
   artistId: string;
   artistName: string;
@@ -29,6 +32,8 @@ type ExpenseRow = {
   amount: number;
   currency: string;
   loggedBy: string;
+  receiptUrl: string;
+  description: string;
 };
 
 function normalizeStatus(value?: string): ExpenseStatus {
@@ -60,7 +65,8 @@ const RecordLabelExpenses = () => {
   const [category, setCategory] = useState('all');
   const [openAdd, setOpenAdd] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
-  const { expenses, trend, createExpense } = useExpenses();
+  const [selectedExpense, setSelectedExpense] = useState<ExpenseRow | null>(null);
+  const { expenses, trend, netTotal, createExpense } = useExpenses();
   const { artists } = useRecordLabelArtists();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -78,39 +84,43 @@ const RecordLabelExpenses = () => {
     [trend]
   );
 
-  const rows = useMemo<ExpenseRow[]>(
-    () =>
-      (expenses ?? []).map((item, index) => ({
-        id: item.ref_id || item._id || `EXP-${index + 1}`,
-        date: new Date(item.expense_date || item.createdAt)
-          .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-          .replace(/ /g, '-'),
-        artistId:
-          ((item as { artist_id?: string; artistId?: string }).artist_id ||
-            (item as { artist_id?: string; artistId?: string }).artistId ||
-            '') + '',
-        artistName:
-          (item as { artist_name?: string; artistName?: string }).artist_name ||
-          (item as { artist_name?: string; artistName?: string }).artistName ||
-          '-',
-        category: item.category || '-',
-        status: normalizeStatus((item as { status?: string }).status),
-        amount: Number(item.amount ?? 0),
-        currency: (item.currency || 'USD').toUpperCase(),
-        loggedBy:
-          (item as { logged_by?: string; paid_by?: string }).logged_by ||
-          (item as { logged_by?: string; paid_by?: string }).paid_by ||
-          'Admin',
-      })),
-    [expenses]
-  );
+  const rows = useMemo<ExpenseRow[]>(() => {
+    const artistById = new Map<string, string>();
+    (artists ?? []).forEach((artist) => {
+      const artistId = (artist.id || artist._id || '').toString().trim();
+      if (!artistId) return;
+      const name = getRecordLabelArtistName(artist);
+      if (name) artistById.set(artistId, name);
+    });
+
+    return (expenses ?? []).map((item, index) => ({
+      id: item.ref_id || item._id || `EXP-${index + 1}`,
+      docId: item._id || '',
+      date: new Date(item.expense_date || item.createdAt)
+        .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+        .replace(/ /g, '-'),
+      artistId: ((item as { artist_id?: string; artistId?: string }).artist_id ||
+        (item as { artist_id?: string; artistId?: string }).artistId ||
+        item.user || '') + '',
+      artistName:
+        (item.user ? artistById.get(item.user) : undefined) ||
+        (item as { artist_name?: string; artistName?: string }).artist_name ||
+        (item as { artist_name?: string; artistName?: string }).artistName ||
+        '-',
+      category: item.category || '-',
+      status: normalizeStatus((item as { status?: string }).status),
+      amount: Number(item.amount ?? 0),
+      currency: (item.currency || 'USD').toUpperCase(),
+      loggedBy:
+        (item as { logged_by?: string; paid_by?: string }).logged_by ||
+        (item as { logged_by?: string; paid_by?: string }).paid_by ||
+        'Admin',
+      receiptUrl: item.receipt_url || '',
+      description: item.description || '',
+    }));
+  }, [expenses, artists]);
   const totalCurrency = useMemo(
     () => deriveSingleCurrency(rows.map((item) => item.currency), 'USD'),
-    [rows]
-  );
-
-  const totalExpenses = useMemo(
-    () => rows.reduce((sum, item) => sum + item.amount, 0),
     [rows]
   );
 
@@ -172,6 +182,9 @@ const RecordLabelExpenses = () => {
     { label: 'Others', value: 'others' },
   ];
 
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
+
   const filteredExpenses = useMemo(() => {
     const search = q.trim().toLowerCase();
     return rows.filter((item) => {
@@ -190,6 +203,9 @@ const RecordLabelExpenses = () => {
       return matchesArtist && matchesCategory && matchesSearch;
     });
   }, [artistFromSidebarId, category, q, rows]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredExpenses.length / PAGE_SIZE));
+  const pagedExpenses = filteredExpenses.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div>
@@ -248,7 +264,7 @@ const RecordLabelExpenses = () => {
                   Total Expenses
                 </div>
                 <p className=" mt-1 text-[20px] font-medium leading-[120%] tracking-[0] text-[#3C3C3C]">
-                  {formatCurrencyAmount(totalExpenses, totalCurrency, {
+                  {formatCurrencyAmount(netTotal, totalCurrency, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
@@ -316,9 +332,9 @@ const RecordLabelExpenses = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#EAEAEA] text-[16px] text-[#4C4C4C]">
-                {filteredExpenses.map((item, index) => (
+                {pagedExpenses.map((item, index) => (
                   <tr key={`${item.id}-${index}`} className="bg-white">
-                    <td className="px-4 py-3 whitespace-nowrap">{item.id}</td>
+                    <td className="px-4 py-3 whitespace-nowrap max-w-[120px] truncate" title={item.id}>{item.id}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{item.date}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{item.artistName}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{item.category}</td>
@@ -332,10 +348,10 @@ const RecordLabelExpenses = () => {
                     <td className="px-4 py-3 text-right">
                       <button
                         type="button"
-                        className="rounded-lg p-1 text-[#5A5A5A] hover:bg-neutral-100"
-                        aria-label="More row actions"
+                        className="text-[#1A6FD4] underline text-[14px] hover:opacity-80"
+                        onClick={() => setSelectedExpense(item)}
                       >
-                        <MoreVertical className="h-4 w-4" />
+                        View Details
                       </button>
                     </td>
                   </tr>
@@ -350,6 +366,8 @@ const RecordLabelExpenses = () => {
               </tbody>
             </table>
           </div>
+
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
         </CardBody>
       </Card>
 
@@ -382,6 +400,88 @@ const RecordLabelExpenses = () => {
           }
         }}
       />
+
+      <Modal
+        open={Boolean(selectedExpense)}
+        onClose={() => setSelectedExpense(null)}
+        headerVariant="none"
+        closeVariant="island"
+        size="lg"
+      >
+        {selectedExpense && (
+          <div className="overflow-hidden rounded-2xl border border-[#D5D5D5]">
+            <div className="border-b border-[#D5D5D5] bg-[#FAFAFA] px-4 py-2 text-xs text-[#6F6F6F]">
+              Expenses / {selectedExpense.id}
+            </div>
+            <div className="p-4">
+              <p className="text-[36px] font-semibold leading-none text-[#2F2F2F]">EXP-{selectedExpense.id.length > 8 ? `${selectedExpense.id.slice(0, 8)}…` : selectedExpense.id}</p>
+              <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
+                <div className="grid grid-cols-[16px_1fr] items-start gap-2">
+                  <span className="mt-0.5 text-[#8E8E8E]"><CalendarDays className="h-3.5 w-3.5" /></span>
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-[14px] text-[#777777]">Date</span>
+                    <span className="text-[14px] font-medium text-[#2F2F2F]">{selectedExpense.date}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-[16px_1fr] items-start gap-2">
+                  <span className="mt-0.5 text-[#8E8E8E]"><UserRound className="h-3.5 w-3.5" /></span>
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-[14px] text-[#777777]">Artist Name</span>
+                    <span className="text-[14px] font-medium text-[#2F2F2F]">{selectedExpense.artistName}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-[16px_1fr] items-start gap-2">
+                  <span className="mt-0.5 text-[#8E8E8E]"><FileText className="h-3.5 w-3.5" /></span>
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-[14px] text-[#777777]">Status</span>
+                    <span className="text-[14px] font-medium text-[#2F2F2F]"><StatusPill label={selectedExpense.status} /></span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-[16px_1fr] items-start gap-2">
+                  <span className="mt-0.5 text-[#8E8E8E]"><FileText className="h-3.5 w-3.5" /></span>
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-[14px] text-[#777777]">Amount</span>
+                    <span className="text-[14px] font-medium text-[#2F2F2F]">{formatCurrencyAmount(selectedExpense.amount, selectedExpense.currency)}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-[16px_1fr] items-start gap-2">
+                  <span className="mt-0.5 text-[#8E8E8E]"><FileText className="h-3.5 w-3.5" /></span>
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-[14px] text-[#777777]">Category</span>
+                    <span className="text-[14px] font-medium text-[#2F2F2F]">{selectedExpense.category}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-[16px_1fr] items-start gap-2">
+                  <span className="mt-0.5 text-[#8E8E8E]"><FileText className="h-3.5 w-3.5" /></span>
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-[14px] text-[#777777]">Support Document</span>
+                    <span className="text-[14px] font-medium text-[#2F2F2F]">
+                      {selectedExpense.receiptUrl ? (
+                        <a
+                          href={selectedExpense.receiptUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-md bg-[#EEEEEE] px-2 py-1 text-xs text-[#4E4E4E] underline hover:bg-[#E0E0E0]"
+                        >
+                          View Document
+                        </a>
+                      ) : (
+                        <span className="rounded-md bg-[#EEEEEE] px-2 py-1 text-xs text-[#4E4E4E]">-</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              {selectedExpense.description && (
+                <div className="mt-5 rounded-lg border border-[#D5D5D5] px-3 py-3">
+                  <p className="text-xs font-medium text-[#8A8A8A]">Description</p>
+                  <p className="mt-1 text-[13px] leading-5 text-[#4E4E4E]">{selectedExpense.description}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

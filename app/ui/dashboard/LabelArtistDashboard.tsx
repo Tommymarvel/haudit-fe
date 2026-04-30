@@ -22,6 +22,7 @@ import { StatusPill } from '@/components/ui/StatusPill';
 import { Select } from '@/components/ui/Select';
 import AddAdvanceModal, { NewAdvancePayload } from '@/ui/advance/AddAdvanceModal';
 import AddExpensesModal, { NewExpensesPayload } from '@/ui/expenses/AddExpensesModal';
+import { Pagination } from '@/components/ui/Pagination';
 import { uploadFile } from '@/lib/utils/upload';
 import { useAdvance } from '@/hooks/useAdvance';
 import { useExpenses } from '@/hooks/useExpenses';
@@ -201,6 +202,9 @@ export default function LabelArtistDashboard() {
   const [advanceStatus, setAdvanceStatus] = useState('all');
   const [expenseSearch, setExpenseSearch] = useState('');
   const [expenseCategory, setExpenseCategory] = useState('all');
+  const [advancePage, setAdvancePage] = useState(1);
+  const [expensePage, setExpensePage] = useState(1);
+  const DASH_PAGE_SIZE = 10;
 
   const {
     dashboardMetrics,
@@ -350,6 +354,9 @@ export default function LabelArtistDashboard() {
     });
   }, [advanceRows, advanceSearch, advanceStatus]);
 
+  const advanceTotalPages = Math.max(1, Math.ceil(filteredAdvanceRows.length / DASH_PAGE_SIZE));
+  const pagedAdvanceRows = filteredAdvanceRows.slice((advancePage - 1) * DASH_PAGE_SIZE, advancePage * DASH_PAGE_SIZE);
+
   const expenseRows = useMemo<ExpenseRow[]>(
     () =>
       (expenses ?? []).map((row, index) => {
@@ -402,6 +409,9 @@ export default function LabelArtistDashboard() {
       return matchCategory && matchKeyword;
     });
   }, [expenseRows, expenseCategory, expenseSearch]);
+
+  const expenseTotalPages = Math.max(1, Math.ceil(filteredExpenseRows.length / DASH_PAGE_SIZE));
+  const pagedExpenseRows = filteredExpenseRows.slice((expensePage - 1) * DASH_PAGE_SIZE, expensePage * DASH_PAGE_SIZE);
 
   const expenseCategoryOptions = useMemo(() => {
     const categories = Array.from(new Set(expenseRows.map((row) => row.category)));
@@ -693,7 +703,7 @@ export default function LabelArtistDashboard() {
                         </td>
                       </tr>
                     ) : (
-                      filteredAdvanceRows.map((row, index) => (
+                      pagedAdvanceRows.map((row, index) => (
                         <tr key={`${row.id}-${index}`}>
                           <td className="px-4 py-3">{row.id}</td>
                           <td className="px-4 py-3">{row.date}</td>
@@ -719,6 +729,8 @@ export default function LabelArtistDashboard() {
                   </tbody>
                 </table>
               </div>
+
+              <Pagination page={advancePage} totalPages={advanceTotalPages} onChange={setAdvancePage} />
             </div>
           </div>
         )}
@@ -801,7 +813,7 @@ export default function LabelArtistDashboard() {
                         </td>
                       </tr>
                     ) : (
-                      filteredExpenseRows.map((row, index) => (
+                      pagedExpenseRows.map((row, index) => (
                         <tr key={`${row.id}-${index}`}>
                           <td className="px-4 py-3">{row.id}</td>
                           <td className="px-4 py-3">{row.date}</td>
@@ -822,6 +834,8 @@ export default function LabelArtistDashboard() {
                   </tbody>
                 </table>
               </div>
+
+              <Pagination page={expensePage} totalPages={expenseTotalPages} onChange={setExpensePage} />
             </div>
           </div>
         )}

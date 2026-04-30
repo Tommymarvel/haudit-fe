@@ -22,6 +22,7 @@ import { StatusPill } from '@/components/ui/StatusPill';
 import { Select } from '@/components/ui/Select';
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 import Modal from '@/components/ui/Modal';
+import { Pagination } from '@/components/ui/Pagination';
 import { useAdvance } from '@/hooks/useAdvance';
 import { useAuth } from '@/contexts/AuthContext';
 import { BRAND } from '@/lib/brand';
@@ -226,6 +227,8 @@ export default function LabelArtistAdvance() {
     Record<string, { status: LabelAdvanceStatus; adminMessage: string; receiptRef?: string }>
   >({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
 
   useEffect(() => {
     const closeMenu = (event: MouseEvent) => {
@@ -333,6 +336,9 @@ export default function LabelArtistAdvance() {
       return statusMatch && keywordMatch;
     });
   }, [rows, search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const pagedRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const marketingSeries = useMemo(() => {
     if (!marketingTrend?.length) return [];
@@ -635,7 +641,7 @@ export default function LabelArtistAdvance() {
                       </td>
                     </tr>
                   ) : (
-                    filteredRows.map((row, index) => (
+                    pagedRows.map((row, index) => (
                       <tr key={`${row.id}-${index}`}>
                         <td className="px-4 py-3 whitespace-nowrap">{row.id}</td>
                         <td className="px-4 py-3 whitespace-nowrap">{row.date}</td>
@@ -699,8 +705,10 @@ export default function LabelArtistAdvance() {
                 </tbody>
               </table>
             </div>
-          </CardBody>
-        </Card>
+
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+        </CardBody>
+      </Card>
 
         <ChartCard
           title="Advance type"

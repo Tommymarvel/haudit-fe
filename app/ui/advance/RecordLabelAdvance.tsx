@@ -28,6 +28,7 @@ import { Advance } from '@/lib/types/advance';
 import { useRecordLabelArtists } from '@/hooks/useRecordLabelArtists';
 import { getRecordLabelArtistName } from '@/lib/utils/recordLabelArtist';
 import { deriveSingleCurrency, formatCurrencyAmount } from '@/lib/utils/currency';
+import { Pagination } from '@/components/ui/Pagination';
 import { toast } from 'react-toastify';
 
 type AdvanceTab = 'request' | 'analytics';
@@ -203,6 +204,8 @@ const RecordLabelAdvance = () => {
   const [statusUpdate, setStatusUpdate] = useState<UpdateStatusValue | ''>('');
   const [statusDescription, setStatusDescription] = useState('');
   const [statusReceiptFiles, setStatusReceiptFiles] = useState<File[]>([]);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
   const [rowStatusOverrides, setRowStatusOverrides] = useState<
     Record<string, { status: AdvanceStatus; adminMessage: string; receiptRef?: string }>
   >({});
@@ -331,6 +334,9 @@ const RecordLabelAdvance = () => {
       return statusOk && keywordOk;
     });
   }, [q, scopedRows, status]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pagedFiltered = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const scopedSummary = useMemo(() => {
     const totalRequests = scopedRows.length;
@@ -532,7 +538,7 @@ const RecordLabelAdvance = () => {
                       </td>
                     </tr>
                   ) : (
-                    filtered.map((row, index) => (
+                    pagedFiltered.map((row, index) => (
                       <tr key={`${row.id}-${index}`}>
                         <td className="px-4 py-3 whitespace-nowrap">{row.id}</td>
                         <td className="px-4 py-3 whitespace-nowrap">{row.date}</td>
@@ -575,8 +581,10 @@ const RecordLabelAdvance = () => {
                 </tbody>
               </table>
             </div>
-          </CardBody>
-        </Card>
+
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+        </CardBody>
+      </Card>
       ) : (
         <div className="mt-5 space-y-4">
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">

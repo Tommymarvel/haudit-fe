@@ -1,17 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import {
-  ArrowLeft,
-  ArrowRight,
-  ArrowUpDown,
-  Download,
-  FileText,
-  MoreVertical,
-  Search,
-  UserRound,
-  CalendarDays,
-} from 'lucide-react';
+import { ArrowUpDown, Download, FileText, MoreVertical, Search, UserRound, CalendarDays } from 'lucide-react';
 import { ChartCard } from '@/components/dashboard/ChartCard';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody } from '@/components/ui/Card';
@@ -24,12 +14,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { uploadFile } from '@/lib/utils/upload';
 import { BRAND } from '@/lib/brand';
 import Modal from '@/components/ui/Modal';
+import { Pagination } from '@/components/ui/Pagination';
 import { deriveSingleCurrency, formatCurrencyAmount } from '@/lib/utils/currency';
 
 type ExpenseStatus = 'Approved' | 'Pending' | 'Rejected';
 
 type ExpenseRow = {
   id: string;
+  docId: string;
   date: string;
   category: string;
   status: ExpenseStatus;
@@ -40,6 +32,7 @@ type ExpenseRow = {
   approvedBy: string;
   paidBy: string;
   attachment: string;
+  receiptUrl: string;
   description: string;
   recoupable: 'Yes' | 'No';
   detailStatus: 'Paid' | ExpenseStatus;
@@ -88,11 +81,15 @@ function DetailItem({
 
 export default function LabelArtistExpenses() {
   const { user } = useAuth();
-  const { expenses, trend, createExpense } = useExpenses();
+  const { expenses, trend, netTotal, createExpense, approveExpense, rejectExpense } = useExpenses();
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('all');
   const [openAdd, setOpenAdd] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<ExpenseRow | null>(null);
+  const [approving, setApproving] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
 
   const titleName =
     [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim() || 'Diamond Platnumz';
@@ -110,6 +107,7 @@ export default function LabelArtistExpenses() {
     if (!expenses?.length) return [];
     return expenses.map((item, index) => ({
       id: item.ref_id || item._id || `EXP-${index + 1}`,
+      docId: item._id || '',
       date: new Date(item.expense_date || item.createdAt)
         .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
         .replace(/ /g, '-'),
@@ -139,6 +137,7 @@ export default function LabelArtistExpenses() {
         (item as { paid_by?: string; paidBy?: string }).paidBy ||
         '-',
       attachment: item.receipt_url ? 'Transaction Receipt' : '-',
+      receiptUrl: item.receipt_url || '',
       description: item.description || 'No description was provided.',
       recoupable:
         ((item as { recoupable?: string }).recoupable || '').toLowerCase() === 'yes'
@@ -204,10 +203,10 @@ export default function LabelArtistExpenses() {
     });
   }, [rows, q, category]);
 
-  const totalExpenses = useMemo(() => {
-    const total = rows.reduce((sum, row) => sum + row.amount, 0);
-    return total;
-  }, [rows]);
+  const totalExpenses = netTotal;
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const pagedRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div>
@@ -314,9 +313,9 @@ export default function LabelArtistExpenses() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#EAEAEA] text-[14px] text-[#4C4C4C]">
-                {filteredRows.map((row, index) => (
+                {pagedRows.map((row, index) => (
                   <tr key={`${row.id}-${index}`} className="bg-white">
-                    <td className="px-4 py-3 whitespace-nowrap">{row.id}</td>
+                    <td className="px-4 py-3 whitespace-nowrap max-w-[120px] truncate" title={row.id}>{row.id}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{row.date}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{row.category}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
@@ -349,31 +348,7 @@ export default function LabelArtistExpenses() {
             </table>
           </div>
 
-          <div className="flex items-center justify-between border-t border-neutral-200 px-4 py-3 text-xs text-[#8A8A8A]">
-            <button
-              type="button"
-              className="rounded-md border border-neutral-200 px-3 py-1 hover:bg-neutral-50"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Previous
-            </button>
-            <div className="flex items-center gap-3">
-              <span className="rounded bg-[#F0F0F0] px-2 py-0.5 text-[#6A6A6A]">1</span>
-              <span>2</span>
-              <span>3</span>
-              <span>...</span>
-              <span>8</span>
-              <span>9</span>
-              <span>10</span>
-            </div>
-            <button
-              type="button"
-              className="rounded-md border border-neutral-200 px-3 py-1 hover:bg-neutral-50"
-            >
-              <ArrowRight className="h-3.5 w-3.5" />
-              Next
-            </button>
-          </div>
+          <Pagination page={page} totalPages={totalPages} onChange={(p) => { setPage(p); }} />
         </CardBody>
       </Card>
 
@@ -422,7 +397,7 @@ export default function LabelArtistExpenses() {
             </div>
 
             <div className="p-4">
-              <p className="text-[36px] font-semibold leading-none text-[#2F2F2F]">{selectedExpense.id}</p>
+              <p className="text-[36px] font-semibold leading-none text-[#2F2F2F]">EXP-{selectedExpense.id.length > 8 ? `${selectedExpense.id.slice(0, 8)}…` : selectedExpense.id}</p>
 
               <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
                 <DetailItem
@@ -467,9 +442,18 @@ export default function LabelArtistExpenses() {
                   icon={<FileText className="h-3.5 w-3.5" />}
                   label="Attachment"
                   value={
-                    <span className="rounded-md bg-[#EEEEEE] px-2 py-1 text-xs text-[#4E4E4E]">
-                      {selectedExpense.attachment}
-                    </span>
+                    selectedExpense.receiptUrl ? (
+                      <a
+                        href={selectedExpense.receiptUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-md bg-[#EEEEEE] px-2 py-1 text-xs text-[#4E4E4E] underline hover:bg-[#E0E0E0]"
+                      >
+                        View Document
+                      </a>
+                    ) : (
+                      <span className="rounded-md bg-[#EEEEEE] px-2 py-1 text-xs text-[#4E4E4E]">-</span>
+                    )
                   }
                 />
 
@@ -496,6 +480,42 @@ export default function LabelArtistExpenses() {
                   {selectedExpense.description}
                 </p>
               </div>
+              {selectedExpense.detailStatus === 'Pending' && (
+                <div className="mt-4 flex gap-3">
+                  <button
+                    type="button"
+                    disabled={approving || rejecting}
+                    onClick={async () => {
+                      setApproving(true);
+                      try {
+                        await approveExpense(selectedExpense.docId);
+                        setSelectedExpense(null);
+                      } finally {
+                        setApproving(false);
+                      }
+                    }}
+                    className="flex-1 rounded-xl py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                    style={{ backgroundColor: BRAND.purple }}>
+                    {approving ? 'Approving…' : 'Approve'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={approving || rejecting}
+                    onClick={async () => {
+                      setRejecting(true);
+                      try {
+                        await rejectExpense(selectedExpense.docId);
+                        setSelectedExpense(null);
+                      } finally {
+                        setRejecting(false);
+                      }
+                    }}
+                    className="flex-1 rounded-xl border py-2 text-sm font-medium hover:opacity-80 disabled:opacity-50"
+                    style={{ borderColor: BRAND.purple, color: BRAND.purple }}>
+                    {rejecting ? 'Rejecting…' : 'Reject'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

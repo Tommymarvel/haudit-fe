@@ -19,8 +19,8 @@ const fetcher = (url: string) =>
 const trendFetcher = (url: string) =>
   axiosInstance.get(url).then((res) => {
     const d = res.data;
-    if (d.trend && Array.isArray(d.trend)) return d.trend;
-    return [];
+    if (d.trend && Array.isArray(d.trend)) return { trend: d.trend as ExpenseTrendItem[], netTotal: Number(d.netTotal ?? 0) };
+    return { trend: [] as ExpenseTrendItem[], netTotal: 0 };
   });
 
 export function useExpenses() {
@@ -34,7 +34,7 @@ export function useExpenses() {
   );
 
   const { data, error, isLoading } = useSWR<Expense[]>(expensesEndpoint, fetcher);
-  const { data: trend } = useSWR<ExpenseTrendItem[]>(trendEndpoint, trendFetcher);
+  const { data: trendData } = useSWR<{ trend: ExpenseTrendItem[]; netTotal: number }>(trendEndpoint, trendFetcher);
 
   const createExpense = async (payload: CreateExpensePayload) => {
     try {
@@ -60,11 +60,40 @@ export function useExpenses() {
     }
   };
 
+  const approveExpense = async (docId: string) => {
+    try {
+      await axiosInstance.patch(`/expenses/${docId}/approve`);
+      toast.success('Expense approved successfully');
+      mutate(expensesEndpoint);
+      mutate(trendEndpoint);
+    } catch (error) {
+      const err = error as AxiosError<{ message: string }>;
+      toast.error(err.response?.data?.message || 'Failed to approve expense');
+      throw error;
+    }
+  };
+
+  const rejectExpense = async (docId: string) => {
+    try {
+      await axiosInstance.patch(`/expenses/${docId}/reject`);
+      toast.success('Expense rejected successfully');
+      mutate(expensesEndpoint);
+      mutate(trendEndpoint);
+    } catch (error) {
+      const err = error as AxiosError<{ message: string }>;
+      toast.error(err.response?.data?.message || 'Failed to reject expense');
+      throw error;
+    }
+  };
+
   return {
     expenses: data,
-    trend,
+    trend: trendData?.trend,
+    netTotal: trendData?.netTotal ?? 0,
     isLoading,
     isError: error,
     createExpense,
+    approveExpense,
+    rejectExpense,
   };
 }
