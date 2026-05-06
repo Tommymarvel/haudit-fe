@@ -191,10 +191,15 @@ function AddArtistModal({
     accountName: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [emailError, setEmailError] = useState('');
+
+  const isValidEmail = (value: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
   const canSubmit =
     form.name.trim() !== '' &&
     form.email.trim() !== '' &&
+    isValidEmail(form.email) &&
     form.phone.trim() !== '' &&
     form.accountNumber.trim() !== '' &&
     form.bank !== BANK_OPTIONS[0] &&
@@ -250,10 +255,15 @@ function AddArtistModal({
             <label className="mb-1.5 block text-sm font-medium text-[#5A5A5A]">Email Address</label>
             <input
               value={form.email}
-              onChange={(event) => handleChange('email', event.target.value)}
+              onChange={(event) => {
+                handleChange('email', event.target.value);
+                if (emailError) setEmailError(isValidEmail(event.target.value) ? '' : 'Enter a valid email address');
+              }}
+              onBlur={() => setEmailError(form.email.trim() && !isValidEmail(form.email) ? 'Enter a valid email address' : '')}
               placeholder="Enter artist email address"
-              className="h-11 w-full rounded-xl border border-[#B6B6B6] px-3 text-sm outline-none focus:border-[#7B00D4]"
+              className={`h-11 w-full rounded-xl border px-3 text-sm outline-none focus:border-[#7B00D4] ${emailError ? 'border-rose-500' : 'border-[#B6B6B6]'}`}
             />
+            {emailError && <p className="mt-1 text-xs text-rose-600">{emailError}</p>}
           </div>
 
           <div>

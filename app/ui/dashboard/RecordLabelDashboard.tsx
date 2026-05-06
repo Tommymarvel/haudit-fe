@@ -81,9 +81,10 @@ export default function RecordLabelDashboard() {
     file: File,
     organization: string,
     onProgress: (msg: string) => void,
+    artistIds?: string[],
   ) => {
     try {
-      const result = await uploadRoyaltyFile(file, organization, onProgress);
+      const result = await uploadRoyaltyFile(file, organization, onProgress, artistIds);
       setOpenUpload(false);
 
       if (result.unmatchedArtists && result.unmatchedArtists.length > 0) {

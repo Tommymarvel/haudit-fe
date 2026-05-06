@@ -29,8 +29,10 @@ export function useRecordLabelArtists() {
       mutate(ARTISTS_ENDPOINT);
       return response.data;
     } catch (err: unknown) {
-      const errorPayload = err as { response?: { data?: { message?: string } } };
-      toast.error(errorPayload.response?.data?.message || 'Failed to invite artist');
+      const errorPayload = err as { response?: { data?: { message?: string | string[] } } };
+      const raw = errorPayload.response?.data?.message;
+      const displayMsg = Array.isArray(raw) ? raw.join(', ') : (raw || 'Failed to invite artist');
+      toast.error(displayMsg);
       throw err;
     }
   };

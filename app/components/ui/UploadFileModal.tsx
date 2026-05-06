@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { X, Upload } from 'lucide-react';
 import Modal from './Modal';
 
@@ -46,6 +46,18 @@ export default function UploadFileModal({
   const [isDragging, setIsDragging] = useState(false);
   const [showArtistDropdown, setShowArtistDropdown] = useState(false);
   const [showOrgDropdown, setShowOrgDropdown] = useState(false);
+  const artistDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showArtistDropdown) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (artistDropdownRef.current && !artistDropdownRef.current.contains(event.target as Node)) {
+        setShowArtistDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showArtistDropdown]);
   const [isUploading, setIsUploading] = useState(false);
   const [progressMessages, setProgressMessages] = useState<string[]>([]);
   const [latestProgress, setLatestProgress] = useState<string>('');
@@ -272,7 +284,7 @@ export default function UploadFileModal({
                 <label className="text-sm font-medium text-neutral-700">
                   Select artists
                 </label>
-                <div className="relative w-full sm:w-[68%]">
+                <div className="relative w-full sm:w-[68%]" ref={artistDropdownRef}>
                   <button
                     type="button"
                     disabled={!hasArtistOptions}
@@ -328,14 +340,22 @@ export default function UploadFileModal({
 
                   {showArtistDropdown && hasArtistOptions && (
                     <div className="absolute z-10 mt-1 w-full rounded-xl border border-neutral-200 bg-white shadow-lg">
-                      <div className="border-b border-neutral-100 p-2">
+                      <div className="border-b border-neutral-100 p-2 flex items-center gap-2">
                         <input
                           type="text"
                           value={artistSearch}
                           onChange={(event) => setArtistSearch(event.target.value)}
                           placeholder="Search artists"
-                          className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-700 outline-none focus:border-[#7B00D4]"
+                          className="flex-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-700 outline-none focus:border-[#7B00D4]"
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowArtistDropdown(false)}
+                          className="flex-shrink-0 text-neutral-400 hover:text-neutral-600"
+                          aria-label="Close dropdown"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
                       </div>
                       <div className="max-h-52 overflow-y-auto py-1">
                         {filteredArtistOptions.length === 0 ? (
