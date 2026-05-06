@@ -92,8 +92,7 @@ export function useRoyalty() {
   const { data: territoryAnalysis, error: territoryAnalysisError, isLoading: isTerritoryAnalysisLoading } =
     useSWR<TerritoryAnalysisItem[]>(territoryAnalysisEndpoint, listFetcher<TerritoryAnalysisItem>);
 
-  const uploadRoyaltyFile = async (
-    file: File,
+  const uploadRoyaltyFile = async (    file: File,
     source: string,
     onProgress?: (message: string) => void,
     artistIds?: string[],
@@ -159,6 +158,22 @@ export function useRoyalty() {
     }
   };
 
+  const deleteRoyaltyUpload = async (manifestId: string): Promise<void> => {
+    try {
+      await axiosInstance.delete(`/royalties/uploads/${manifestId}`);
+      toast.success('Upload deleted successfully');
+      mutate('/royalties/uploads?limit=10&page=1');
+      mutate('/royalties/dashboard');
+      if (uploadsEndpoint !== '/royalties/uploads?limit=10&page=1') mutate(uploadsEndpoint);
+      if (dashboardEndpoint !== '/royalties/dashboard') mutate(dashboardEndpoint);
+    } catch (err: unknown) {
+      const error = err as AxiosError<{ message?: string }>;
+      const msg = error.response?.data?.message || 'Failed to delete upload';
+      toast.error(msg);
+      throw err;
+    }
+  };
+
   return {
     dashboardMetrics,
     isDashboardLoading,
@@ -185,5 +200,6 @@ export function useRoyalty() {
     isTerritoryAnalysisLoading,
     territoryAnalysisError,
     uploadRoyaltyFile,
+    deleteRoyaltyUpload,
   };
 }

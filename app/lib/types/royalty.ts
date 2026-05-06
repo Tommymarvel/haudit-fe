@@ -1,4 +1,6 @@
 export interface UploadedFile {
+  _id?: string;
+  id?: string;
   source: string;
   normalizedName: string;
   fileUrl: string;

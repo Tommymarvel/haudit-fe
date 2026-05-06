@@ -275,10 +275,14 @@ function recolorSvgMarkup(svgText: string) {
   }
 
   const styleTag =
-    "<style>path{fill:#FFFFFF !important;stroke:#D9D9D9 !important;stroke-width:0.6px;} g{fill:#FFFFFF;}</style>";
+    "<style>[data-territory-map-base] path{fill:#FFFFFF !important;stroke:#D9D9D9 !important;stroke-width:0.6px;} [data-territory-map-base] g{fill:#FFFFFF;}</style>";
 
   return svgText.replace(/<svg\b[^>]*>/i, (openTag) => {
     let nextTag = openTag;
+
+    if (!/\sdata-territory-map-base\b/i.test(nextTag)) {
+      nextTag = nextTag.replace(/<svg\b/i, '<svg data-territory-map-base="true"');
+    }
 
     if (/\sstyle\s*=\s*("[^"]*"|'[^']*')/i.test(nextTag)) {
       nextTag = nextTag.replace(

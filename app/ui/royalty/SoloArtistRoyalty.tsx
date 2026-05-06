@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useRef } from "react";
-import { ChevronDown, Download } from "lucide-react";
+import { ChevronDown, Download, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import useSWR from "swr";
 import axiosInstance from "@/lib/axiosinstance";
@@ -13,6 +13,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ChartCard } from "@/components/dashboard/ChartCard";
 import { ChartEmptyState } from "@/components/dashboard/ChartEmptyState";
 import UploadFileModal from "@/components/ui/UploadFileModal";
+import Modal from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
 import { useRoyalty } from "@/hooks/useRoyalty";
 import { useUnrecognizedArtists } from "@/hooks/useUnrecognizedArtists";
 import { useAuth } from "@/contexts/AuthContext";
@@ -126,6 +128,7 @@ export default function SoloArtistRoyalty() {
     uploads, 
     isUploadsLoading, 
     uploadRoyaltyFile,
+    deleteRoyaltyUpload,
     albumRevenue,
     trackRevenueDsp,
     trackStreamsDsp,
@@ -150,6 +153,8 @@ export default function SoloArtistRoyalty() {
   const [filter, setFilter] = useState<FilterKey>("all_months");
   const [menuOpen, setMenuOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [deletingUploadId, setDeletingUploadId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [openUnrecognizedModal, setOpenUnrecognizedModal] = useState(false);
   const [openIgnoreConfirm, setOpenIgnoreConfirm] = useState(false);
   const [pendingUnmatchedArtists, setPendingUnmatchedArtists] = useState<string[]>([]);
@@ -240,6 +245,16 @@ export default function SoloArtistRoyalty() {
   const sortedTerritories = [...territoryRows].sort((a, b) => b.streams - a.streams);
   const data = sortedTerritories.slice(0, 5);
   const totalTerritories = sortedTerritories.length;
+
+  const handleDeleteUpload = async (manifestId: string) => {
+    try {
+      setDeletingUploadId(manifestId);
+      await deleteRoyaltyUpload(manifestId);
+    } finally {
+      setDeletingUploadId(null);
+      setConfirmDeleteId(null);
+    }
+  };
 
   const handleDownload = (fileUrl: string) => {
     window.open(fileUrl, '_blank');
@@ -563,6 +578,16 @@ const handleUpload = async (
                   <Download className="h-4 w-4" />
                   Download
                 </button>
+                {canUploadRoyalty && (
+                  <button
+                    onClick={() => setConfirmDeleteId(file._id || file.id || file.hash)}
+                    disabled={deletingUploadId === (file._id || file.id || file.hash)}
+                    className="flex-shrink-0 ml-2 inline-flex items-center justify-center rounded-2xl border border-rose-300 bg-white p-2 text-rose-500 hover:bg-rose-50 transition-colors disabled:opacity-50"
+                    title="Delete upload"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             ))
           )}
@@ -1138,6 +1163,39 @@ const handleUpload = async (
           await refreshPendingArtists();
         }}
       />
+
+      {/* Delete upload confirm modal */}
+      <Modal
+        open={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        size="sm"
+        headerVariant="none"
+        closeVariant="island"
+      >
+        <div className="px-6 py-7">
+          <h2 className="text-xl font-semibold text-neutral-900">Delete upload?</h2>
+          <p className="mt-2 text-sm text-neutral-600">
+            This will permanently delete the upload and all its associated royalty records. This action cannot be undone.
+          </p>
+          <div className="mt-6 flex gap-3">
+            <Button
+              variant="outline"
+              className="flex-1 justify-center rounded-xl border-neutral-300"
+              onClick={() => setConfirmDeleteId(null)}
+              disabled={!!deletingUploadId}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 justify-center rounded-xl bg-rose-600 hover:bg-rose-700 text-white"
+              onClick={() => confirmDeleteId && handleDeleteUpload(confirmDeleteId)}
+              disabled={!!deletingUploadId}
+            >
+              {deletingUploadId ? 'Deleting...' : 'Delete'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
