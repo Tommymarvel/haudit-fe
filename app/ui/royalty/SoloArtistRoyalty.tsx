@@ -24,6 +24,7 @@ import UnrecognizedArtistsModal from "@/components/ui/UnrecognizedArtistsModal";
 import IgnoreUnrecognizedConfirmModal from "@/components/ui/IgnoreUnrecognizedConfirmModal";
 import YearFilterCalendar from "@/components/ui/YearFilterCalendar";
 import TerritoryWorldMap from "@/components/royalty/TerritoryWorldMap";
+import SplitDocumentsTab from "@/ui/royalty/SplitDocumentsTab";
 import { appendQueryParam } from "@/lib/utils/query";
 import { getRecordLabelArtistName } from "@/lib/utils/recordLabelArtist";
 import { getCountryDisplayName } from "@/lib/utils/country";
@@ -135,8 +136,11 @@ export default function SoloArtistRoyalty() {
     territoryAnalysis,
   } = useRoyalty();
   const { assignPendingArtists, refreshPendingArtists } = useUnrecognizedArtists();
+  const canAccessSplitDocuments =
+    user?.user_type === "record_label" || user?.user_type === "label_artist";
+  const canManageSplitDocuments = user?.user_type === "record_label";
 
-  const [activeTab, setActiveTab] = useState<"analytics" | "files">(
+  const [activeTab, setActiveTab] = useState<"analytics" | "files" | "split_document">(
     "analytics"
   );
   const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
@@ -402,6 +406,236 @@ const handleUpload = async (
   );
 
   const activeFilter = FILTER_OPTIONS.find((f) => f.key === filter)!;
+  const shouldRenderTerritoryInLegacyPosition = false;
+  const territoryCardMinHeight =
+    isEffectiveTerritoryLoading || data.length > 0 ? 300 : 220;
+  const pageTitle =
+    activeTab === "files"
+      ? "My Files"
+      : activeTab === "split_document"
+        ? "Split Documents"
+        : "Royalty Analytics";
+  const pageDescription =
+    activeTab === "split_document"
+      ? canManageSplitDocuments
+        ? "Upload, assign, and manage report documents for artists on your roster."
+        : "Review split documents that your label has shared with you."
+      : "Monitor your music performance and royalty earnings.";
+  const revenuePerTrackCard = (
+    <div className="relative">
+      <ChartCard
+        title="Revenue per Track"
+        variant="line"
+        data={albumPerformanceData}
+        xKey="x"
+        yKey="v"
+        lineType="monotone"
+        chartHeight={300}
+        emptyStateHeight={220}
+        headerFilterLabel={
+          FILTER_OPTIONS.find((f) => f.key === filter3)?.label ||
+          "All months"
+        }
+        onHeaderFilterClick={() => setShowDropdown3(!showDropdown3)}
+        footerActionLabel="View all report insight"
+        onFooterActionClick={() => {
+          router.push("/royalty/stream-per-track?view=revenue");
+        }}
+      />
+      {showDropdown3 && (
+        <div className="absolute top-16 right-6 z-10 w-48 rounded-xl border border-neutral-200 bg-white shadow-lg">
+          {FILTER_OPTIONS.map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => {
+                setFilter3(opt.key);
+                setShowDropdown3(false);
+              }}
+              className="w-full px-4 py-2 text-left text-sm hover:bg-neutral-50 first:rounded-t-xl last:rounded-b-xl"
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+  const territoryAnalysisCard = (
+    <div className="relative flex-1">
+      <Card
+        className="flex h-full flex-col overflow-hidden"
+        style={{ minHeight: territoryCardMinHeight }}
+      >
+        <div className="flex items-center justify-between bg-neutral-100 px-4 py-3">
+          <div className="text-sm font-semibold text-[#3C3C3C]">
+            Territory Analysis
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setMenuOpen((o) => !o)}
+            className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-700 shadow-sm hover:bg-neutral-50"
+          >
+            <span>{activeFilter.label}</span>
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        </div>
+
+        <div className="flex flex-1 flex-col bg-neutral-100 px-4 pb-4 pt-3">
+          {isEffectiveTerritoryLoading ? (
+            <div className="flex flex-1 rounded-2xl bg-white p-5">
+              <ChartEmptyState
+                title="Loading territory analysis"
+                description="Please wait while we fetch territory records."
+              />
+            </div>
+          ) : data.length > 0 ? (
+            <div className="grid flex-1 gap-4 md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.8fr)]">
+              <div className="rounded-2xl bg-white p-4">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-semibold text-neutral-900">
+                    {totalTerritories}
+                  </span>
+                  <span className="text-xs font-medium text-neutral-500">
+                    Total Territory
+                  </span>
+                </div>
+
+                <div className="mt-4 flex h-[157px] flex-col justify-center gap-3">
+                  {(() => {
+                    const maxStreams = Math.max(
+                      ...data.map((d) => d.streams)
+                    );
+                    const maxRevenue = Math.max(
+                      ...data.map((d) => d.revenue)
+                    );
+
+                    return data.map((t) => {
+                      const streamsWidth = maxStreams > 0 ? (t.streams / maxStreams) * 100 : 0;
+                      const revenueWidth = maxRevenue > 0 ? (t.revenue / maxRevenue) * 100 : 0;
+                      const showStreamsInside = streamsWidth >= 32;
+                      const showRevenueInside = revenueWidth >= 32;
+
+                      return (
+                        <div
+                          key={t.name}
+                          className="grid grid-cols-[1fr_auto_1fr] items-center gap-4"
+                        >
+                          <div className="flex items-center justify-end gap-1">
+                            {!showStreamsInside && (
+                              <span className="whitespace-nowrap text-[11px] font-semibold text-[#3C3C3C]">
+                                {t.streams.toLocaleString()}
+                              </span>
+                            )}
+                            <div
+                              className="flex h-6 min-w-[2px] items-center justify-end overflow-hidden rounded-[4px] px-2 py-1"
+                              style={{
+                                width: `${streamsWidth}%`,
+                                backgroundColor: PRIMARY,
+                              }}
+                            >
+                              {showStreamsInside && (
+                                <span className="whitespace-nowrap text-[11px] font-semibold text-white">
+                                  {t.streams.toLocaleString()}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div
+                            className="w-[100px] truncate text-center text-xs text-neutral-700"
+                            title={t.displayName}
+                          >
+                            {t.displayName}
+                          </div>
+
+                          <div className="flex items-center justify-start gap-1">
+                            <div
+                              className="flex h-6 min-w-[2px] items-center justify-start overflow-hidden rounded-[4px] px-2 py-1"
+                              style={{
+                                width: `${revenueWidth}%`,
+                                backgroundColor: PRIMARY_SOFT,
+                              }}
+                            >
+                              {showRevenueInside && (
+                                <span className="whitespace-nowrap text-[11px] font-semibold text-[#7B00D4]">
+                                  ${t.revenue.toLocaleString()}
+                                </span>
+                              )}
+                            </div>
+                            {!showRevenueInside && (
+                              <span className="whitespace-nowrap text-[11px] font-semibold text-[#7B00D4]">
+                                ${t.revenue.toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-white p-4">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-semibold text-neutral-900">
+                    {totalTerritories}
+                  </span>
+                  <span className="text-xs font-medium text-neutral-500">
+                    Total Territory
+                  </span>
+                </div>
+
+                <div className="mt-4 h-52 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50">
+                  <TerritoryWorldMap territories={sortedTerritories} maxMarkers={8} className="h-full w-full" />
+                </div>
+
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => router.push("/royalty/streams-and-revenue-per-territory")}
+                    className="inline-flex items-center gap-1 rounded-full bg-[rgba(123,0,212,0.06)] px-3 py-1 text-[11px] font-medium text-[#7B00D4] hover:bg-[rgba(123,0,212,0.12)]"
+                  >
+                    <span>View report insight</span>
+                    <ChevronDown className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-1 rounded-2xl bg-white p-5">
+              <ChartEmptyState
+                title="No data available"
+                description="Data will appear here once records are available."
+              />
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {menuOpen && (
+        <div className="absolute right-6 top-11 z-20 w-40 rounded-lg border border-neutral-200 bg-white py-1 text-xs shadow-lg">
+          {FILTER_OPTIONS.map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => {
+                setFilter(opt.key as FilterKey);
+                setMenuOpen(false);
+              }}
+              className={`block w-full px-3 py-2 text-left hover:bg-neutral-50 ${
+                opt.key === filter
+                  ? "font-semibold text-neutral-900"
+                  : "text-neutral-600"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -409,10 +643,10 @@ const handleUpload = async (
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-neutral-900">
-            {activeTab === "files" ? "My Files" : "Royalty Analytics"}
+            {pageTitle}
           </h1>
           <p className="text-sm text-neutral-500">
-            Monitor your music performance and royalty earnings.
+            {pageDescription}
           </p>
         </div>
         {activeTab === "analytics" ? (
@@ -435,7 +669,7 @@ const handleUpload = async (
               </span>
             </button>
           </div>
-        ) : (
+        ) : activeTab === "files" ? (
           <div className="flex items-center gap-3">
             <div className="relative">
               <input
@@ -485,7 +719,7 @@ const handleUpload = async (
               </button>
             )}
           </div>
-        )}
+        ) : null}
       </div>
       {/* Tabs */}
       <div className="flex items-center gap-6 border-b border-neutral-200">
@@ -509,6 +743,18 @@ const handleUpload = async (
         >
           Files({filteredUploads.length})
         </button>
+        {canAccessSplitDocuments ? (
+          <button
+            onClick={() => setActiveTab("split_document")}
+            className={`relative py-2 text-sm ${
+              activeTab === "split_document"
+                ? "font-medium text-black after:absolute after:-bottom-px after:left-0 after:h-[2px] after:w-full after:bg-[#7B00D4]"
+                : "text-neutral-500"
+            }`}
+          >
+            Split Document
+          </button>
+        ) : null}
       </div>
 
       <div ref={exportRef}>
@@ -593,12 +839,15 @@ const handleUpload = async (
           )}
         </div>
       )}
+      {activeTab === "split_document" && canAccessSplitDocuments && (
+        <SplitDocumentsTab artistOptions={recordLabelArtists} />
+      )}
 
       {/* ===== ANALYTICS TAB ===== */}
       {activeTab === "analytics" && (
         <>
           {/* ===== GRID A (4 cards) ===== */}
-          <div className="flex flex-col xl:flex-row gap-4 mt-6">
+          <div className="mt-6 flex flex-col gap-4 xl:flex-row xl:items-stretch">
             {/* 1) Track revenue per DSP */}
             <div className="flex-1 relative">
               <ChartCard
@@ -771,41 +1020,7 @@ const handleUpload = async (
 
             {/* 4) Revenue per Track */}
             {/* <SoftHeader title="Revenue per Track" right={<FilterPill />} /> */}
-            <div className="flex-1 relative">
-              <ChartCard
-                title="Revenue per Track"
-                variant="line"
-                data={albumPerformanceData}
-                xKey="x"
-                yKey="v"
-                lineType="monotone"
-                headerFilterLabel={
-                  FILTER_OPTIONS.find((f) => f.key === filter3)?.label ||
-                  "All months"
-                }
-                onHeaderFilterClick={() => setShowDropdown3(!showDropdown3)}
-                footerActionLabel="View all report insight"
-                onFooterActionClick={() => {
-                  router.push("/royalty/stream-per-track?view=revenue");
-                }}
-              />
-              {showDropdown3 && (
-                <div className="absolute top-16 right-6 z-10 w-48 rounded-xl border border-neutral-200 bg-white shadow-lg">
-                  {FILTER_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.key}
-                      onClick={() => {
-                        setFilter3(opt.key);
-                        setShowDropdown3(false);
-                      }}
-                      className="w-full px-4 py-2 text-left text-sm hover:bg-neutral-50 first:rounded-t-xl last:rounded-b-xl"
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            {territoryAnalysisCard}
           </div>
           {/* ===== GRID B (4 cards) ===== */}
           <div className="flex flex-col xl:flex-row gap-4 mt-6">
@@ -940,6 +1155,8 @@ const handleUpload = async (
               </div>
             </Card>
           </div>
+          {revenuePerTrackCard}
+          {shouldRenderTerritoryInLegacyPosition ? (
           <div className="relative">
             <Card className="overflow-hidden">
               {/* Header: title + filter */}
@@ -1123,6 +1340,7 @@ const handleUpload = async (
               </div>
             )}
           </div>
+          ) : null}
         </>
       )}
       </div>

@@ -330,6 +330,7 @@ interface ChartCardProps {
   donutStyle?: 'default' | 'advance';
   emptyStateTitle?: string;
   emptyStateDescription?: string;
+  emptyStateHeight?: number;
   chartOverlay?: React.ReactNode;
   chartMarginTop?: number;
   chartHeight?: number;
@@ -376,6 +377,7 @@ export function ChartCard({
   donutStyle = 'default',
   emptyStateTitle,
   emptyStateDescription,
+  emptyStateHeight,
   chartOverlay,
   chartMarginTop = 6,
   chartHeight = 350,
@@ -499,6 +501,9 @@ export function ChartCard({
   const effectiveChartMarginTop = chartOverlay
     ? Math.max(chartMarginTop, 60)
     : chartMarginTop;
+  const effectiveChartHeight = hasData
+    ? chartHeight
+    : emptyStateHeight ?? chartHeight;
 
   return (
     <Card className="overflow-hidden">
@@ -537,7 +542,7 @@ export function ChartCard({
               ? 'relative rounded-2xl bg-white px-2 pt-5'
               : 'relative rounded-xl bg-white'
           }
-          style={{ height: chartHeight }}
+          style={{ height: effectiveChartHeight }}
         >
           {chartOverlay ? (
             <div className="pointer-events-none absolute left-4 top-3 z-10">

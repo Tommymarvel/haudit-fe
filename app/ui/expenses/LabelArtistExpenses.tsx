@@ -216,7 +216,7 @@ export default function LabelArtistExpenses() {
             {titleName} Expenses
           </h1>
           <p className="mt-1 text-[16px] leading-[120%] text-[#777777]">
-            You are now on the page to manage Record Label artists.
+            Manage and review expenses recorded for this artist.
           </p>
         </div>
 

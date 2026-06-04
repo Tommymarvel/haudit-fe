@@ -215,7 +215,7 @@ const RecordLabelExpenses = () => {
             Artist Expenses
           </h1>
           <p className="mt-1 text-[16px] leading-[120%] text-[#6E6E6E]">
-            You are now on the page to manage Record Label artists.
+            Manage and add expenses for artists on your roster.
           </p>
         </div>
 

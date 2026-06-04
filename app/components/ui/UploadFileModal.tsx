@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { X, Upload } from 'lucide-react';
 import Modal from './Modal';
 
@@ -17,7 +17,7 @@ interface UploadFileModalProps {
   ) => Promise<{ unmatchedArtists?: string[] } | void>;
 }
 
-function parseProgressMessage(raw: string): string {
+function legacyParseProgressMessage(raw: string): string {
   // processed:1000  →  Processing… 1,000 rows
   // done:5000:4800  →  Done! 4,800 / 5,000 rows processed
   const processed = raw.match(/^processed:(\d+)$/);
@@ -31,6 +31,25 @@ function parseProgressMessage(raw: string): string {
 }
 
 const ORGANIZATIONS = ['FUGA', 'DITTO'];
+const UPLOAD_INSIGHTS = [
+  'Validating the sheet structure so the upload lands cleanly in your dashboard.',
+  'Matching rows to artists, tracks, DSPs, and territories for more reliable reporting.',
+  'Preparing fresh trend, territory, and track-level views as soon as processing finishes.',
+];
+
+function parseProgressMessage(raw: string): string {
+  const processed = raw.match(/^processed:(\d+)$/);
+  if (processed) {
+    return `Processing... ${Number(processed[1]).toLocaleString()} rows processed`;
+  }
+
+  const done = raw.match(/^done:(\d+):(\d+)$/);
+  if (done) {
+    return `Done! ${Number(done[2]).toLocaleString()} / ${Number(done[1]).toLocaleString()} rows processed`;
+  }
+
+  return legacyParseProgressMessage(raw);
+}
 
 export default function UploadFileModal({
   isOpen,
@@ -61,6 +80,7 @@ export default function UploadFileModal({
   const [isUploading, setIsUploading] = useState(false);
   const [progressMessages, setProgressMessages] = useState<string[]>([]);
   const [latestProgress, setLatestProgress] = useState<string>('');
+  const [activeInsightIndex, setActiveInsightIndex] = useState(0);
   const shouldShowArtistSelect = showArtistSelect;
   const hasArtistOptions = artistOptions.length > 0;
   const canSubmit =
@@ -78,6 +98,45 @@ export default function UploadFileModal({
     if (!artistSearch.trim()) return true;
     return artist.name.toLowerCase().includes(artistSearch.toLowerCase());
   });
+  const uploadInsights = useMemo(() => {
+    const fileName = selectedFile?.name || 'your royalty statement';
+    const artistSummary = shouldShowArtistSelect
+      ? selectedArtistIds.length > 0
+        ? `${selectedArtistIds.length} selected artist${selectedArtistIds.length > 1 ? 's' : ''}`
+        : 'your selected artists'
+      : 'your catalog';
+
+    return [
+      {
+        label: 'Reading the file',
+        title: `Inspecting ${fileName}`,
+        detail: UPLOAD_INSIGHTS[0],
+      },
+      {
+        label: 'Mapping the data',
+        title: `Connecting the report to ${artistSummary}`,
+        detail: UPLOAD_INSIGHTS[1],
+      },
+      {
+        label: 'Staging insights',
+        title: 'Getting the dashboard ready',
+        detail: UPLOAD_INSIGHTS[2],
+      },
+    ];
+  }, [selectedFile?.name, selectedArtistIds.length, shouldShowArtistSelect]);
+
+  useEffect(() => {
+    if (!isUploading) {
+      setActiveInsightIndex(0);
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setActiveInsightIndex((prev) => (prev + 1) % uploadInsights.length);
+    }, 2400);
+
+    return () => window.clearInterval(intervalId);
+  }, [isUploading, uploadInsights.length]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -155,6 +214,7 @@ export default function UploadFileModal({
     setIsUploading(false);
     setProgressMessages([]);
     setLatestProgress('');
+    setActiveInsightIndex(0);
     onClose();
   };
 
@@ -185,9 +245,9 @@ export default function UploadFileModal({
 
         {/* Modal content */}
         <div className="px-6 py-6">
-          <h2 className="text-xl font-semibold text-neutral-900">Upload file</h2>
+          <h2 className="text-xl font-semibold text-neutral-900">Royalty file upload</h2>
           <p className="mt-1 text-sm text-neutral-500">
-            Upload your royalty file to continue.
+            Upload a royalty statement, choose the reporting source, and we&apos;ll process it into fresh insights.
           </p>
 
           {/* Upload area */}
@@ -465,6 +525,67 @@ export default function UploadFileModal({
             </div>
           )}
 
+          {isUploading && (
+            <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(220px,0.85fr)]">
+              <div className="rounded-2xl border border-[#E9D7FE] bg-white px-4 py-4 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7B00D4]">
+                    {uploadInsights[activeInsightIndex].label}
+                  </p>
+                  <span className="rounded-full bg-[#F5ECFF] px-2.5 py-1 text-[11px] font-medium text-[#7B00D4]">
+                    Step {activeInsightIndex + 1} of {uploadInsights.length}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm font-semibold text-[#111827]">
+                  {uploadInsights[activeInsightIndex].title}
+                </p>
+                <p className="mt-1 text-sm leading-6 text-neutral-600">
+                  {uploadInsights[activeInsightIndex].detail}
+                </p>
+                <div className="mt-4 flex gap-2">
+                  {uploadInsights.map((insight, index) => (
+                    <span
+                      key={insight.label}
+                      className={`h-1.5 flex-1 rounded-full transition-colors ${
+                        index === activeInsightIndex ? 'bg-[#7B00D4]' : 'bg-[#E9D7FE]'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-[#111827] px-4 py-4 text-white">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/60">
+                  Upload context
+                </p>
+                <div className="mt-3 space-y-3 text-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-white/60">File</span>
+                    <span className="max-w-[180px] break-words text-right font-medium">
+                      {selectedFile?.name || 'Pending'}
+                    </span>
+                  </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-white/60">Source</span>
+                    <span className="text-right font-medium">
+                      {selectedOrganization || 'Pending'}
+                    </span>
+                  </div>
+                  {shouldShowArtistSelect && (
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-white/60">Artists</span>
+                      <span className="text-right font-medium">
+                        {selectedArtistIds.length > 0
+                          ? `${selectedArtistIds.length} selected`
+                          : 'Pending'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Action buttons */}
           <div className="mt-6 flex gap-3">
             <button
@@ -504,7 +625,7 @@ export default function UploadFileModal({
                   Uploading...
                 </>
               ) : (
-                'Next'
+                'Upload file'
               )}
             </button>
           </div>
