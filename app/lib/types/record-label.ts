@@ -78,4 +78,6 @@ export type InviteRecordLabelArtistPayload = {
   bank: string;
   acc_no: string;
   acc_name: string;
+  personal_advance?: { amount: number; currency: 'USD' | 'NGN' };
+  marketing_advance?: { amount: number; currency: 'USD' | 'NGN' };
 };

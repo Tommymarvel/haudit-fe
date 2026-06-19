@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { X, Upload } from 'lucide-react';
+import { X, Upload, FileText, AlertCircle, ChevronDown } from 'lucide-react';
 import Modal from './Modal';
 
 interface UploadFileModalProps {
@@ -9,6 +9,7 @@ interface UploadFileModalProps {
   onClose: () => void;
   showArtistSelect?: boolean;
   artistOptions?: Array<{ id: string; name: string }>;
+  templateUrl?: string;
   onUpload?: (
     file: File,
     organization: string,
@@ -17,20 +18,8 @@ interface UploadFileModalProps {
   ) => Promise<{ unmatchedArtists?: string[] } | void>;
 }
 
-function legacyParseProgressMessage(raw: string): string {
-  // processed:1000  →  Processing… 1,000 rows
-  // done:5000:4800  →  Done! 4,800 / 5,000 rows processed
-  const processed = raw.match(/^processed:(\d+)$/);
-  if (processed) return `Processing… ${Number(processed[1]).toLocaleString()} rows processed`;
-
-  const done = raw.match(/^done:(\d+):(\d+)$/);
-  if (done)
-    return `Done! ${Number(done[2]).toLocaleString()} / ${Number(done[1]).toLocaleString()} rows processed`;
-
-  return raw;
-}
-
 const ORGANIZATIONS = ['FUGA', 'DITTO'];
+
 const UPLOAD_INSIGHTS = [
   'Validating the sheet structure so the upload lands cleanly in your dashboard.',
   'Matching rows to artists, tracks, DSPs, and territories for more reliable reporting.',
@@ -39,16 +28,13 @@ const UPLOAD_INSIGHTS = [
 
 function parseProgressMessage(raw: string): string {
   const processed = raw.match(/^processed:(\d+)$/);
-  if (processed) {
-    return `Processing... ${Number(processed[1]).toLocaleString()} rows processed`;
-  }
+  if (processed) return `Processing... ${Number(processed[1]).toLocaleString()} rows processed`;
 
   const done = raw.match(/^done:(\d+):(\d+)$/);
-  if (done) {
+  if (done)
     return `Done! ${Number(done[2]).toLocaleString()} / ${Number(done[1]).toLocaleString()} rows processed`;
-  }
 
-  return legacyParseProgressMessage(raw);
+  return raw;
 }
 
 export default function UploadFileModal({
@@ -56,8 +42,10 @@ export default function UploadFileModal({
   onClose,
   showArtistSelect = false,
   artistOptions = [],
+  templateUrl,
   onUpload,
 }: UploadFileModalProps) {
+  const [step, setStep] = useState<1 | 2>(1);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedArtistIds, setSelectedArtistIds] = useState<string[]>([]);
   const [artistSearch, setArtistSearch] = useState('');
@@ -65,77 +53,74 @@ export default function UploadFileModal({
   const [isDragging, setIsDragging] = useState(false);
   const [showArtistDropdown, setShowArtistDropdown] = useState(false);
   const [showOrgDropdown, setShowOrgDropdown] = useState(false);
-  const artistDropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!showArtistDropdown) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (artistDropdownRef.current && !artistDropdownRef.current.contains(event.target as Node)) {
-        setShowArtistDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showArtistDropdown]);
   const [isUploading, setIsUploading] = useState(false);
   const [progressMessages, setProgressMessages] = useState<string[]>([]);
-  const [latestProgress, setLatestProgress] = useState<string>('');
+  const [latestProgress, setLatestProgress] = useState('');
   const [activeInsightIndex, setActiveInsightIndex] = useState(0);
-  const shouldShowArtistSelect = showArtistSelect;
+
+  const artistDropdownRef = useRef<HTMLDivElement>(null);
+  const orgDropdownRef = useRef<HTMLDivElement>(null);
+
   const hasArtistOptions = artistOptions.length > 0;
+
   const canSubmit =
     !!selectedFile &&
     !!selectedOrganization &&
-    (!shouldShowArtistSelect || !hasArtistOptions || selectedArtistIds.length > 0) &&
+    (!showArtistSelect || !hasArtistOptions || selectedArtistIds.length > 0) &&
     !isUploading;
 
   const selectedArtistNames = selectedArtistIds
-    .map((artistId) => artistOptions.find((artist) => artist.id === artistId)?.name)
-    .filter((name): name is string => !!name);
+    .map((id) => artistOptions.find((a) => a.id === id)?.name)
+    .filter((n): n is string => !!n);
 
   const filteredArtistOptions = artistOptions.filter((artist) => {
     if (selectedArtistIds.includes(artist.id)) return false;
     if (!artistSearch.trim()) return true;
     return artist.name.toLowerCase().includes(artistSearch.toLowerCase());
   });
+
   const uploadInsights = useMemo(() => {
     const fileName = selectedFile?.name || 'your royalty statement';
-    const artistSummary = shouldShowArtistSelect
+    const artistSummary = showArtistSelect
       ? selectedArtistIds.length > 0
         ? `${selectedArtistIds.length} selected artist${selectedArtistIds.length > 1 ? 's' : ''}`
         : 'your selected artists'
       : 'your catalog';
-
     return [
-      {
-        label: 'Reading the file',
-        title: `Inspecting ${fileName}`,
-        detail: UPLOAD_INSIGHTS[0],
-      },
-      {
-        label: 'Mapping the data',
-        title: `Connecting the report to ${artistSummary}`,
-        detail: UPLOAD_INSIGHTS[1],
-      },
-      {
-        label: 'Staging insights',
-        title: 'Getting the dashboard ready',
-        detail: UPLOAD_INSIGHTS[2],
-      },
+      { label: 'Reading the file', title: `Inspecting ${fileName}`, detail: UPLOAD_INSIGHTS[0] },
+      { label: 'Mapping the data', title: `Connecting the report to ${artistSummary}`, detail: UPLOAD_INSIGHTS[1] },
+      { label: 'Staging insights', title: 'Getting the dashboard ready', detail: UPLOAD_INSIGHTS[2] },
     ];
-  }, [selectedFile?.name, selectedArtistIds.length, shouldShowArtistSelect]);
+  }, [selectedFile?.name, selectedArtistIds.length, showArtistSelect]);
 
   useEffect(() => {
-    if (!isUploading) {
-      setActiveInsightIndex(0);
-      return;
-    }
+    if (!showArtistDropdown) return;
+    const handler = (e: MouseEvent) => {
+      if (artistDropdownRef.current && !artistDropdownRef.current.contains(e.target as Node)) {
+        setShowArtistDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showArtistDropdown]);
 
-    const intervalId = window.setInterval(() => {
+  useEffect(() => {
+    if (!showOrgDropdown) return;
+    const handler = (e: MouseEvent) => {
+      if (orgDropdownRef.current && !orgDropdownRef.current.contains(e.target as Node)) {
+        setShowOrgDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showOrgDropdown]);
+
+  useEffect(() => {
+    if (!isUploading) { setActiveInsightIndex(0); return; }
+    const id = window.setInterval(() => {
       setActiveInsightIndex((prev) => (prev + 1) % uploadInsights.length);
     }, 2400);
-
-    return () => window.clearInterval(intervalId);
+    return () => window.clearInterval(id);
   }, [isUploading, uploadInsights.length]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -151,60 +136,42 @@ export default function UploadFileModal({
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-
-    const files = e.dataTransfer.files;
-    if (files && files[0]) {
-      const file = files[0];
-      // Validate file type
-      if (
-        file.name.endsWith('.csv') ||
-        file.name.endsWith('.xls') ||
-        file.name.endsWith('.xlsx')
-      ) {
-        setSelectedFile(file);
-      }
-    }
+    const file = e.dataTransfer.files?.[0];
+    if (file && /\.(csv|xls|xlsx)$/i.test(file.name)) setSelectedFile(file);
   }, []);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files[0]) {
-      setSelectedFile(files[0]);
-    }
+    const file = e.target.files?.[0];
+    if (file) setSelectedFile(file);
   }, []);
 
-  const handleRemoveFile = () => {
-    setSelectedFile(null);
-  };
-
   const handleNext = async () => {
-    if (canSubmit && onUpload && selectedFile) {
-      setIsUploading(true);
-      setProgressMessages([]);
-      setLatestProgress('');
-      const handleProgress = (message: string) => {
-        const parsed = parseProgressMessage(message);
-        setLatestProgress(parsed);
-        setProgressMessages((prev) => [...prev, parsed]);
-      };
-      try {
-        await onUpload(
-          selectedFile,
-          selectedOrganization,
-          handleProgress,
-          selectedArtistIds.length > 0 ? selectedArtistIds : undefined,
-        );
-        handleClose();
-      } catch (error) {
-        console.error('Upload failed:', error);
-      } finally {
-        setIsUploading(false);
-      }
+    if (!canSubmit || !onUpload || !selectedFile) return;
+    setIsUploading(true);
+    setProgressMessages([]);
+    setLatestProgress('');
+    try {
+      await onUpload(
+        selectedFile,
+        selectedOrganization,
+        (msg) => {
+          const parsed = parseProgressMessage(msg);
+          setLatestProgress(parsed);
+          setProgressMessages((prev) => [...prev, parsed]);
+        },
+        selectedArtistIds.length > 0 ? selectedArtistIds : undefined,
+      );
+      handleClose();
+    } catch {
+      // error handled by caller
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const handleClose = () => {
-    if (isUploading) return; // Prevent closing during upload
+    if (isUploading) return;
+    setStep(1);
     setSelectedFile(null);
     setSelectedArtistIds([]);
     setArtistSearch('');
@@ -218,254 +185,51 @@ export default function UploadFileModal({
     onClose();
   };
 
-
-
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  };
-
-  const handleArtistSelect = (artistId: string) => {
-    if (selectedArtistIds.includes(artistId)) return;
-    setSelectedArtistIds((prev) => [...prev, artistId]);
-    setArtistSearch('');
-  };
-
-  const handleArtistRemove = (artistId: string) => {
-    setSelectedArtistIds((prev) => prev.filter((item) => item !== artistId));
-  };
-
   return (
     <Modal open={isOpen} onClose={handleClose} size="lg" headerVariant="none" closeVariant="island">
-      <div className="relative">
+      <div className="px-6 py-6">
+        <h2 className="text-xl font-semibold text-neutral-900">Upload file</h2>
+        <p className="mt-1 text-sm text-neutral-500">
+          Upload data from reporting organisation or use Haudit template.
+        </p>
 
-
-        {/* Modal content */}
-        <div className="px-6 py-6">
-          <h2 className="text-xl font-semibold text-neutral-900">Royalty file upload</h2>
-          <p className="mt-1 text-sm text-neutral-500">
-            Upload a royalty statement, choose the reporting source, and we&apos;ll process it into fresh insights.
-          </p>
-
-          {/* Upload area */}
-          <div className="mt-6">
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              className={`relative rounded-xl border-2 border-dashed bg-neutral-50 px-6 py-12 text-center transition-colors ${
-                isDragging
-                  ? 'border-[#7B00D4] bg-[#7B00D4]/5'
-                  : 'border-neutral-300'
-              }`}
-            >
-              <input
-                type="file"
-                id="file-upload"
-                className="hidden"
-                accept=".csv,.xls,.xlsx"
-                onChange={handleFileSelect}
-              />
-              <div className="flex flex-col items-center">
-                <div className="mb-3 text-neutral-400">
-                  <Upload className="h-10 w-10 mx-auto" />
-                </div>
-                <p className="text-sm text-neutral-600">
-                  Drag and Drop file here or{' '}
-                  <label
-                    htmlFor="file-upload"
-                    className="cursor-pointer font-medium text-[#7B00D4] hover:text-[#6A00B8] underline"
-                  >
-                    Select a file
-                  </label>
-                </p>
-              </div>
-            </div>
-            <div className="mt-2 flex items-center justify-between text-xs text-neutral-500">
-              <span>Supported file types: CSV, XLS, XLSX</span>
-              <span>Maximum size: 10MB</span>
-            </div>
-          </div>
-
-          {/* Selected file */}
-          {selectedFile && (
-            <div className="mt-4 flex items-center justify-between rounded-xl bg-[#F5F5F5] px-4 py-3">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="flex-shrink-0">
-                  <svg
-                    width="32"
-                    height="32"
-                    viewBox="0 0 32 32"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <rect width="32" height="32" rx="6" fill="#E8E8E8" />
-                    <path
-                      d="M18 10H12C11.4477 10 11 10.4477 11 11V21C11 21.5523 11.4477 22 12 22H20C20.5523 22 21 21.5523 21 21V13L18 10Z"
-                      stroke="#5A5A5A"
-                      strokeWidth="1.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M18 10V13H21"
-                      stroke="#5A5A5A"
-                      strokeWidth="1.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-[#3C3C3C] truncate">
-                    {selectedFile.name}
-                  </p>
-                  <p className="text-xs text-neutral-500 mt-0.5">
-                    {formatDate(new Date(selectedFile.lastModified))}
-                  </p>
-                </div>
-              </div>
+        {/* ── STEP 1 ── */}
+        {step === 1 && !isUploading && (
+          <>
+            <div className="mt-6">
+              {/* Use Haudit template */}
               <button
-                onClick={handleRemoveFile}
-                className="flex-shrink-0 ml-2 text-[#DC2626] hover:text-[#B91C1C]"
+                type="button"
+                onClick={() => setStep(2)}
+                className="w-full rounded-xl border-2 border-dashed border-[#7B00D4] bg-[#F5ECFF]/50 px-4 py-3 text-sm font-medium text-[#7B00D4] transition-colors hover:bg-[#F5ECFF]"
               >
-                <X className="h-5 w-5" />
+                Use Haudit template
               </button>
-            </div>
-          )}
 
-          {/* Selectors */}
-          <div className="mt-6 space-y-4">
-            {shouldShowArtistSelect && (
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <label className="text-sm font-medium text-neutral-700">
-                  Select artists
-                </label>
-                <div className="relative w-full sm:w-[68%]" ref={artistDropdownRef}>
-                  <button
-                    type="button"
-                    disabled={!hasArtistOptions}
-                    onClick={() => {
-                      setShowArtistDropdown((prev) => !prev);
-                      setShowOrgDropdown(false);
-                    }}
-                    className="relative w-full rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-[#7B00D4]/20 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
-                  >
-                    {selectedArtistIds.length > 0
-                      ? `${selectedArtistIds.length} artist${selectedArtistIds.length > 1 ? 's' : ''} selected`
-                      : hasArtistOptions
-                        ? 'Select artists'
-                        : 'No artists available'}
-                    <svg
-                      className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 9l-7 7-7-7"
-                      />
-                    </svg>
-                  </button>
-
-                  {selectedArtistNames.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2 rounded-xl border border-neutral-200 bg-neutral-50 p-2">
-                      {selectedArtistNames.map((artistName, index) => {
-                        const artistId = selectedArtistIds[index];
-                        return (
-                        <span
-                          key={artistId}
-                          className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-neutral-700 border border-neutral-200"
-                        >
-                          {artistName}
-                          <button
-                            type="button"
-                            onClick={() => handleArtistRemove(artistId)}
-                            className="text-neutral-500 hover:text-neutral-700"
-                            aria-label={`Remove ${artistName}`}
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </span>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {showArtistDropdown && hasArtistOptions && (
-                    <div className="absolute z-10 mt-1 w-full rounded-xl border border-neutral-200 bg-white shadow-lg">
-                      <div className="border-b border-neutral-100 p-2 flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={artistSearch}
-                          onChange={(event) => setArtistSearch(event.target.value)}
-                          placeholder="Search artists"
-                          className="flex-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-700 outline-none focus:border-[#7B00D4]"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowArtistDropdown(false)}
-                          className="flex-shrink-0 text-neutral-400 hover:text-neutral-600"
-                          aria-label="Close dropdown"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                      <div className="max-h-52 overflow-y-auto py-1">
-                        {filteredArtistOptions.length === 0 ? (
-                          <p className="px-3 py-2 text-xs text-neutral-400">No artist matches</p>
-                        ) : (
-                          filteredArtistOptions.map((artist) => (
-                            <button
-                              key={artist.id}
-                              type="button"
-                              onClick={() => handleArtistSelect(artist.id)}
-                              className="w-full px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50"
-                            >
-                              {artist.name}
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
+              {/* or separator */}
+              <div className="my-4 flex items-center gap-3">
+                <div className="h-px flex-1 bg-neutral-200" />
+                <span className="text-sm text-neutral-400">or</span>
+                <div className="h-px flex-1 bg-neutral-200" />
               </div>
-            )}
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <label className="text-sm font-medium text-neutral-700">
-                Select reporting Organisation
-              </label>
-              <div className="relative w-full sm:w-[68%]">
+              {/* Reporting Organisation */}
+              <div ref={orgDropdownRef} className="relative">
+                <label className="mb-1.5 block text-sm font-medium text-neutral-700">
+                  Reporting Organisation <span className="text-rose-500">*</span>
+                </label>
                 <button
                   type="button"
                   onClick={() => {
-                    setShowOrgDropdown(!showOrgDropdown);
+                    setShowOrgDropdown((v) => !v);
                     setShowArtistDropdown(false);
                   }}
-                  className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-[#7B00D4]/20"
+                  className="flex w-full items-center justify-between rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-[#7B00D4]/20"
                 >
-                  {selectedOrganization || 'Select organization'}
-                  <svg
-                    className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
+                  <span className={selectedOrganization ? 'text-neutral-900' : 'text-neutral-400'}>
+                    {selectedOrganization || 'Select reporting organisation'}
+                  </span>
+                  <ChevronDown className="h-4 w-4 text-neutral-400" />
                 </button>
                 {showOrgDropdown && (
                   <div className="absolute z-10 mt-1 w-full rounded-xl border border-neutral-200 bg-white shadow-lg">
@@ -485,23 +249,237 @@ export default function UploadFileModal({
                   </div>
                 )}
               </div>
-            </div>
-          </div>
 
-          {/* SSE progress */}
-          {isUploading && (
+              {/* Artist select (record label only) */}
+              {showArtistSelect && (
+                <div ref={artistDropdownRef} className="relative mt-4">
+                  <label className="mb-1.5 block text-sm font-medium text-neutral-700">
+                    Select artists
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!hasArtistOptions}
+                    onClick={() => {
+                      setShowArtistDropdown((v) => !v);
+                      setShowOrgDropdown(false);
+                    }}
+                    className="flex w-full items-center justify-between rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-[#7B00D4]/20 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
+                  >
+                    <span>
+                      {selectedArtistIds.length > 0
+                        ? `${selectedArtistIds.length} artist${selectedArtistIds.length > 1 ? 's' : ''} selected`
+                        : hasArtistOptions
+                          ? 'Select artists'
+                          : 'No artists available'}
+                    </span>
+                    <ChevronDown className="h-4 w-4 text-neutral-400" />
+                  </button>
+
+                  {selectedArtistNames.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2 rounded-xl border border-neutral-200 bg-neutral-50 p-2">
+                      {selectedArtistNames.map((name, i) => (
+                        <span
+                          key={selectedArtistIds[i]}
+                          className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-700"
+                        >
+                          {name}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSelectedArtistIds((prev) =>
+                                prev.filter((id) => id !== selectedArtistIds[i]),
+                              )
+                            }
+                            className="text-neutral-400 hover:text-neutral-700"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {showArtistDropdown && hasArtistOptions && (
+                    <div className="absolute z-10 mt-1 w-full rounded-xl border border-neutral-200 bg-white shadow-lg">
+                      <div className="flex items-center gap-2 border-b border-neutral-100 p-2">
+                        <input
+                          type="text"
+                          value={artistSearch}
+                          onChange={(e) => setArtistSearch(e.target.value)}
+                          placeholder="Search artists"
+                          className="flex-1 rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-700 outline-none focus:border-[#7B00D4]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowArtistDropdown(false)}
+                          className="text-neutral-400 hover:text-neutral-600"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="max-h-52 overflow-y-auto py-1">
+                        {filteredArtistOptions.length === 0 ? (
+                          <p className="px-3 py-2 text-xs text-neutral-400">No artist matches</p>
+                        ) : (
+                          filteredArtistOptions.map((artist) => (
+                            <button
+                              key={artist.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedArtistIds((prev) => [...prev, artist.id]);
+                                setArtistSearch('');
+                              }}
+                              className="w-full px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50"
+                            >
+                              {artist.name}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* File dropzone */}
+              <div className="mt-4">
+                <label className="mb-1.5 block text-sm font-medium text-neutral-700">File</label>
+                {selectedFile ? (
+                  <div className="flex items-center justify-between rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <FileText className="h-5 w-5 flex-shrink-0 text-[#7B00D4]" />
+                      <p className="truncate text-sm font-medium text-neutral-800">
+                        {selectedFile.name}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedFile(null)}
+                      className="ml-3 text-rose-500 hover:text-rose-700"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={`rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
+                      isDragging ? 'border-[#7B00D4] bg-[#7B00D4]/5' : 'border-neutral-200 bg-white'
+                    }`}
+                  >
+                    <input
+                      type="file"
+                      id="file-upload"
+                      className="hidden"
+                      accept=".csv,.xls,.xlsx"
+                      onChange={handleFileSelect}
+                    />
+                    <Upload className="mx-auto h-8 w-8 text-neutral-400" />
+                    <p className="mt-2 text-sm text-neutral-600">
+                      Drag and Drop file here or{' '}
+                      <label
+                        htmlFor="file-upload"
+                        className="cursor-pointer font-medium text-[#7B00D4] underline hover:text-[#6A00B8]"
+                      >
+                        Click to upload
+                      </label>
+                    </p>
+                    <p className="mt-1 text-xs text-neutral-400">CSV, XLS or XLSX (max. 10MB)</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Step 1 actions */}
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="flex-1 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={!canSubmit}
+                className="flex-1 rounded-xl bg-[#7B00D4] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#6A00B8] disabled:cursor-not-allowed disabled:bg-neutral-300"
+              >
+                Next
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── STEP 2 (template) ── */}
+        {step === 2 && (
+          <>
+            <div className="mt-5 flex items-start gap-3 rounded-xl bg-amber-50 px-4 py-3">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" />
+              <p className="text-sm text-amber-800">
+                Download the Haudit template below, fill it with data from your reporting
+                organization, then upload it back to continue.
+              </p>
+            </div>
+
+            <div className="mt-5">
+              <label className="mb-1.5 block text-sm font-medium text-neutral-700">File</label>
+              <div className="flex flex-col items-center rounded-xl border-2 border-dashed border-[#7B00D4] bg-[#F5ECFF]/40 px-6 py-8 text-center">
+                <FileText className="h-10 w-10 text-[#7B00D4]" />
+                <p className="mt-3 text-sm font-medium text-neutral-800">Haudit Template</p>
+                {templateUrl ? (
+                  <a
+                    href={templateUrl}
+                    download
+                    className="mt-1 text-sm font-medium text-[#7B00D4] underline hover:text-[#6A00B8]"
+                  >
+                    Download template
+                  </a>
+                ) : (
+                  <span className="mt-1 text-sm text-neutral-400">Download template</span>
+                )}
+              </div>
+            </div>
+
+            {/* Step 2 actions */}
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="flex-1 rounded-xl border border-[#7B00D4] bg-white px-4 py-2.5 text-sm font-medium text-[#7B00D4] hover:bg-[#7B00D4]/5 transition-colors"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="flex-1 rounded-xl bg-[#7B00D4] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#6A00B8] transition-colors"
+              >
+                Continue
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── UPLOADING ── */}
+        {isUploading && (
+          <>
             <div className="mt-5 rounded-xl border border-[#7B00D4]/20 bg-[#F5ECFF] px-4 py-3 space-y-1">
-              <p className="text-xs font-semibold text-[#7B00D4] uppercase tracking-wide">Upload progress</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#7B00D4]">
+                Upload progress
+              </p>
               <div className="max-h-28 overflow-y-auto space-y-0.5 pr-1">
                 {progressMessages.length === 0 ? (
-                  <p className="text-xs text-neutral-500 animate-pulse">Connecting…</p>
+                  <p className="animate-pulse text-xs text-neutral-500">Connecting…</p>
                 ) : (
                   progressMessages.map((msg, i) => (
                     <p
                       key={i}
                       className={`text-xs ${
                         i === progressMessages.length - 1
-                          ? 'text-[#3c3c3c] font-medium'
+                          ? 'font-medium text-[#3c3c3c]'
                           : 'text-neutral-400'
                       }`}
                     >
@@ -512,20 +490,16 @@ export default function UploadFileModal({
               </div>
               {latestProgress && (
                 <div className="mt-2">
-                  <div className="h-1.5 w-full rounded-full bg-[#7B00D4]/20 overflow-hidden">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#7B00D4]/20">
                     <div
                       className="h-full rounded-full bg-[#7B00D4] transition-all duration-500"
-                      style={{
-                        width: latestProgress.startsWith('Done') ? '100%' : '60%',
-                      }}
+                      style={{ width: latestProgress.startsWith('Done') ? '100%' : '60%' }}
                     />
                   </div>
                 </div>
               )}
             </div>
-          )}
 
-          {isUploading && (
             <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(220px,0.85fr)]">
               <div className="rounded-2xl border border-[#E9D7FE] bg-white px-4 py-4 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
@@ -543,11 +517,11 @@ export default function UploadFileModal({
                   {uploadInsights[activeInsightIndex].detail}
                 </p>
                 <div className="mt-4 flex gap-2">
-                  {uploadInsights.map((insight, index) => (
+                  {uploadInsights.map((insight, i) => (
                     <span
                       key={insight.label}
                       className={`h-1.5 flex-1 rounded-full transition-colors ${
-                        index === activeInsightIndex ? 'bg-[#7B00D4]' : 'bg-[#E9D7FE]'
+                        i === activeInsightIndex ? 'bg-[#7B00D4]' : 'bg-[#E9D7FE]'
                       }`}
                     />
                   ))}
@@ -571,7 +545,7 @@ export default function UploadFileModal({
                       {selectedOrganization || 'Pending'}
                     </span>
                   </div>
-                  {shouldShowArtistSelect && (
+                  {showArtistSelect && (
                     <div className="flex items-start justify-between gap-3">
                       <span className="text-white/60">Artists</span>
                       <span className="text-right font-medium">
@@ -584,52 +558,8 @@ export default function UploadFileModal({
                 </div>
               </div>
             </div>
-          )}
-
-          {/* Action buttons */}
-          <div className="mt-6 flex gap-3">
-            <button
-              onClick={handleClose}
-              disabled={isUploading}
-              className="flex-1 rounded-xl border-2 border-[#7B00D4] bg-white px-4 py-2.5 text-sm font-medium text-[#7B00D4] hover:bg-[#7B00D4]/5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleNext}
-              disabled={!canSubmit}
-              className="flex-1 rounded-xl bg-[#7B00D4] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#6A00B8] disabled:bg-neutral-400 disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center gap-2"
-            >
-              {isUploading ? (
-                <>
-                  <svg
-                    className="animate-spin h-4 w-4"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  Uploading...
-                </>
-              ) : (
-                'Upload file'
-              )}
-            </button>
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </Modal>
   );

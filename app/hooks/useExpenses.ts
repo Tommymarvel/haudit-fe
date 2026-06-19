@@ -41,7 +41,8 @@ export function useExpenses() {
       await axiosInstance.post('/expenses', {
         artistId: payload.artistId,
         expense_date: payload.expense_date,
-        category: payload.category,
+        ...(payload.category && { category: payload.category }),
+        ...(payload.advance_type && { advance_type: payload.advance_type }),
         currency: payload.currency,
         amount: payload.amount,
         recoupable: payload.recoupable,
@@ -86,6 +87,20 @@ export function useExpenses() {
     }
   };
 
+  const updateExpenseStatus = async (docId: string, payload: { status: string; status_desc: string }) => {
+    try {
+      await axiosInstance.patch(`/expenses/${docId}/status`, payload);
+      toast.success('Expense status updated');
+      mutate(expensesEndpoint);
+      mutate(trendEndpoint);
+      if (expensesEndpoint !== '/expenses') mutate(expensesEndpoint);
+    } catch (error) {
+      const err = error as AxiosError<{ message: string }>;
+      toast.error(err.response?.data?.message || 'Failed to update expense status');
+      throw error;
+    }
+  };
+
   return {
     expenses: data,
     trend: trendData?.trend,
@@ -95,5 +110,6 @@ export function useExpenses() {
     createExpense,
     approveExpense,
     rejectExpense,
+    updateExpenseStatus,
   };
 }

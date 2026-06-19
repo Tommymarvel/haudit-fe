@@ -169,7 +169,7 @@ export default function RecordLabelDashboard() {
       await createExpense({
         artistId: payload.artistId,
         expense_date: payload.expense_date,
-        category: payload.category,
+        advance_type: payload.advance_type,
         currency: payload.currency,
         amount: payload.amount,
         recoupable: payload.recoupable,

@@ -458,7 +458,7 @@ export default function LabelArtistDashboard() {
 
       await createExpense({
         expense_date: payload.expense_date,
-        category: payload.category,
+        advance_type: payload.advance_type,
         currency: payload.currency,
         amount: payload.amount,
         recoupable: payload.recoupable,

@@ -1,25 +1,34 @@
 'use client';
 
-import { ChartCard } from '@/components/dashboard/ChartCard';
-import { Button } from '@/components/ui/Button';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { useExpenses } from '@/hooks/useExpenses';
 import { useRecordLabelArtists } from '@/hooks/useRecordLabelArtists';
-import { BRAND } from '@/lib/brand';
 import { getRecordLabelArtistName } from '@/lib/utils/recordLabelArtist';
 import { uploadFile } from '@/lib/utils/upload';
-import { deriveSingleCurrency, formatCurrencyAmount } from '@/lib/utils/currency';
-import { ArrowUpDown, CalendarDays, FileText, Search, UserRound } from 'lucide-react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import React, { useMemo, useState } from 'react';
+import { formatCurrencyAmount } from '@/lib/utils/currency';
+import {
+  ArrowUpDown,
+  CalendarDays,
+  CircleDollarSign,
+  FileText,
+  MoreVertical,
+  Search,
+  UserRound,
+} from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import AddExpensesModal, { NewExpensesPayload } from './AddExpensesModal';
-import { StatusPill } from '@/components/ui/StatusPill';
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 import Modal from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
+import Image from 'next/image';
+import { toast } from 'react-toastify';
 
-type ExpenseStatus = 'Approved' | 'Pending' | 'Rejected';
+type ExpenseStatus = 'Paid' | 'Approved' | 'Pending' | 'Rejected';
+type StatusUpdateValue = 'paid' | 'approved' | 'pending' | 'rejected';
 
 type ExpenseRow = {
   id: string;
@@ -27,339 +36,301 @@ type ExpenseRow = {
   date: string;
   artistId: string;
   artistName: string;
-  category: string;
+  advanceType: string;
   status: ExpenseStatus;
   amount: number;
   currency: string;
   loggedBy: string;
   receiptUrl: string;
   description: string;
+  recoupable: string;
+  approvedBy: string;
 };
+
+const STATUS_UPDATE_OPTIONS = [
+  { label: 'Pending', value: 'pending' },
+  { label: 'Approved', value: 'approved' },
+  { label: 'Rejected', value: 'rejected' },
+  { label: 'Paid', value: 'paid' },
+];
 
 function normalizeStatus(value?: string): ExpenseStatus {
   const key = (value || '').trim().toLowerCase();
-  if (key === 'approved' || key === 'paid' || key === 'repaid') return 'Approved';
+  if (key === 'paid' || key === 'repaid') return 'Paid';
+  if (key === 'approved') return 'Approved';
   if (key === 'rejected') return 'Rejected';
   return 'Pending';
 }
 
-function updateArtistQuery(
-  pathname: string,
-  searchParams: URLSearchParams,
-  artistId: string,
-  router: ReturnType<typeof useRouter>
-) {
-  const next = new URLSearchParams(searchParams.toString());
-  next.delete('artist');
-  if (artistId === 'all') {
-    next.delete('artistId');
-  } else {
-    next.set('artistId', artistId);
+
+const advanceTypeOptions = [
+  { label: 'All types', value: 'all' },
+  { label: 'Personal', value: 'personal' },
+  { label: 'Marketing', value: 'marketting' },
+];
+
+function LoggedByBadge({ loggedBy }: { loggedBy: string }) {
+  const normalized = loggedBy.toLowerCase();
+  const isLabel = normalized === 'record_label' || normalized === 'admin' || normalized === 'label';
+  if (isLabel) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F3E8FF] px-3 py-1 text-xs font-medium text-[#7B00D4]">
+        <FileText className="h-3.5 w-3.5" />
+        Logged by Label
+      </span>
+    );
   }
-  const query = next.toString();
-  router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF3E0] px-3 py-1 text-xs font-medium text-[#F59E0B]">
+      <UserRound className="h-3.5 w-3.5" />
+      Logged by Artist
+    </span>
+  );
 }
 
 const RecordLabelExpenses = () => {
   const [q, setQ] = useState('');
-  const [category, setCategory] = useState('all');
+  const [advanceTypeFilter, setAdvanceTypeFilter] = useState('all');
   const [openAdd, setOpenAdd] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const [selectedExpense, setSelectedExpense] = useState<ExpenseRow | null>(null);
-  const { expenses, trend, netTotal, createExpense } = useExpenses();
+  const [menuOpenForId, setMenuOpenForId] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
+  const [statusRow, setStatusRow] = useState<ExpenseRow | null>(null);
+  const [statusUpdate, setStatusUpdate] = useState<StatusUpdateValue>('pending');
+  const [statusDescription, setStatusDescription] = useState('');
+  const [rowStatusOverrides, setRowStatusOverrides] = useState<Record<string, ExpenseStatus>>({});
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
+
+  const { expenses, createExpense, updateExpenseStatus } = useExpenses();
   const { artists } = useRecordLabelArtists();
   const searchParams = useSearchParams();
-  const pathname = usePathname();
-  const router = useRouter();
 
   const artistFromSidebarId = searchParams.get('artistId') || 'all';
-
-  const trendData = useMemo(
-    () =>
-      (trend ?? []).map((item) => ({
-        label: new Date(item.day).toLocaleDateString('en-US', { month: 'short' }),
-        date: item.day,
-        value: Number(item.amount ?? 0),
-      })),
-    [trend]
-  );
 
   const rows = useMemo<ExpenseRow[]>(() => {
     const artistById = new Map<string, string>();
     (artists ?? []).forEach((artist) => {
       const artistId = (artist.id || artist._id || '').toString().trim();
-      if (!artistId) return;
       const name = getRecordLabelArtistName(artist);
-      if (name) artistById.set(artistId, name);
+      if (artistId && name) artistById.set(artistId, name);
     });
 
-    return (expenses ?? []).map((item, index) => ({
-      id: item.ref_id || item._id || `EXP-${index + 1}`,
-      docId: item._id || '',
-      date: new Date(item.expense_date || item.createdAt)
-        .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-        .replace(/ /g, '-'),
-      artistId: ((item as { artist_id?: string; artistId?: string }).artist_id ||
-        (item as { artist_id?: string; artistId?: string }).artistId ||
-        item.user || '') + '',
-      artistName:
-        (item.user ? artistById.get(item.user) : undefined) ||
-        (item as { artist_name?: string; artistName?: string }).artist_name ||
-        (item as { artist_name?: string; artistName?: string }).artistName ||
-        '-',
-      category: item.category || '-',
-      status: normalizeStatus((item as { status?: string }).status),
-      amount: Number(item.amount ?? 0),
-      currency: (item.currency || 'USD').toUpperCase(),
-      loggedBy:
-        (item as { logged_by?: string; paid_by?: string }).logged_by ||
-        (item as { logged_by?: string; paid_by?: string }).paid_by ||
-        'Admin',
-      receiptUrl: item.receipt_url || '',
-      description: item.description || '',
-    }));
-  }, [expenses, artists]);
-  const totalCurrency = useMemo(
-    () => deriveSingleCurrency(rows.map((item) => item.currency), 'USD'),
-    [rows]
-  );
+    return (expenses ?? []).map((item, index) => {
+      const id = (item as { ref_id?: string }).ref_id || item._id || `EXP-${index + 1}`;
+      const docId = item._id || '';
+      const raw = item as unknown as Record<string, unknown>;
+      return {
+        id,
+        docId,
+        date: new Date((raw.expense_date as string) || (raw.createdAt as string))
+          .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+          .replace(/ /g, '-'),
+        artistId: ((raw.artist_id || raw.artistId || raw.user || '') as string).toString(),
+        artistName:
+          (raw.user ? artistById.get(raw.user as string) : undefined) ||
+          (raw.artist_name as string) ||
+          (raw.artistName as string) || '-',
+        advanceType: (raw.advance_type as string) || (raw.category as string) || '-',
+        status: rowStatusOverrides[docId] || normalizeStatus((raw.status as string) || ''),
+        amount: Number(raw.amount ?? 0),
+        currency: ((raw.currency as string) || 'USD').toUpperCase(),
+        loggedBy: (raw.initiated_by as string) || (raw.logged_by as string) || (raw.paid_by as string) || '-',
+        receiptUrl: (raw.receipt_url as string) || '',
+        description: (raw.description as string) || '',
+        recoupable: (raw.recoupable as string) || '',
+        approvedBy: (raw.approved_by as string) || (raw.approvedBy as string) || '',
+      };
+    });
+  }, [expenses, artists, rowStatusOverrides]);
 
-  const artistOptions = useMemo(() => {
+  const artistSelectOptions = useMemo(() => {
     const uniqueById = new Map<string, string>();
     artists.forEach((artist) => {
       const artistId = (artist.id || artist._id || '').toString().trim();
       const artistName = getRecordLabelArtistName(artist);
-      if (!artistId || !artistName) return;
-      uniqueById.set(artistId, artistName);
+      if (artistId && artistName) uniqueById.set(artistId, artistName);
     });
-    return [{ label: 'All artist', value: 'all' }].concat(
-      Array.from(uniqueById.entries()).map(([id, name]) => ({ label: name, value: id }))
-    );
+    return Array.from(uniqueById.entries()).map(([id, name]) => ({ id, name }));
   }, [artists]);
-  const artistSelectOptions = useMemo(
-    () =>
-      artistOptions
-        .filter((option) => option.value !== 'all')
-        .map((option) => ({ id: option.value, name: option.label })),
-    [artistOptions]
-  );
 
-  const categoryOptions = [
-    { label: 'All categories', value: 'all' },
-    { label: 'Marketing', value: 'marketting' },
-    { label: 'Production', value: 'production' },
-    { label: 'Personal', value: 'personal' },
-    { label: 'Recording costs', value: 'Recording costs' },
-    { label: 'Production costs', value: 'Production costs' },
-    { label: 'Mixing & mastering', value: 'Mixing & mastering' },
-    { label: 'Marketing spend', value: 'Marketing spend' },
-    { label: 'Promotion spend', value: 'Promotion spend' },
-    { label: 'Digital ads', value: 'Digital ads' },
-    { label: 'Radio', value: 'Radio' },
-    { label: 'PR & media runs', value: 'PR & media runs' },
-    { label: 'Content creation', value: 'Content creation' },
-    { label: 'Music video production', value: 'Music video production' },
-    { label: 'Artwork/Design', value: 'Artwork/Design' },
-    { label: 'Distribution', value: 'Distribution' },
-    { label: 'Management fees', value: 'Management fees' },
-    { label: 'Legal fees', value: 'Legal fees' },
-    { label: 'Travel & logistics', value: 'Travel & logistics' },
-    { label: 'Accommodation', value: 'Accommodation' },
-    { label: 'Show/tour costs', value: 'Show/tour costs' },
-    { label: 'Styling', value: 'Styling' },
-    { label: 'Photography', value: 'Photography' },
-    { label: 'Social media management', value: 'Social media management' },
-    { label: 'Branding', value: 'Branding' },
-    { label: 'Equipment', value: 'Equipment' },
-    { label: 'Miscellaneous', value: 'Miscellaneous' },
-    { label: 'Food & Entertainment', value: 'Food & Entertainment' },
-    { label: 'Accounting services fees', value: 'Accounting services fees' },
-    { label: 'Marketing services fees', value: 'Marketing services fees' },
-    { label: 'Agency fees', value: 'Agency fees' },
-    { label: 'Health', value: 'Health' },
-    { label: 'Insurance Fees', value: 'Insurance Fees' },
-    { label: 'Cash at Hand', value: 'Cash at Hand' },
-    { label: 'Others', value: 'others' },
-  ];
+  // "Logged by" filter options derived from rows
+  const loggedByOptions = useMemo(() => {
+    const unique = Array.from(new Set(rows.map((r) => r.loggedBy)));
+    return [{ label: 'Logged by', value: 'all' }, ...unique.map((v) => ({ label: v, value: v }))];
+  }, [rows]);
 
-  const [page, setPage] = useState(1);
-  const PAGE_SIZE = 10;
+  const [loggedByFilter, setLoggedByFilter] = useState('all');
 
   const filteredExpenses = useMemo(() => {
     const search = q.trim().toLowerCase();
     return rows.filter((item) => {
-      const matchesArtist =
-        artistFromSidebarId === 'all' ||
-        item.artistId === '' ||
-        item.artistId === artistFromSidebarId;
-      const matchesCategory = category === 'all' || item.category === category;
+      const matchesArtist = artistFromSidebarId === 'all' || item.artistId === '' || item.artistId === artistFromSidebarId;
+      const matchesAdvanceType = advanceTypeFilter === 'all' || item.advanceType.toLowerCase() === advanceTypeFilter;
+      const matchesLoggedBy = loggedByFilter === 'all' || item.loggedBy === loggedByFilter;
       const matchesSearch =
         search === '' ||
         item.id.toLowerCase().includes(search) ||
         item.artistName.toLowerCase().includes(search) ||
-        item.category.toLowerCase().includes(search) ||
+        item.advanceType.toLowerCase().includes(search) ||
         item.loggedBy.toLowerCase().includes(search);
-
-      return matchesArtist && matchesCategory && matchesSearch;
+      return matchesArtist && matchesAdvanceType && matchesLoggedBy && matchesSearch;
     });
-  }, [artistFromSidebarId, category, q, rows]);
+  }, [artistFromSidebarId, advanceTypeFilter, loggedByFilter, q, rows]);
 
   const totalPages = Math.max(1, Math.ceil(filteredExpenses.length / PAGE_SIZE));
   const pagedExpenses = filteredExpenses.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  useEffect(() => {
+    if (!menuOpenForId) return;
+    const close = () => { setMenuOpenForId(null); setMenuPosition(null); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [menuOpenForId]);
+
+  // Menu portal helpers
+  const openRowMenu = (e: React.MouseEvent<HTMLButtonElement>, id: string) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mw = 180;
+    const vp = 8;
+    const left = Math.max(vp, Math.min(rect.right - mw, window.innerWidth - mw - vp));
+    setMenuPosition({ top: rect.bottom + 6, left });
+    setMenuOpenForId((prev) => (prev === id ? null : id));
+  };
+
+  // Status update logic
+  const openStatusModal = (row: ExpenseRow) => {
+    setStatusRow(row);
+    setStatusUpdate(row.status.toLowerCase() as StatusUpdateValue);
+    setStatusDescription('');
+    setMenuOpenForId(null);
+  };
+
+  const submitStatus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!statusRow) return;
+    if (!statusDescription.trim()) { toast.error('Description is required'); return; }
+
+    try {
+      await updateExpenseStatus(statusRow.docId, {
+        status: statusUpdate,
+        status_desc: statusDescription.trim(),
+      });
+      const newStatus: ExpenseStatus =
+        statusUpdate === 'approved' ? 'Approved' :
+        statusUpdate === 'rejected' ? 'Rejected' :
+        statusUpdate === 'paid' ? 'Paid' : 'Pending';
+      setRowStatusOverrides((prev) => ({ ...prev, [statusRow.docId]: newStatus }));
+      setStatusRow(null);
+    } catch {
+      // error already toasted by hook
+    }
+  };
+
   return (
     <div>
+      {/* Header */}
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
-          <h1 className="text-[24px] font-medium leading-[120%] text-[#3C3C3C]">
-            Artist Expenses
-          </h1>
+          <h1 className="text-[24px] font-medium leading-[120%] text-[#3C3C3C]">Artist Expenses</h1>
           <p className="mt-1 text-[16px] leading-[120%] text-[#6E6E6E]">
-            Manage and add expenses for artists on your roster.
+            Manage and add expenses for artists on your roster
           </p>
         </div>
-
         <div className="flex w-full gap-3 lg:w-auto">
           <YearFilterCalendar
             value={selectedYear}
             onChange={setSelectedYear}
             label="Year"
             showYear={true}
-            buttonClassName="inline-flex items-center gap-2 rounded-2xl bg-[#E9E9E9] px-3 py-2 text-[14px] font-medium text-[#5A5A5A] cursor-pointer hover:bg-[#DCDCDC] transition-colors"
+            buttonClassName="inline-flex items-center gap-2 rounded-2xl bg-[#E9E9E9] px-3 py-2 text-[14px] font-medium text-[#5A5A5A]"
           />
-
           <button
             type="button"
-            className="inline-flex items-center gap-2 rounded-2xl bg-[#E9E9E9] px-3 py-2 text-[14px] font-medium text-[#5A5A5A] cursor-pointer hover:bg-[#DCDCDC] transition-colors"
-          >
-            Export
-          </button>
-
-          <Button
-            variant="primary"
-            className="rounded-2xl  text-[14px] px-4 font-medium"
-            style={{ backgroundColor: BRAND.purple }}
             onClick={() => setOpenAdd(true)}
+            className="inline-flex items-center gap-2 rounded-2xl bg-[#7B00D4] px-5 py-2 text-[14px] font-medium text-white hover:bg-[#6A00B8]"
           >
-            Add Expense
-          </Button>
+            Add New Expenses
+          </button>
         </div>
       </div>
 
-      <div className="mt-5">
-        <ChartCard
-          title="Expenses Trend"
-          variant="line"
-          data={trendData}
-          xKey="label"
-          yKey="value"
-          bandFill="#E8E8E8"
-          lineType="monotone"
-          chartMarginTop={48}
-          chartOverlay={
-            <div className="leading-none">
-              <div className="leading-none">
-                <div className=" flex items-center gap-2 text-[12px] font-normal leading-[120%] text-[#AAAAAA]">
-                  <span className="h-3 w-[2px] rounded bg-[#7B00D4]" />
-                  Total Expenses
-                </div>
-                <p className=" mt-1 text-[20px] font-medium leading-[120%] tracking-[0] text-[#3C3C3C]">
-                  {formatCurrencyAmount(netTotal, totalCurrency, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </p>
-              </div>
-            </div>
-          }
-        />
-      </div>
-
+      {/* Table card */}
       <Card className="mt-8 overflow-hidden">
         <CardBody className="p-0!">
           <div className="flex flex-col gap-3 border-b border-neutral-200 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="text-[14px] font-semibold text-[#3C3C3C]">All Expenses</div>
-
+            <div className="text-[14px] font-semibold text-[#3C3C3C]">Expenses</div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
                 <input
                   value={q}
-                  onChange={(event) => setQ(event.target.value)}
+                  onChange={(e) => setQ(e.target.value)}
                   placeholder="Search expense"
-                  className="h-10 w-[280px] rounded-xl border border-neutral-200 bg-[#F4F4F4] pl-9 pr-3 text-[14px] text-neutral-700 outline-none"
+                  className="h-9 w-[240px] rounded-xl border border-neutral-200 bg-[#F4F4F4] pl-9 pr-3 text-[13px] text-neutral-700 outline-none"
                 />
               </div>
-
               <Select
-                value={category}
-                onChange={setCategory}
-                className="h-10 min-w-[160px] bg-[#F8F8F8] text-[14px] text-[#5A5A5A]"
-                options={categoryOptions}
+                value={loggedByFilter}
+                onChange={setLoggedByFilter}
+                className="h-9 min-w-[130px] bg-white text-[13px]"
+                options={loggedByOptions}
               />
-
-              <div className="relative min-w-[160px]">
-                <UserRound className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-[#707070]" />
-                <Select
-                  value={artistFromSidebarId}
-                  onChange={(value) =>
-                    updateArtistQuery(pathname, new URLSearchParams(searchParams.toString()), value, router)
-                  }
-                  className="h-10 w-full bg-[#F8F8F8] pl-8 text-[14px] text-[#5A5A5A]"
-                  options={artistOptions}
-                />
-              </div>
+              <Select
+                value={advanceTypeFilter}
+                onChange={setAdvanceTypeFilter}
+                className="h-9 min-w-[150px] bg-white text-[13px]"
+                options={advanceTypeOptions}
+              />
             </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px]">
-              <thead className="bg-[#ECECEC] text-left text-[16px] font-medium text-[#5F5F5F]">
+            <table className="w-full min-w-[800px]">
+              <thead className="bg-[#F4F4F4] text-left text-[14px] font-medium text-[#5F5F5F]">
                 <tr>
-                  <th className="px-4 py-3">ID</th>
+                  <th className="px-4 py-3">Transaction</th>
                   <th className="px-4 py-3">
                     <span className="inline-flex items-center gap-1">
-                      Date
-                      <ArrowUpDown className="h-3.5 w-3.5" />
+                      Date <ArrowUpDown className="h-3.5 w-3.5" />
                     </span>
                   </th>
-                  <th className="px-4 py-3">Artist Name</th>
-                  <th className="px-4 py-3">Category</th>
+                  <th className="px-4 py-3">Advance Type</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Amount</th>
                   <th className="px-4 py-3">Logged by</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#EAEAEA] text-[16px] text-[#4C4C4C]">
+              <tbody className="divide-y divide-[#EAEAEA] text-[14px] text-[#4C4C4C]">
                 {pagedExpenses.map((item, index) => (
                   <tr key={`${item.id}-${index}`} className="bg-white">
-                    <td className="px-4 py-3 whitespace-nowrap max-w-[120px] truncate" title={item.id}>{item.id}</td>
+                    <td className="max-w-[140px] truncate px-4 py-3 whitespace-nowrap" title={item.id}>{item.id}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{item.date}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">{item.artistName}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">{item.category}</td>
+                    <td className="px-4 py-3 capitalize whitespace-nowrap">{item.advanceType === 'marketting' ? 'Marketing' : item.advanceType}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <StatusPill label={item.status} />
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {formatCurrencyAmount(item.amount, item.currency)}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">{item.loggedBy}</td>
+                    <td className="px-4 py-3 whitespace-nowrap capitalize">{item.loggedBy}</td>
                     <td className="px-4 py-3 text-right">
                       <button
                         type="button"
-                        className="text-[#1A6FD4] underline text-[14px] hover:opacity-80"
-                        onClick={() => setSelectedExpense(item)}
+                        onClick={(e) => openRowMenu(e, item.id)}
+                        className="text-[#9C9C9C] hover:text-[#7B00D4]"
                       >
-                        View Details
+                        <MoreVertical className="h-4 w-4" />
                       </button>
                     </td>
                   </tr>
                 ))}
                 {filteredExpenses.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-4 py-16 text-center text-[#777777]">
-                      No expenses match this artist/category filter.
+                    <td colSpan={7} className="px-4 py-16 text-center text-[#777777]">
+                      No expenses match this filter.
                     </td>
                   </tr>
                 )}
@@ -371,23 +342,57 @@ const RecordLabelExpenses = () => {
         </CardBody>
       </Card>
 
+      {/* Row actions menu portal */}
+      {menuOpenForId && menuPosition
+        ? createPortal(
+            <div
+              style={{ position: 'fixed', top: menuPosition.top, left: menuPosition.left }}
+              className="z-[130] w-[180px] rounded-xl border border-[#E2E2E2] bg-white p-2 shadow-lg"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              {(() => {
+                const menuRow = filteredExpenses.find((r) => r.id === menuOpenForId);
+                if (!menuRow) return null;
+                return (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedExpense(menuRow); setMenuOpenForId(null); }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[#494F59] hover:bg-[#F6F7F9]"
+                    >
+                      <span className="font-medium">View details</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openStatusModal(menuRow)}
+                      className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-[#494F59] hover:bg-[#F6F7F9]"
+                    >
+                      <span className="font-medium">Update status</span>
+                    </button>
+                  </>
+                );
+              })()}
+            </div>,
+            document.body
+          )
+        : null}
+
+      {/* Add Expenses Modal */}
       <AddExpensesModal
         open={openAdd}
         onClose={() => setOpenAdd(false)}
         recordLabelFields
         artistOptions={artistSelectOptions}
-
         onSubmit={async (payload: NewExpensesPayload) => {
           try {
             let receiptUrl = '';
             if (payload.proofs && payload.proofs.length > 0) {
               receiptUrl = await uploadFile(payload.proofs[0], 'expense');
             }
-
             await createExpense({
               artistId: payload.artistId,
               expense_date: payload.expense_date,
-              category: payload.category,
+              advance_type: payload.advance_type,
               currency: payload.currency,
               amount: payload.amount,
               recoupable: payload.recoupable,
@@ -395,12 +400,13 @@ const RecordLabelExpenses = () => {
               receipt_url: receiptUrl,
             });
             setOpenAdd(false);
-          } catch (error) {
-            console.error('Create expense failed', error);
+          } catch {
+            // error toasted by hook
           }
         }}
       />
 
+      {/* Expense Details Modal */}
       <Modal
         open={Boolean(selectedExpense)}
         onClose={() => setSelectedExpense(null)}
@@ -409,81 +415,165 @@ const RecordLabelExpenses = () => {
         size="lg"
       >
         {selectedExpense && (
-          <div className="overflow-hidden rounded-2xl border border-[#D5D5D5]">
-            <div className="border-b border-[#D5D5D5] bg-[#FAFAFA] px-4 py-2 text-xs text-[#6F6F6F]">
-              Expenses / {selectedExpense.id}
+          <div className="overflow-hidden rounded-3xl border border-[#DBDBDB] bg-white">
+            {/* Header bar */}
+            <div className="flex items-center justify-between border-b border-[#DBDBDB] bg-[#FAFAFA] px-4 py-3">
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-[#3F3F3F]">Expenses / {selectedExpense.id}</span>
+                <LoggedByBadge loggedBy={selectedExpense.loggedBy} />
+              </div>
+              <button
+                type="button"
+                onClick={() => { openStatusModal(selectedExpense); setSelectedExpense(null); }}
+                className="rounded-full bg-[#7B00D4] px-4 py-1.5 text-xs font-medium text-white hover:bg-[#6A00B8]"
+              >
+                Update status
+              </button>
             </div>
-            <div className="p-4">
-              <p className="text-[36px] font-semibold leading-none text-[#2F2F2F]">EXP-{selectedExpense.id.length > 8 ? `${selectedExpense.id.slice(0, 8)}…` : selectedExpense.id}</p>
-              <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
-                <div className="grid grid-cols-[16px_1fr] items-start gap-2">
-                  <span className="mt-0.5 text-[#8E8E8E]"><CalendarDays className="h-3.5 w-3.5" /></span>
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-[14px] text-[#777777]">Date</span>
-                    <span className="text-[14px] font-medium text-[#2F2F2F]">{selectedExpense.date}</span>
-                  </div>
+
+            <div className="p-5">
+              <p className="text-xl font-bold text-[#2F2F2F]">{selectedExpense.id}</p>
+
+              {/* Detail grid */}
+              <div className="mt-4 grid grid-cols-1 gap-x-10 gap-y-3 md:grid-cols-2">
+                {/* Left column */}
+                <div className="space-y-3">
+                  <DetailRow icon={<CalendarDays className="h-4 w-4" />} label="Date" value={selectedExpense.date} />
+                  <DetailRow icon={<CircleDollarSign className="h-4 w-4" />} label="Amount" value={<span className="font-semibold">{formatCurrencyAmount(selectedExpense.amount, selectedExpense.currency)}</span>} />
+                  <DetailRow icon={<FileText className="h-4 w-4" />} label="Advance Type" value={selectedExpense.advanceType === 'marketting' ? 'Marketing' : selectedExpense.advanceType} />
+                  <DetailRow icon={<FileText className="h-4 w-4" />} label="Status" value={<StatusPill label={selectedExpense.status} />} />
                 </div>
-                <div className="grid grid-cols-[16px_1fr] items-start gap-2">
-                  <span className="mt-0.5 text-[#8E8E8E]"><UserRound className="h-3.5 w-3.5" /></span>
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-[14px] text-[#777777]">Artist Name</span>
-                    <span className="text-[14px] font-medium text-[#2F2F2F]">{selectedExpense.artistName}</span>
-                  </div>
-                </div>
-                <div className="grid grid-cols-[16px_1fr] items-start gap-2">
-                  <span className="mt-0.5 text-[#8E8E8E]"><FileText className="h-3.5 w-3.5" /></span>
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-[14px] text-[#777777]">Status</span>
-                    <span className="text-[14px] font-medium text-[#2F2F2F]"><StatusPill label={selectedExpense.status} /></span>
-                  </div>
-                </div>
-                <div className="grid grid-cols-[16px_1fr] items-start gap-2">
-                  <span className="mt-0.5 text-[#8E8E8E]"><FileText className="h-3.5 w-3.5" /></span>
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-[14px] text-[#777777]">Amount</span>
-                    <span className="text-[14px] font-medium text-[#2F2F2F]">{formatCurrencyAmount(selectedExpense.amount, selectedExpense.currency)}</span>
-                  </div>
-                </div>
-                <div className="grid grid-cols-[16px_1fr] items-start gap-2">
-                  <span className="mt-0.5 text-[#8E8E8E]"><FileText className="h-3.5 w-3.5" /></span>
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-[14px] text-[#777777]">Category</span>
-                    <span className="text-[14px] font-medium text-[#2F2F2F]">{selectedExpense.category}</span>
-                  </div>
-                </div>
-                <div className="grid grid-cols-[16px_1fr] items-start gap-2">
-                  <span className="mt-0.5 text-[#8E8E8E]"><FileText className="h-3.5 w-3.5" /></span>
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-[14px] text-[#777777]">Support Document</span>
-                    <span className="text-[14px] font-medium text-[#2F2F2F]">
-                      {selectedExpense.receiptUrl ? (
-                        <a
-                          href={selectedExpense.receiptUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rounded-md bg-[#EEEEEE] px-2 py-1 text-xs text-[#4E4E4E] underline hover:bg-[#E0E0E0]"
-                        >
-                          View Document
-                        </a>
-                      ) : (
-                        <span className="rounded-md bg-[#EEEEEE] px-2 py-1 text-xs text-[#4E4E4E]">-</span>
-                      )}
-                    </span>
-                  </div>
+                {/* Right column */}
+                <div className="space-y-3">
+                  <DetailRow icon={<UserRound className="h-4 w-4" />} label="Artist Name" value={selectedExpense.artistName} />
+                  {selectedExpense.approvedBy && (
+                    <DetailRow
+                      icon={<UserRound className="h-4 w-4" />}
+                      label="Approved by"
+                      value={selectedExpense.approvedBy}
+                    />
+                  )}
+                  {selectedExpense.recoupable && (
+                    <DetailRow
+                      icon={<FileText className="h-4 w-4" />}
+                      label="Recoupable"
+                      value={
+                        <span className="rounded-md bg-[#ECFDF5] px-2.5 py-0.5 text-xs font-medium text-[#065F46]">
+                          {selectedExpense.recoupable}
+                        </span>
+                      }
+                    />
+                  )}
                 </div>
               </div>
+
+              {/* Attachment */}
+              {selectedExpense.receiptUrl && (
+                <div className="mt-5">
+                  <p className="flex items-center gap-1.5 text-sm font-medium text-[#5A5A5A]">
+                    <span className="text-[#B0B0B0]">🔗</span> Attachment
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <a
+                      href={selectedExpense.receiptUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 rounded-lg border border-[#D5D5D5] px-3 py-1.5 text-xs text-[#4E4E4E] hover:bg-[#F5F5F5]"
+                    >
+                      <FileText className="h-3.5 w-3.5 text-[#9C9C9C]" />
+                      View receipt
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* Description */}
               {selectedExpense.description && (
-                <div className="mt-5 rounded-lg border border-[#D5D5D5] px-3 py-3">
-                  <p className="text-xs font-medium text-[#8A8A8A]">Description</p>
-                  <p className="mt-1 text-[13px] leading-5 text-[#4E4E4E]">{selectedExpense.description}</p>
+                <div className="mt-5 border-t border-[#F0F0F0] pt-4">
+                  <p className="text-sm font-medium text-[#8A8A8A]">Description</p>
+                  <p className="mt-1.5 text-[13px] leading-6 text-[#4E4E4E]">
+                    {selectedExpense.description}
+                  </p>
                 </div>
               )}
             </div>
           </div>
         )}
       </Modal>
+
+      {/* Status Update Modal */}
+      <Modal
+        open={Boolean(statusRow)}
+        onClose={() => setStatusRow(null)}
+        headerVariant="none"
+        closeVariant="island"
+        size="md"
+      >
+        <div className="m-5 rounded-3xl border border-[#DBDBDB] bg-white p-6">
+          <div className="flex justify-center">
+            <Image src="/haudit-logo.svg" alt="Haudit" width={44} height={44} />
+          </div>
+          <h3 className="mt-3 text-center text-2xl font-medium text-[#222222]">Status Update</h3>
+          <p className="mt-1 text-center text-sm text-[#9C9C9C]">
+            Fill out form to update Expenses logged.
+          </p>
+
+          <form className="mt-5 space-y-4" onSubmit={submitStatus}>
+            <div>
+              <label className="text-sm font-medium text-[#2D2D2D]">Status</label>
+              <div className="mt-1.5">
+                <Select
+                  value={statusUpdate}
+                  onChange={(v) => setStatusUpdate(v as StatusUpdateValue)}
+                  options={STATUS_UPDATE_OPTIONS}
+                  placeholder="Select status"
+                  className="h-11 rounded-xl border border-[#B9B9B9] bg-white text-sm"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-[#2D2D2D]">Description</label>
+              <textarea
+                rows={4}
+                placeholder="Enter expenses description"
+                className="mt-1.5 w-full resize-none rounded-xl border border-[#B9B9B9] bg-white px-3 py-2.5 text-sm text-[#3C3C3C] outline-none placeholder:text-[#B0B0B0]"
+                value={statusDescription}
+                onChange={(e) => setStatusDescription(e.target.value)}
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="h-11 w-full rounded-xl bg-[#7B00D4] text-sm font-medium text-white"
+            >
+              Submit
+            </button>
+          </form>
+        </div>
+      </Modal>
     </div>
   );
 };
+
+function DetailRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="grid grid-cols-[18px_1fr] items-start gap-2">
+      <span className="mt-0.5 text-[#8E8E8E]">{icon}</span>
+      <div className="flex items-start justify-between gap-3">
+        <span className="shrink-0 text-[13px] text-[#777777]">{label}</span>
+        <span className="text-right text-[13px] font-medium text-[#2F2F2F]">{value}</span>
+      </div>
+    </div>
+  );
+}
 
 export default RecordLabelExpenses;

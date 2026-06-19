@@ -7,6 +7,8 @@ export interface Advance {
   advance_source_email: string;
   advance_type: string;
   repayment_status: string;
+  status?: string;
+  initiated_by?: string;
   repaid_amount?: number;
   proof_of_payment?: string;
   purpose: string;

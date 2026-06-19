@@ -112,6 +112,48 @@ export function useAdvance() {
     }
   };
 
+  const updateAdvanceStatus = async (
+    id: string,
+    payload: { status: string; status_desc: string; advance_paid_receipt?: string },
+  ) => {
+    try {
+      const response = await axiosInstance.patch(`/advance/${id}/status`, payload);
+      toast.success('Advance status updated');
+      revalidateAdvanceEndpoints();
+      return response.data;
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      toast.error(error.response?.data?.message || 'Failed to update advance status');
+      throw err;
+    }
+  };
+
+  const approveAdvance = async (id: string) => {
+    try {
+      const response = await axiosInstance.patch(`/advance/${id}/approve`);
+      toast.success('Advance approved');
+      revalidateAdvanceEndpoints();
+      return response.data;
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      toast.error(error.response?.data?.message || 'Failed to approve advance');
+      throw err;
+    }
+  };
+
+  const rejectAdvance = async (id: string) => {
+    try {
+      const response = await axiosInstance.patch(`/advance/${id}/reject`);
+      toast.success('Advance rejected');
+      revalidateAdvanceEndpoints();
+      return response.data;
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      toast.error(error.response?.data?.message || 'Failed to reject advance');
+      throw err;
+    }
+  };
+
   return {
     advances,
     isLoading,
@@ -123,5 +165,8 @@ export function useAdvance() {
     createAdvance,
     createRepayment,
     getRepayments,
+    updateAdvanceStatus,
+    approveAdvance,
+    rejectAdvance,
   };
 }

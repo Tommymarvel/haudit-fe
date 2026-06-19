@@ -15,7 +15,7 @@ import Modal from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { StatusPill } from '@/components/ui/StatusPill';
 
-const CategoryDisplay: Record<string, string> = {
+const AdvanceTypeDisplay: Record<string, string> = {
   marketting: 'Marketing',
   production: 'Production',
   personal: 'Personal',
@@ -27,7 +27,7 @@ type SoloExpenseRow = {
   id: string;
   docId: string;
   date: string;
-  category: string;
+  advanceType: string;
   amount: number;
   currency: string;
   description: string;
@@ -54,7 +54,7 @@ function normalizeDetailStatus(value?: string): SoloExpenseRow['detailStatus'] {
 const SoloArtistExpenses = () => {
   const { expenses, trend, createExpense } = useExpenses();
   const [q, setQ] = useState('');
-  const [category, setCategory] = useState('All Categories');
+  const [advanceTypeFilter, setAdvanceTypeFilter] = useState('all');
   const [openAdd, setOpenAdd] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<SoloExpenseRow | null>(null);
   const [page, setPage] = useState(1);
@@ -68,7 +68,7 @@ const SoloArtistExpenses = () => {
         date: new Date(item.expense_date || item.createdAt)
           .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
           .replace(/ /g, '-'),
-        category: CategoryDisplay[item.category] || item.category || '-',
+        advanceType: AdvanceTypeDisplay[(item as { advance_type?: string }).advance_type || item.category || ''] || (item as { advance_type?: string }).advance_type || item.category || '-',
         amount: Number(item.amount ?? 0),
         currency: (item.currency || 'USD').toUpperCase(),
         description: item.description || '',
@@ -83,13 +83,13 @@ const SoloArtistExpenses = () => {
     () =>
       rows.filter(
         (r) =>
-          (category === 'All Categories' || r.category === category) &&
+          (advanceTypeFilter === 'all' || r.advanceType.toLowerCase() === advanceTypeFilter) &&
           (q === '' ||
             r.id.toLowerCase().includes(q.toLowerCase()) ||
-            r.category.toLowerCase().includes(q.toLowerCase()) ||
+            r.advanceType.toLowerCase().includes(q.toLowerCase()) ||
             r.description.toLowerCase().includes(q.toLowerCase()))
       ),
-    [q, category, rows]
+    [q, advanceTypeFilter, rows]
   );
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -188,45 +188,13 @@ const SoloArtistExpenses = () => {
               />
             </div>
             <Select
-              value={category}
-              onChange={setCategory}
+              value={advanceTypeFilter}
+              onChange={setAdvanceTypeFilter}
               className="w-[200px]"
               options={[
-                { label: 'All Categories', value: 'All Categories' },
-                { label: 'Marketing', value: 'marketting' },
-                { label: 'Production', value: 'production' },
+                { label: 'All types', value: 'all' },
                 { label: 'Personal', value: 'personal' },
-                { label: 'Recording costs', value: 'Recording costs' },
-                { label: 'Production costs', value: 'Production costs' },
-                { label: 'Mixing & mastering', value: 'Mixing & mastering' },
-                { label: 'Marketing spend', value: 'Marketing spend' },
-                { label: 'Promotion spend', value: 'Promotion spend' },
-                { label: 'Digital ads', value: 'Digital ads' },
-                { label: 'Radio', value: 'Radio' },
-                { label: 'PR & media runs', value: 'PR & media runs' },
-                { label: 'Content creation', value: 'Content creation' },
-                { label: 'Music video production', value: 'Music video production' },
-                { label: 'Artwork/Design', value: 'Artwork/Design' },
-                { label: 'Distribution', value: 'Distribution' },
-                { label: 'Management fees', value: 'Management fees' },
-                { label: 'Legal fees', value: 'Legal fees' },
-                { label: 'Travel & logistics', value: 'Travel & logistics' },
-                { label: 'Accommodation', value: 'Accommodation' },
-                { label: 'Show/tour costs', value: 'Show/tour costs' },
-                { label: 'Styling', value: 'Styling' },
-                { label: 'Photography', value: 'Photography' },
-                { label: 'Social media management', value: 'Social media management' },
-                { label: 'Branding', value: 'Branding' },
-                { label: 'Equipment', value: 'Equipment' },
-                { label: 'Miscellaneous', value: 'Miscellaneous' },
-                { label: 'Food & Entertainment', value: 'Food & Entertainment' },
-                { label: 'Accounting services fees', value: 'Accounting services fees' },
-                { label: 'Marketing services fees', value: 'Marketing services fees' },
-                { label: 'Agency fees', value: 'Agency fees' },
-                { label: 'Health', value: 'Health' },
-                { label: 'Insurance Fees', value: 'Insurance Fees' },
-                { label: 'Cash at Hand', value: 'Cash at Hand' },
-                { label: 'Others', value: 'others' },
+                { label: 'Marketing', value: 'marketting' },
               ]}
             />
           </div>
@@ -237,7 +205,7 @@ const SoloArtistExpenses = () => {
                 <tr>
                   <th className="py-3 pl-3 pr-4 whitespace-nowrap">ID</th>
                   <th className="py-3 pr-4 whitespace-nowrap">Date</th>
-                  <th className="py-3 pr-4 whitespace-nowrap">Category</th>
+                  <th className="py-3 pr-4 whitespace-nowrap">Advance Type</th>
                   <th className="py-3 pr-4 whitespace-nowrap">Amount</th>
                   <th className="py-3 pr-4 whitespace-nowrap">Description</th>
                   <th className="py-3 pr-3 whitespace-nowrap">Receipt</th>
@@ -262,7 +230,7 @@ const SoloArtistExpenses = () => {
                     <tr key={r.id || i} className="text-neutral-800">
                       <td className="py-3 pl-3 pr-4 whitespace-nowrap max-w-[120px] truncate" title={r.id}>{r.id}</td>
                       <td className="py-3 pr-4 whitespace-nowrap">{r.date}</td>
-                      <td className="py-3 pr-4 whitespace-nowrap">{r.category}</td>
+                      <td className="py-3 pr-4 capitalize whitespace-nowrap">{r.advanceType === 'marketting' ? 'Marketing' : r.advanceType}</td>
                       <td className="py-3 pr-4 whitespace-nowrap">
                         {formatCurrencyAmount(r.amount, r.currency)}
                       </td>
@@ -307,7 +275,7 @@ const SoloArtistExpenses = () => {
 
             await createExpense({
               expense_date: payload.expense_date,
-              category: payload.category,
+              advance_type: payload.advance_type,
               currency: payload.currency,
               amount: payload.amount,
               description: payload.description,
@@ -361,8 +329,8 @@ const SoloArtistExpenses = () => {
                 <div className="grid grid-cols-[16px_1fr] items-start gap-2">
                   <span className="mt-0.5 text-[#8E8E8E]"><FileText className="h-3.5 w-3.5" /></span>
                   <div className="flex items-start justify-between gap-3">
-                    <span className="text-[14px] text-[#777777]">Category</span>
-                    <span className="text-[14px] font-medium text-[#2F2F2F]">{selectedExpense.category}</span>
+                    <span className="text-[14px] text-[#777777]">Advance Type</span>
+                    <span className="text-[14px] font-medium text-[#2F2F2F]">{selectedExpense.advanceType === 'marketting' ? 'Marketing' : selectedExpense.advanceType}</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-[16px_1fr] items-start gap-2">

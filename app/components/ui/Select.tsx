@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Search } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { createPortal } from 'react-dom';
 
@@ -20,6 +20,7 @@ type SelectProps = {
   className?: string;
   menuClassName?: string;
   optionClassName?: string;
+  searchable?: boolean;
 };
 
 export function Select({
@@ -31,12 +32,15 @@ export function Select({
   className,
   menuClassName,
   optionClassName,
+  searchable = false,
 }: SelectProps) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const [searchQuery, setSearchQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const listboxId = useId();
 
   const selectedOption = useMemo(
@@ -112,6 +116,21 @@ export function Select({
     }
   }, [disabled, open]);
 
+  useEffect(() => {
+    if (open && searchable) {
+      setTimeout(() => searchRef.current?.focus(), 0);
+    }
+    if (!open) {
+      setSearchQuery('');
+    }
+  }, [open, searchable]);
+
+  const filteredOptions = useMemo(() => {
+    if (!searchable || !searchQuery.trim()) return options;
+    const q = searchQuery.trim().toLowerCase();
+    return options.filter((o) => o.label.toLowerCase().includes(q));
+  }, [options, searchQuery, searchable]);
+
   const dropdown = (
     <div
       ref={menuRef}
@@ -119,11 +138,28 @@ export function Select({
       role="listbox"
       style={menuStyle}
       className={cn(
-        'mt-1 max-h-60 overflow-auto rounded-xl border border-neutral-200 bg-white py-1 shadow-lg',
+        'mt-1 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg',
         menuClassName,
       )}
     >
-      {options.map((option) => {
+      {searchable && (
+        <div className="sticky top-0 flex items-center gap-2 border-b border-neutral-100 bg-white px-3 py-2">
+          <Search className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+          <input
+            ref={searchRef}
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search..."
+            className="w-full bg-transparent text-sm outline-none placeholder:text-neutral-400"
+            onKeyDown={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+      <div className="max-h-52 overflow-auto py-1">
+      {filteredOptions.length === 0 ? (
+        <p className="px-3 py-2 text-sm text-neutral-400">No results</p>
+      ) : filteredOptions.map((option) => {
         const isSelected = option.value === value;
         return (
           <button
@@ -151,6 +187,7 @@ export function Select({
           </button>
         );
       })}
+      </div>
     </div>
   );
 

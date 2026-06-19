@@ -5,10 +5,16 @@ import Image from 'next/image';
 import {
   ArrowLeft,
   CalendarDays,
+  ChevronDown,
   ChevronsUpDown,
+  CircleDollarSign,
+  Info,
+  Loader2,
   MoreVertical,
   Music2,
-  UploadCloud,
+  Receipt,
+  RefreshCcw,
+  TrendingUp,
   UserRound,
 } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -20,6 +26,7 @@ import { TagInput } from '@/components/ui/TagInput';
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAdvance } from '@/hooks/useAdvance';
+import { useExpenses } from '@/hooks/useExpenses';
 import { useRecordLabelArtists } from '@/hooks/useRecordLabelArtists';
 import { useRoyalty } from '@/hooks/useRoyalty';
 import { Advance } from '@/lib/types/advance';
@@ -27,6 +34,8 @@ import type { RecordLabelArtist } from '@/lib/types/record-label';
 import { getRecordLabelArtistName } from '@/lib/utils/recordLabelArtist';
 import { toast } from 'react-toastify';
 import axiosInstance from '@/lib/axiosinstance';
+import { uploadFile } from '@/lib/utils/upload';
+import AddExpensesModal from '../expenses/AddExpensesModal';
 
 type ArtistRow = {
   id: string;
@@ -50,16 +59,11 @@ type AddArtistPayload = {
   accountNumber: string;
   bank: string;
   accountName: string;
+  personalAmount: string;
+  personalCurrency: string;
+  marketingAmount: string;
+  marketingCurrency: string;
 };
-
-const BANK_OPTIONS = [
-  'Select your bank',
-  'Access Bank',
-  'GTBank',
-  'First Bank',
-  'Zenith Bank',
-  'UBA',
-];
 
 const ARTISTS_PAGE_SIZE = 8;
 
@@ -109,7 +113,6 @@ function formatDateAdded(value?: string) {
   return parsed.toLocaleDateString('en-GB');
 }
 
-const normalizeName = (value: string) => value.trim().toLowerCase();
 const normalizeArtistStatus = (value?: string): ArtistStatus => {
   const normalized = (value || '').trim().toLowerCase();
   if (normalized === 'inactive') return 'inactive';
@@ -187,11 +190,61 @@ function AddArtistModal({
     otherNames: [],
     phone: '',
     accountNumber: '',
-    bank: BANK_OPTIONS[0],
+    bank: '',
     accountName: '',
+    personalAmount: '',
+    personalCurrency: 'USD',
+    marketingAmount: '',
+    marketingCurrency: 'USD',
   });
+  const [bankCode, setBankCode] = useState('');
+  const [banks, setBanks] = useState<{ label: string; value: string; code: string }[]>([]);
+  const [verifying, setVerifying] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emailError, setEmailError] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    axiosInstance
+      .get('/payments/listbanks', { params: { currency: 'NGN' } })
+      .then((res) => {
+        const raw = res.data;
+        const list: Array<{ name: string; code: string }> = Array.isArray(raw)
+          ? raw
+          : Array.isArray(raw?.result)
+            ? raw.result
+            : Array.isArray(raw?.data)
+              ? raw.data
+              : [];
+        setBanks(list.map((b) => ({ label: b.name, value: b.name, code: b.code })));
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (form.accountNumber.length !== 10 || !bankCode) return;
+
+    debounceRef.current = setTimeout(async () => {
+      setVerifying(true);
+      try {
+        const res = await axiosInstance.get('/payments/validateacc', {
+          params: { acc_no: form.accountNumber, bank_code: bankCode, currency: 'NGN' },
+        });
+        const raw = res.data;
+        const name: string = raw?.result?.account_name ?? raw?.account_name ?? '';
+        setForm((prev) => ({ ...prev, accountName: name }));
+      } catch {
+        setForm((prev) => ({ ...prev, accountName: '' }));
+      } finally {
+        setVerifying(false);
+      }
+    }, 600);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [form.accountNumber, bankCode]);
 
   const isValidEmail = (value: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -202,7 +255,7 @@ function AddArtistModal({
     isValidEmail(form.email) &&
     form.phone.trim() !== '' &&
     form.accountNumber.trim() !== '' &&
-    form.bank !== BANK_OPTIONS[0] &&
+    form.bank.trim() !== '' &&
     form.accountName.trim() !== '';
 
   const handleChange = (key: keyof AddArtistPayload, value: string) => {
@@ -221,9 +274,14 @@ function AddArtistModal({
         otherNames: [],
         phone: '',
         accountNumber: '',
-        bank: BANK_OPTIONS[0],
+        bank: '',
         accountName: '',
+        personalAmount: '',
+        personalCurrency: 'USD',
+        marketingAmount: '',
+        marketingCurrency: 'USD',
       });
+      setBankCode('');
     } finally {
       setIsSubmitting(false);
     }
@@ -237,7 +295,7 @@ function AddArtistModal({
             <Image src="/haudit-logo.svg" alt="Haudit" width={32} height={32} />
           </div>
           <h3 className="mt-2 text-[26px] font-semibold text-[#1F1F1F]">Onboard Artist</h3>
-          <p className="text-sm text-[#9A9A9A]">Fill in all necessary details to onboard</p>
+          <p className="text-sm text-[#9A9A9A]">Fill in all necessary details to onboard new artists.</p>
         </div>
 
         <div className="space-y-4">
@@ -273,8 +331,10 @@ function AddArtistModal({
               onChange={(next) => setForm((prev) => ({ ...prev, otherNames: next }))}
               placeholder="Enter artist other names"
             />
-            <div className="mt-2 rounded-full bg-[#FFF3D6] px-3 py-1 text-[11px] text-[#D39A16]">
-Include artist stage names, and any other AKAs and alias. For example (Wizkid, Starboy, Machala)            </div>
+            <div className="mt-2 flex items-start gap-2 rounded-lg bg-[#FFF3D6] px-3 py-2 text-[11px] text-[#D39A16]">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>Include artist stage names, and any other AKAs and alias. For example (Wizkid, Starboy, Machala)</span>
+            </div>
           </div>
 
           <div>
@@ -301,23 +361,77 @@ Include artist stage names, and any other AKAs and alias. For example (Wizkid, S
             <label className="mb-1.5 block text-sm font-medium text-[#5A5A5A]">Bank</label>
             <Select
               value={form.bank}
-              onChange={(value) => handleChange('bank', value)}
+              onChange={(value) => {
+                handleChange('bank', value);
+                const found = banks.find((b) => b.value === value);
+                setBankCode(found?.code ?? '');
+                handleChange('accountName', '');
+              }}
               className="h-11 rounded-xl border-[#B6B6B6] bg-white text-sm text-[#4A4A4A] focus:border-[#7B00D4] focus:ring-1 focus:ring-[#7B00D4]"
-              options={BANK_OPTIONS.map((option) => ({
-                label: option,
-                value: option,
-              }))}
+              options={banks}
+              placeholder={banks.length === 0 ? 'Loading banks...' : 'Select bank'}
+              disabled={banks.length === 0}
+              searchable
             />
           </div>
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-[#5A5A5A]">Account Name</label>
-            <input
-              value={form.accountName}
-              onChange={(event) => handleChange('accountName', event.target.value)}
-              placeholder="Enter your account name"
-              className="h-11 w-full rounded-xl border border-[#B6B6B6] px-3 text-sm outline-none focus:border-[#7B00D4]"
-            />
+            <div className="relative">
+              <input
+                value={form.accountName}
+                readOnly
+                placeholder={verifying ? 'Verifying...' : 'Auto-filled after verification'}
+                className="h-11 w-full rounded-xl border border-[#B6B6B6] bg-[#F5F5F5] px-3 pr-10 text-sm outline-none cursor-not-allowed"
+              />
+              {verifying && (
+                <Loader2 className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-neutral-400" />
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-[#5A5A5A]">Personal Advance (optional)</label>
+            <div className="flex h-11 w-full overflow-hidden rounded-xl border border-[#B6B6B6] focus-within:border-[#7B00D4]">
+              <select
+                value={form.personalCurrency}
+                onChange={(event) => handleChange('personalCurrency', event.target.value)}
+                className="border-r border-[#B6B6B6] bg-[#F9F9F9] px-3 text-sm text-[#4A4A4A] outline-none"
+              >
+                <option value="USD">USD</option>
+                <option value="NGN">NGN</option>
+              </select>
+              <input
+                value={form.personalAmount}
+                onChange={(event) => handleChange('personalAmount', event.target.value)}
+                placeholder="Enter amount"
+                type="number"
+                min="0"
+                className="h-full flex-1 bg-transparent px-3 text-sm outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-[#5A5A5A]">Marketing Advance (optional)</label>
+            <div className="flex h-11 w-full overflow-hidden rounded-xl border border-[#B6B6B6] focus-within:border-[#7B00D4]">
+              <select
+                value={form.marketingCurrency}
+                onChange={(event) => handleChange('marketingCurrency', event.target.value)}
+                className="border-r border-[#B6B6B6] bg-[#F9F9F9] px-3 text-sm text-[#4A4A4A] outline-none"
+              >
+                <option value="USD">USD</option>
+                <option value="NGN">NGN</option>
+              </select>
+              <input
+                value={form.marketingAmount}
+                onChange={(event) => handleChange('marketingAmount', event.target.value)}
+                placeholder="Enter amount"
+                type="number"
+                min="0"
+                className="h-full flex-1 bg-transparent px-3 text-sm outline-none"
+              />
+            </div>
           </div>
         </div>
 
@@ -356,54 +470,109 @@ function MetricCard({
   );
 }
 
-function ProfileFormRow({
+function EligibleAdvanceCard({
+  value,
   label,
-  required,
-  children,
-  helpText,
+  balanceValue,
+  balanceColor,
+  onBalance,
 }: {
+  value: string;
   label: string;
-  required?: boolean;
-  children: React.ReactNode;
-  helpText?: React.ReactNode;
+  balanceValue: string;
+  balanceColor: string;
+  onBalance: () => void;
 }) {
   return (
-    <div className="grid gap-4 border-b border-neutral-200 py-5 last:border-0 md:grid-cols-[260px_1fr]">
-      <div>
-        <label className="block text-sm font-semibold text-[#414651]">
-          {label} {required && <span className="text-[#7F56D9]">*</span>}
-        </label>
-        {helpText && <div className="mt-1 text-sm text-[#535862]">{helpText}</div>}
-      </div>
-      <div className="max-w-[500px]">{children}</div>
+    <div className="rounded-xl border border-[#D5D5D5] bg-white p-4">
+      <p className="text-[26px] font-semibold leading-none text-[#3C3C3C]">{value}</p>
+      <p className="mt-1 text-xs text-[#8B8B8B]">{label}</p>
+      <button
+        type="button"
+        onClick={onBalance}
+        style={{ color: balanceColor }}
+        className="mt-3 text-xs font-medium underline-offset-2 hover:underline"
+      >
+        Balance Advance: {balanceValue}
+      </button>
     </div>
   );
 }
 
-function ProfileInput({
-  value,
-  placeholder,
-  type = 'text',
-  onChange,
+function UpdateEligibleAdvanceModal({
+  open,
+  onClose,
+  type,
+  artistId,
 }: {
-  value: string;
-  placeholder: string;
-  type?: string;
-  onChange: (value: string) => void;
+  open: boolean;
+  onClose: () => void;
+  type: 'personal' | 'marketing';
+  artistId: string;
 }) {
+  const [amount, setAmount] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleClose = () => {
+    setAmount('');
+    onClose();
+  };
+
+  const handleSubmit = async () => {
+    if (!amount.trim() || !artistId || isSubmitting) return;
+    const parsed = parseFloat(amount);
+    if (!Number.isFinite(parsed) || parsed <= 0) return;
+    try {
+      setIsSubmitting(true);
+      const field = type === 'personal' ? 'eligible_personal_advance' : 'eligible_marketing_advance';
+      await axiosInstance.patch(`/record-label/artists/${artistId}`, { [field]: parsed });
+      toast.success(`Eligible ${type} advance updated`);
+      handleClose();
+    } catch (err) {
+      const error = err as { response?: { data?: { message?: string } } };
+      toast.error(error.response?.data?.message || 'Failed to update advance limit');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <div className="relative">
-      <input
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-lg border border-neutral-300 bg-white py-2.5 pl-3 pr-10 text-sm text-neutral-900 placeholder:text-neutral-500 outline-none focus:border-[#7B00D4] focus:ring-1 focus:ring-[#7B00D4]"
-      />
-      <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400">
-        <Image src="/svgs/edit-pencil.svg" alt="Edit" width={20} height={20} />
+    <Modal open={open} onClose={handleClose} headerVariant="none" closeVariant="island" size="md">
+      <div className="px-6 py-7">
+        <div className="mb-6 text-center">
+          <div className="flex justify-center">
+            <Image src="/haudit-logo.svg" alt="Haudit" width={32} height={32} />
+          </div>
+          <h3 className="mt-2 text-[22px] font-semibold text-[#1F1F1F]">
+            Update Eligible {type === 'personal' ? 'Personal' : 'Marketing'} Advance
+          </h3>
+          <p className="text-sm text-[#9A9A9A]">
+            Set the maximum {type} advance limit for this artist
+          </p>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-[#5A5A5A]">Amount (USD)</label>
+          <input
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            type="number"
+            min="0"
+            placeholder="Enter amount"
+            className="h-11 w-full rounded-xl border border-[#B6B6B6] px-3 text-sm outline-none focus:border-[#7B00D4]"
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={!amount.trim() || isSubmitting}
+          className="mt-6 h-10 w-full rounded-xl bg-[#7B00D4] text-sm font-medium text-white transition hover:bg-[#6900B5] disabled:cursor-not-allowed disabled:bg-[#B5B5B5]"
+        >
+          {isSubmitting ? 'Updating...' : 'Update'}
+        </button>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -411,6 +580,7 @@ export default function RecordLabelArtists() {
   const { user } = useAuth();
   const { dashboardMetrics, albumPerformance, albumRevenue } = useRoyalty();
   const { advances = [], overview } = useAdvance();
+  const { expenses = [] } = useExpenses();
   const {
     artists: artistsResponse,
     isLoading: artistsLoading,
@@ -424,24 +594,24 @@ export default function RecordLabelArtists() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const menuRootRef = useRef<HTMLDivElement | null>(null);
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
   const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; placement: 'up' | 'down' } | null>(null);
 
   const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const [openAddArtist, setOpenAddArtist] = useState(false);
+  const [openPersonalAdvanceModal, setOpenPersonalAdvanceModal] = useState(false);
+  const [openMarketingAdvanceModal, setOpenMarketingAdvanceModal] = useState(false);
+  const [openRecordExpense, setOpenRecordExpense] = useState(false);
+  const [profileMoreOpen, setProfileMoreOpen] = useState(false);
+  const [expenseSearch, setExpenseSearch] = useState('');
+  const [expenseLoggedBy, setExpenseLoggedBy] = useState('all');
+  const [expenseCategoryFilter, setExpenseCategoryFilter] = useState('all');
   const [menuOpenForId, setMenuOpenForId] = useState<string | null>(null);
   const [pendingArtistActionId, setPendingArtistActionId] = useState<string | null>(null);
   const [nameSortDirection, setNameSortDirection] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<'all' | ArtistStatus>('all');
-  const [profileOtherNames, setProfileOtherNames] = useState<string[]>([]);
-  const [profileForm, setProfileForm] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-  });
-  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
 
   const artists = useMemo(
     () => artistsResponse.map((artist, index) => mapArtistRow(artist, index)),
@@ -537,13 +707,26 @@ export default function RecordLabelArtists() {
     };
   }, [menuOpenForId, menuAnchorEl]);
 
+  useEffect(() => {
+    if (!profileMoreOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setProfileMoreOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [profileMoreOpen]);
+
   const selectedArtistId = (searchParams.get('artistId') || searchParams.get('id') || '').trim();
   const selectedViewParam = searchParams.get('view');
   const activeView: ArtistView = !selectedArtistId
     ? 'list'
-    : selectedViewParam === 'profile'
-      ? 'profile'
-      : 'performance';
+    : selectedViewParam === 'performance'
+      ? 'performance'
+      : selectedViewParam === 'profile'
+        ? 'profile'
+        : 'list';
 
   const activeArtist = useMemo(
     () =>
@@ -564,18 +747,71 @@ export default function RecordLabelArtists() {
     [artistsResponse, selectedArtistId],
   );
 
-  const selectedArtistNameEntries = useMemo(() => {
+  const eligiblePersonal = useMemo(
+    () => advances
+      .filter((a) => (a.status === 'approved') && (a.advance_type === 'personal'))
+      .reduce((s, a) => s + Number(a.amount || 0), 0),
+    [advances],
+  );
+  const eligibleMarketing = useMemo(
+    () => advances
+      .filter((a) => (a.status === 'approved') && (a.advance_type === 'marketting'))
+      .reduce((s, a) => s + Number(a.amount || 0), 0),
+    [advances],
+  );
+  const balancePersonal = useMemo(
+    () => advances
+      .filter((a) => (a.status === 'approved') && (a.advance_type === 'personal') && (a.repayment_status !== 'repaid'))
+      .reduce((s, a) => s + Number(a.amount || 0), 0),
+    [advances],
+  );
+  const balanceMarketing = useMemo(
+    () => advances
+      .filter((a) => (a.status === 'approved') && (a.advance_type === 'marketting') && (a.repayment_status !== 'repaid'))
+      .reduce((s, a) => s + Number(a.amount || 0), 0),
+    [advances],
+  );
+
+  const totalExpenses = useMemo(
+    () => (expenses ?? []).reduce((sum, e) => sum + Number(e.amount ?? 0), 0),
+    [expenses],
+  );
+
+  const artistInitials = activeArtist.name
+    .split(' ')
+    .map((p) => p[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
+  const artistOtherNames = useMemo(() => {
     const namesField = selectedArtistRecord?.names;
-    if (!namesField) return [] as Array<{ _id?: string; name: string; name_type?: string }>;
+    if (!namesField) return '';
     const entries = Array.isArray(namesField) ? namesField : [namesField];
     return entries
-      .filter((entry) => !!entry && typeof entry.name === 'string')
-      .map((entry) => ({
-        _id: entry._id,
-        name: (entry.name || '').trim(),
-        name_type: entry.name_type,
-      }));
+      .filter((e) => e?.name_type === 'other_names' && e?.name)
+      .map((e) => e.name)
+      .join(', ');
   }, [selectedArtistRecord]);
+
+  const filteredProfileExpenses = useMemo(() => {
+    return (expenses ?? []).filter((expense) => {
+      const expRecord = expense as unknown as Record<string, unknown>;
+      if (expenseSearch) {
+        const searchLower = expenseSearch.toLowerCase();
+        const ref = String(expense.ref_id || expense._id || '').toLowerCase();
+        const category = String(expense.category || '').toLowerCase();
+        if (!ref.includes(searchLower) && !category.includes(searchLower)) return false;
+      }
+      if (expenseLoggedBy !== 'all') {
+        const loggedBy = String(expRecord.logged_by || '').toLowerCase();
+        if (expenseLoggedBy === 'admin' && loggedBy !== 'admin') return false;
+        if (expenseLoggedBy === 'user' && loggedBy === 'admin') return false;
+      }
+      if (expenseCategoryFilter !== 'all' && expense.category !== expenseCategoryFilter) return false;
+      return true;
+    });
+  }, [expenses, expenseSearch, expenseLoggedBy, expenseCategoryFilter]);
 
   const chartTrackRevenueData = useMemo(
     () =>
@@ -665,16 +901,6 @@ export default function RecordLabelArtists() {
   );
 
   const goToArtistView = (artistId: string, view: Exclude<ArtistView, 'list'>) => {
-    if (view === 'profile') {
-      const params = new URLSearchParams();
-      params.set('artistId', artistId);
-      router.replace(`/settings?${params.toString()}`, { scroll: false });
-      setMenuOpenForId(null);
-      setMenuAnchorEl(null);
-      setMenuPosition(null);
-      return;
-    }
-
     const href = addArtistQueryState(pathname, new URLSearchParams(searchParams.toString()), artistId, view);
     router.replace(href, { scroll: false });
     setMenuOpenForId(null);
@@ -689,13 +915,6 @@ export default function RecordLabelArtists() {
     setMenuAnchorEl(null);
     setMenuPosition(null);
   };
-
-  useEffect(() => {
-    if (activeView !== 'profile' || !selectedArtistId) return;
-    router.replace(`/settings?artistId=${encodeURIComponent(selectedArtistId)}`, {
-      scroll: false,
-    });
-  }, [activeView, selectedArtistId, router]);
 
   const handleDeactivateOrActivateArtist = async (artist: ArtistRow) => {
     try {
@@ -750,189 +969,15 @@ export default function RecordLabelArtists() {
       bank: payload.bank,
       acc_no: payload.accountNumber.trim(),
       acc_name: payload.accountName.trim(),
+      ...(payload.personalAmount.trim() && {
+        personal_advance: { amount: Number(payload.personalAmount), currency: payload.personalCurrency as 'USD' | 'NGN' },
+      }),
+      ...(payload.marketingAmount.trim() && {
+        marketing_advance: { amount: Number(payload.marketingAmount), currency: payload.marketingCurrency as 'USD' | 'NGN' },
+      }),
     });
   };
 
-  useEffect(() => {
-    if (activeView !== 'profile') return;
-
-    const recordName = (selectedArtistRecord?.name || '').trim();
-    const nameFromSelection = recordName || activeArtist.name?.trim() || '';
-    const [fallbackFirstName = '', ...fallbackLastName] = nameFromSelection.split(/\s+/).filter(Boolean);
-
-    const firstNameFromEntry =
-      selectedArtistNameEntries.find((entry) => entry.name_type === 'first_name')?.name || '';
-    const lastNameFromEntry =
-      selectedArtistNameEntries.find((entry) => entry.name_type === 'last_name')?.name || '';
-    const otherNamesFromEntry = selectedArtistNameEntries
-      .filter((entry) => entry.name_type === 'other_names')
-      .map((entry) => entry.name)
-      .filter(Boolean);
-
-    setProfileForm({
-      firstName: firstNameFromEntry || fallbackFirstName || '',
-      lastName: lastNameFromEntry || fallbackLastName.join(' ') || '',
-      email:
-        (selectedArtistRecord?.email || '').trim() ||
-        (activeArtist.email && activeArtist.email !== '--' ? activeArtist.email : ''),
-      phone:
-        (selectedArtistRecord?.phn_no || '').trim() ||
-        (activeArtist.phone && activeArtist.phone !== '--' ? activeArtist.phone : ''),
-    });
-
-    setProfileOtherNames(Array.from(new Set(otherNamesFromEntry)));
-  }, [activeArtist, activeView, selectedArtistNameEntries, selectedArtistRecord]);
-
-  const handleUpdateProfile = async () => {
-    if (isUpdatingProfile) return;
-
-    if (!selectedArtistId) {
-      toast.error('Please select an artist to update');
-      return;
-    }
-
-    const fallbackName = (selectedArtistRecord?.name || activeArtist.name || '').trim();
-    const [fallbackFirst = '', ...fallbackLast] = fallbackName.split(/\s+/).filter(Boolean);
-
-    const emailLocal = profileForm.email.trim().split('@')[0]?.trim() || '';
-    const firstName = profileForm.firstName.trim() || fallbackFirst || emailLocal || 'Artist';
-    const lastName = profileForm.lastName.trim() || fallbackLast.join(' ');
-    const email = profileForm.email.trim();
-    const phone = profileForm.phone.trim();
-
-    try {
-      setIsUpdatingProfile(true);
-
-      const artistProfilePayload: { email?: string; phn_no?: string } = {};
-      if (email) artistProfilePayload.email = email;
-      if (phone) artistProfilePayload.phn_no = phone;
-
-      if (Object.keys(artistProfilePayload).length > 0) {
-        await axiosInstance.patch(`/record-label/artists/${selectedArtistId}`, artistProfilePayload);
-      }
-
-      const desiredOtherNames = Array.from(
-        new Set(profileOtherNames.map((name) => name.trim()).filter(Boolean)),
-      );
-      const existingOtherNameEntries = selectedArtistNameEntries.filter(
-        (entry) => entry.name_type === 'other_names',
-      );
-
-      const existingFirstNameEntry = selectedArtistNameEntries.find(
-        (entry) => entry.name_type === 'first_name',
-      );
-      const existingLastNameEntry = selectedArtistNameEntries.find(
-        (entry) => entry.name_type === 'last_name',
-      );
-
-      const existingByNormalized = new Map(
-        existingOtherNameEntries.map((entry) => [normalizeName(entry.name), entry]),
-      );
-      const desiredByNormalized = new Map<string, string>();
-      desiredOtherNames.forEach((name) => {
-        const normalized = normalizeName(name);
-        if (!desiredByNormalized.has(normalized)) desiredByNormalized.set(normalized, name);
-      });
-
-      const requests: Promise<unknown>[] = [];
-
-      if (existingFirstNameEntry?._id) {
-        if (existingFirstNameEntry.name !== firstName) {
-          requests.push(
-            axiosInstance.patch(
-              `/auth/user-names/${existingFirstNameEntry._id}`,
-              {
-                name: firstName,
-                name_type: 'first_name',
-              },
-              { params: { artistId: selectedArtistId } },
-            ),
-          );
-        }
-      } else if (firstName) {
-        requests.push(
-          axiosInstance.post(
-            '/auth/user-names',
-            {
-              names: [firstName],
-              name_type: 'first_name',
-            },
-            { params: { artistId: selectedArtistId } },
-          ),
-        );
-      }
-
-      if (existingLastNameEntry?._id) {
-        if (existingLastNameEntry.name !== lastName) {
-          requests.push(
-            axiosInstance.patch(
-              `/auth/user-names/${existingLastNameEntry._id}`,
-              {
-                name: lastName,
-                name_type: 'last_name',
-              },
-              { params: { artistId: selectedArtistId } },
-            ),
-          );
-        }
-      } else if (lastName) {
-        requests.push(
-          axiosInstance.post(
-            '/auth/user-names',
-            {
-              names: [lastName],
-              name_type: 'last_name',
-            },
-            { params: { artistId: selectedArtistId } },
-          ),
-        );
-      }
-
-      existingOtherNameEntries.forEach((entry) => {
-        const normalized = normalizeName(entry.name);
-        if (!desiredByNormalized.has(normalized)) {
-          requests.push(axiosInstance.delete(`/auth/user-names/${entry._id}`));
-        }
-      });
-      desiredByNormalized.forEach((name, normalized) => {
-        const existing = existingByNormalized.get(normalized);
-        if (!existing) {
-          requests.push(
-            axiosInstance.post(
-              '/auth/user-names',
-              {
-                names: [name],
-                name_type: 'other_names',
-              },
-              { params: { artistId: selectedArtistId } },
-            ),
-          );
-          return;
-        }
-
-        if (existing._id && existing.name !== name) {
-          requests.push(
-            axiosInstance.patch(
-              `/auth/user-names/${existing._id}`,
-              {
-                name,
-                name_type: 'other_names',
-              },
-              { params: { artistId: selectedArtistId } },
-            ),
-          );
-        }
-      });
-
-      await Promise.all(requests);
-      toast.success('Profile updated successfully');
-    } catch (error) {
-      const err = error as { response?: { data?: { message?: string } } };
-      toast.error(err.response?.data?.message || 'Failed to update profile');
-    } finally {
-      setIsUpdatingProfile(false);
-    }
-  };
 
   return (
     <div className="pb-6">
@@ -1121,16 +1166,6 @@ export default function RecordLabelArtists() {
               >
                 View performance
               </button>
-              {openedMenuArtist.status !== 'archived' && (
-                <button
-                  type="button"
-                  onClick={() => handleDeactivateOrActivateArtist(openedMenuArtist)}
-                  disabled={pendingArtistActionId === openedMenuArtist.id}
-                  className="block w-full px-3 py-2 text-left hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {openedMenuArtist.status === 'inactive' ? 'Activate artist' : 'Deactivate artist'}
-                </button>
-              )}
               <button
                 type="button"
                 onClick={() => handleArchiveOrUnarchiveArtist(openedMenuArtist)}
@@ -1239,164 +1274,297 @@ export default function RecordLabelArtists() {
         </div>
       )}
 
+      {/* ── Artist Profile / Details View ── */}
       {activeView === 'profile' && (
-        <div className="mt-4 px-1 pb-8">
-          <button
-            type="button"
-            onClick={goBackToArtistList}
-            className="inline-flex items-center gap-2 text-left"
-          >
-            <ArrowLeft className="h-5 w-5 text-[#3C3C3C]" />
-            <div>
-              <h2 className="text-2xl font-medium leading-none text-[#3C3C3C]">Artist Profile</h2>
-              <p className="mt-1 text-sm text-[#8A8A8A]">
-                Here you can update artist personal information.
-              </p>
-            </div>
-          </button>
-
-          <div className="mt-[30px]">
-            <div className="mb-8">
-              <div className="mb-5 flex items-center justify-between border-b border-neutral-200 pb-5">
-                <div>
-                  <h2 className="text-[18px] font-semibold text-[#181D27]">Personal Info</h2>
-                  <p className="text-sm text-[#535862]">
-                    Update artist profile photo and the names displayed on this account.
-                  </p>
-                </div>
+        <div className="mt-4 space-y-4">
+          {/* Header */}
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <button
+              type="button"
+              onClick={goBackToArtistList}
+              className="inline-flex items-center gap-2 text-left"
+            >
+              <ArrowLeft className="h-5 w-5 text-[#3C3C3C]" />
+              <div>
+                <h2 className="text-2xl font-medium text-[#3C3C3C]">Artist Details</h2>
+                <p className="text-sm text-[#8A8A8A]">Manage artist information, finances, and activity</p>
               </div>
+            </button>
 
-              <div className="space-y-2">
-                <ProfileFormRow
-                  label="Your photo"
-                  required
-                  helpText="This will be displayed on your profile."
+            <div className="flex flex-wrap items-center gap-2">
+              <YearFilterCalendar
+                value={selectedYear}
+                onChange={setSelectedYear}
+                showYear
+                align="right"
+                buttonClassName="h-9 rounded-full border border-[#DFDFDF] bg-white px-4 text-sm font-medium text-[#5A5A5A]"
+              />
+              <button
+                type="button"
+                onClick={() => setOpenRecordExpense(true)}
+                className="h-9 rounded-full bg-[#7B00D4] px-5 text-sm font-medium text-white transition hover:bg-[#6900B5]"
+              >
+                Record Expense
+              </button>
+              <div ref={moreMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setProfileMoreOpen((v) => !v)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[#DFDFDF] bg-white px-4 text-sm font-medium text-[#3C3C3C] hover:bg-[#F8F8F8]"
                 >
-                  <div className="flex items-start gap-6">
-                    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-neutral-200 ring-2 ring-white shadow-sm">
-                      <div className="grid h-full w-full place-items-center text-sm font-semibold text-[#5A5A5A]">
-                        {activeArtist.name
-                          .split(' ')
-                          .map((piece) => piece[0])
-                          .join('')
-                          .slice(0, 2)
-                          .toUpperCase()}
-                      </div>
-                    </div>
-
+                  More <ChevronDown className="h-4 w-4 text-[#8A8A8A]" />
+                </button>
+                {profileMoreOpen && (
+                  <div className="absolute right-0 top-full z-30 mt-1 w-52 overflow-hidden rounded-xl border border-[#EFEFEF] bg-white py-1 shadow-lg">
                     <button
                       type="button"
-                      className="flex h-[120px] w-full max-w-[500px] items-center justify-center rounded-xl border border-[#7B00D4] bg-white px-4 text-center hover:bg-neutral-50"
+                      onClick={() => { setProfileMoreOpen(false); goToArtistView(selectedArtistId, 'performance'); }}
+                      className="block w-full px-4 py-2.5 text-left text-sm text-[#3C3C3C] hover:bg-[#F8F8F8]"
                     >
-                      <div className="space-y-1">
-                        <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-600 shadow-sm">
-                          <UploadCloud className="h-5 w-5" />
-                        </div>
-                        <p className="text-sm">
-                          <span className="font-semibold text-[#7B00D4]">Click to upload</span>{' '}
-                          <span className="text-neutral-600">or drag and drop</span>
-                        </p>
-                        <p className="text-xs text-neutral-500">SVG, PNG, JPG or GIF (max. 800x400px)</p>
-                      </div>
+                      View performance
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setProfileMoreOpen(false); handleArchiveOrUnarchiveArtist(activeArtist); }}
+                      className="block w-full px-4 py-2.5 text-left text-sm text-[#3C3C3C] hover:bg-[#F8F8F8]"
+                    >
+                      {activeArtist.status === 'archived' ? 'Unarchive artist' : 'Archive artist'}
                     </button>
                   </div>
-                </ProfileFormRow>
+                )}
+              </div>
+            </div>
+          </div>
 
-                <ProfileFormRow label="First name" required>
-                  <ProfileInput
-                    value={profileForm.firstName}
-                    onChange={(value) =>
-                      setProfileForm((prev) => ({ ...prev, firstName: value }))
-                    }
-                    placeholder="Enter artist first name"
-                  />
-                </ProfileFormRow>
+          {/* Artist info card — grey bg, rectangular photo, horizontal info */}
+          <div className="rounded-xl bg-[#F5F5F5] p-4">
+            <div className="flex gap-5">
+              {/* Photo area */}
+              <div className="relative shrink-0">
+                <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-lg bg-[#E0D4F5] text-2xl font-bold text-[#7B00D4]">
+                  {artistInitials}
+                </div>
+                <span className={`absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  activeArtist.status === 'active' ? 'bg-[#D4F7E3] text-[#00B241]' :
+                  activeArtist.status === 'archived' ? 'bg-[#F0F0F0] text-[#8A8A8A]' :
+                  'bg-[#FFF3E0] text-[#F59E0B]'
+                }`}>
+                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                  {activeArtist.status === 'active' ? 'Active' : activeArtist.status === 'archived' ? 'Archived' : 'Inactive'}
+                </span>
+              </div>
 
-                <ProfileFormRow label="Last name" required>
-                  <ProfileInput
-                    value={profileForm.lastName}
-                    onChange={(value) =>
-                      setProfileForm((prev) => ({ ...prev, lastName: value }))
-                    }
-                    placeholder="Enter artist last name"
-                  />
-                </ProfileFormRow>
-
-                <ProfileFormRow
-                  label="Other Names"
-                  required
-                  helpText="This will be displayed on your profile."
-                >
-                  <div className="space-y-2">
-                    <TagInput
-                      value={profileOtherNames}
-                      onChange={setProfileOtherNames}
-                      placeholder="Type artist name and press Enter"
-                    />
-                    <div className="flex gap-2 rounded-lg border border-yellow-200 bg-yellow-50 p-3">
-                      <span className="mt-0.5 flex-shrink-0 text-yellow-600">
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 16 16"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            d="M8 5.333V8M8 10.667H8.007M14.667 8C14.667 11.682 11.682 14.667 8 14.667C4.318 14.667 1.333 11.682 1.333 8C1.333 4.318 4.318 1.333 8 1.333C11.682 1.333 14.667 4.318 14.667 8Z"
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </span>
-                      <p className="text-sm text-yellow-800">
-                        Manage artist alternate names, including stage names and aliases used in reporting files.
-                      </p>
-                    </div>
+              {/* Info area */}
+              <div className="min-w-0 flex-1">
+                {/* Row 1: Full name | Other name | Phone number */}
+                <div className="flex flex-wrap gap-x-8 gap-y-2">
+                  <div>
+                    <p className="text-xs text-[#9A9A9A]">Full name</p>
+                    <p className="text-sm font-medium text-[#1F1F1F]">{activeArtist.name}</p>
                   </div>
-                </ProfileFormRow>
-
-                <ProfileFormRow label="Email address" required>
-                  <ProfileInput
-                    value={profileForm.email}
-                    onChange={(value) =>
-                      setProfileForm((prev) => ({ ...prev, email: value }))
-                    }
-                    placeholder="Enter your email address"
-                    type="email"
-                  />
-                </ProfileFormRow>
-
-                <ProfileFormRow label="Phone number" required>
-                  <ProfileInput
-                    value={profileForm.phone}
-                    onChange={(value) =>
-                      setProfileForm((prev) => ({ ...prev, phone: value }))
-                    }
-                    placeholder="Enter artist phone number"
-                  />
-                </ProfileFormRow>
+                  {artistOtherNames && (
+                    <div>
+                      <p className="text-xs text-[#9A9A9A]">Other name</p>
+                      <p className="text-sm font-medium text-[#1F1F1F]">{artistOtherNames}</p>
+                    </div>
+                  )}
+                  {activeArtist.phone !== '--' && (
+                    <div>
+                      <p className="text-xs text-[#9A9A9A]">Phone number</p>
+                      <p className="text-sm font-medium text-[#1F1F1F]">{activeArtist.phone}</p>
+                    </div>
+                  )}
+                </div>
+                {/* Row 2: Email */}
+                <div className="mt-3">
+                  <p className="text-xs text-[#9A9A9A]">Email address</p>
+                  <p className="text-sm font-medium text-[#1F1F1F]">{activeArtist.email}</p>
+                </div>
               </div>
+            </div>
+          </div>
 
-              <div className="flex items-center justify-end gap-3 py-4">
-                <button
-                  type="button"
-                  className="rounded-lg border border-neutral-300 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-700 shadow-sm hover:bg-neutral-50"
-                  onClick={goBackToArtistList}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleUpdateProfile}
-                  disabled={isUpdatingProfile}
-                  className="rounded-lg bg-[#7B00D4] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#6900B5]"
-                >
-                  {isUpdatingProfile ? 'Updating...' : 'Update details'}
-                </button>
+          {/* Metric cards — Row 1: 3 cards */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <EligibleAdvanceCard
+              label="Personal Advance"
+              value={formatCurrency(eligiblePersonal)}
+              balanceValue={formatCurrency(balancePersonal)}
+              balanceColor="#7B00D4"
+              onBalance={() => setOpenPersonalAdvanceModal(true)}
+            />
+            <EligibleAdvanceCard
+              label="Marketing Advance"
+              value={formatCurrency(eligibleMarketing)}
+              balanceValue={formatCurrency(balanceMarketing)}
+              balanceColor="#00B241"
+              onBalance={() => setOpenMarketingAdvanceModal(true)}
+            />
+            <div className="rounded-xl border border-[#D5D5D5] bg-white p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[26px] font-semibold leading-none text-[#3C3C3C]">
+                    {formatCurrency(Number(dashboardMetrics?.totalRevenue ?? 0))}
+                  </p>
+                  <p className="mt-2 text-xs text-[#8B8B8B]">Total Revenue</p>
+                </div>
+                <div className="rounded-full border border-[#E6D6F8] p-2 text-[#7B00D4]">
+                  <Music2 className="h-4 w-4" />
+                </div>
               </div>
+            </div>
+          </div>
+
+          {/* Metric cards — Row 2: 4 cards */}
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <div className="rounded-xl border border-[#D5D5D5] bg-white p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[22px] font-semibold leading-none text-[#3C3C3C]">
+                    {formatCurrency(Number(overview?.totalAdvanceUSD ?? 0))}
+                  </p>
+                  <p className="mt-2 text-xs text-[#8B8B8B]">Total Funds Received</p>
+                </div>
+                <div className="rounded-full border border-[#E6D6F8] p-2 text-[#7B00D4]">
+                  <CircleDollarSign className="h-4 w-4" />
+                </div>
+              </div>
+            </div>
+            <div className="rounded-xl border border-[#D5D5D5] bg-white p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[22px] font-semibold leading-none text-[#3C3C3C]">
+                    {formatCurrency(Number(overview?.totalRepaidUSD ?? 0))}
+                  </p>
+                  <p className="mt-2 text-xs text-[#8B8B8B]">Recouped Advance</p>
+                </div>
+                <div className="rounded-full border border-[#E6D6F8] p-2 text-[#7B00D4]">
+                  <RefreshCcw className="h-4 w-4" />
+                </div>
+              </div>
+            </div>
+            <div className="rounded-xl border border-[#D5D5D5] bg-white p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[22px] font-semibold leading-none text-[#3C3C3C]">
+                    {formatCurrency(Number(overview?.outstandingUSD ?? 0))}
+                  </p>
+                  <p className="mt-2 text-xs text-[#8B8B8B]">Outstanding Advance</p>
+                </div>
+                <div className="rounded-full border border-[#E6D6F8] p-2 text-[#7B00D4]">
+                  <TrendingUp className="h-4 w-4" />
+                </div>
+              </div>
+            </div>
+            <div className="rounded-xl border border-[#D5D5D5] bg-white p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[22px] font-semibold leading-none text-[#3C3C3C]">
+                    {formatCurrency(totalExpenses)}
+                  </p>
+                  <p className="mt-2 text-xs text-[#8B8B8B]">Total Expenses</p>
+                </div>
+                <div className="rounded-full border border-[#E6D6F8] p-2 text-[#7B00D4]">
+                  <Receipt className="h-4 w-4" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Expenses table */}
+          <div className="overflow-hidden rounded-xl border border-[#DFDFDF] bg-white">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EFEFEF] px-5 py-4">
+              <h3 className="text-base font-semibold text-[#1F1F1F]">Expenses</h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  value={expenseSearch}
+                  onChange={(e) => setExpenseSearch(e.target.value)}
+                  placeholder="Search transaction..."
+                  className="h-9 w-44 rounded-lg border border-[#DFDFDF] bg-white px-3 text-sm outline-none focus:border-[#7B00D4]"
+                />
+                <select
+                  value={expenseLoggedBy}
+                  onChange={(e) => setExpenseLoggedBy(e.target.value)}
+                  className="h-9 rounded-lg border border-[#DFDFDF] bg-white px-3 text-sm text-[#5A5A5A] outline-none focus:border-[#7B00D4]"
+                >
+                  <option value="all">Logged by</option>
+                  <option value="admin">Admin</option>
+                  <option value="user">User</option>
+                </select>
+                <select
+                  value={expenseCategoryFilter}
+                  onChange={(e) => setExpenseCategoryFilter(e.target.value)}
+                  className="h-9 rounded-lg border border-[#DFDFDF] bg-white px-3 text-sm text-[#5A5A5A] outline-none focus:border-[#7B00D4]"
+                >
+                  <option value="all">All categories</option>
+                  <option value="marketting">Marketing</option>
+                  <option value="production">Production</option>
+                  <option value="personal">Personal</option>
+                </select>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[700px] text-sm">
+                <thead className="bg-[#F9F9F9] text-left text-[#666666]">
+                  <tr>
+                    <th className="px-5 py-3 font-medium">Transaction</th>
+                    <th className="px-5 py-3 font-medium">Date</th>
+                    <th className="px-5 py-3 font-medium">Category</th>
+                    <th className="px-5 py-3 font-medium">Status</th>
+                    <th className="px-5 py-3 font-medium">Amount</th>
+                    <th className="px-5 py-3 font-medium">Logged by</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#EFEFEF]">
+                  {filteredProfileExpenses.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-5 py-8 text-center text-[#8A8A8A]">
+                        No expenses recorded yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredProfileExpenses.slice(0, 8).map((expense) => {
+                      const expRecord = expense as unknown as Record<string, unknown>;
+                      const status = String(expRecord.status || '').trim();
+                      const loggedBy = String(expRecord.logged_by || '').trim();
+                      const statusLower = status.toLowerCase();
+                      const statusStyle =
+                        statusLower === 'paid' ? 'bg-[#D4F7E3] text-[#00B241]' :
+                        statusLower === 'approved' ? 'bg-[#EDE1FF] text-[#7B00D4]' :
+                        statusLower === 'pending' ? 'bg-[#FFF3E0] text-[#F59E0B]' :
+                        statusLower === 'rejected' ? 'bg-[#FFE5E5] text-[#D14343]' :
+                        'bg-[#F5F5F5] text-[#8A8A8A]';
+                      return (
+                        <tr key={expense._id} className="text-[#3C3C3C]">
+                          <td className="px-5 py-3.5 font-medium">
+                            TRX-{(expense.ref_id || expense._id || '').toString().slice(-8).toUpperCase()}
+                          </td>
+                          <td className="px-5 py-3.5 text-[#8A8A8A]">
+                            {expense.expense_date ? new Date(expense.expense_date).toLocaleDateString('en-GB') : '--'}
+                          </td>
+                          <td className="px-5 py-3.5 capitalize">{expense.category || '--'}</td>
+                          <td className="px-5 py-3.5">
+                            {status ? (
+                              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyle}`}>
+                                <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                                {status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()}
+                              </span>
+                            ) : (
+                              <span className="text-[#8A8A8A]">--</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5 font-medium">
+                            ${Number(expense.amount ?? 0).toLocaleString()}
+                          </td>
+                          <td className="px-5 py-3.5 text-[#8A8A8A]">
+                            {loggedBy ? (loggedBy.toLowerCase() === 'admin' ? 'Admin' : loggedBy) : '--'}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -1406,6 +1574,53 @@ export default function RecordLabelArtists() {
         open={openAddArtist}
         onClose={() => setOpenAddArtist(false)}
         onSubmit={handleAddArtist}
+      />
+
+      <UpdateEligibleAdvanceModal
+        open={openPersonalAdvanceModal}
+        onClose={() => setOpenPersonalAdvanceModal(false)}
+        type="personal"
+        artistId={selectedArtistId}
+      />
+
+      <UpdateEligibleAdvanceModal
+        open={openMarketingAdvanceModal}
+        onClose={() => setOpenMarketingAdvanceModal(false)}
+        type="marketing"
+        artistId={selectedArtistId}
+      />
+
+      <AddExpensesModal
+        open={openRecordExpense}
+        onClose={() => setOpenRecordExpense(false)}
+        onSubmit={async (data) => {
+          try {
+            let receiptUrl = '';
+            if (data.proofs && data.proofs.length > 0) {
+              receiptUrl = await uploadFile(data.proofs[0], 'expense');
+            }
+            await axiosInstance.post('/expenses', {
+              artistId: selectedArtistId || data.artistId,
+              expense_date: data.expense_date,
+              advance_type: data.advance_type,
+              currency: data.currency,
+              amount: data.amount,
+              recoupable: data.recoupable,
+              description: data.description,
+              receipt_url: receiptUrl,
+            });
+            toast.success('Expense recorded successfully');
+            setOpenRecordExpense(false);
+          } catch (err) {
+            const error = err as { response?: { data?: { message?: string } } };
+            toast.error(error.response?.data?.message || 'Failed to record expense');
+            throw err;
+          }
+        }}
+        initialArtistId={selectedArtistId}
+        recordLabelFields={false}
+        personalEligibleAmount={formatCurrency(eligiblePersonal)}
+        marketingEligibleAmount={formatCurrency(eligibleMarketing)}
       />
     </div>
   );

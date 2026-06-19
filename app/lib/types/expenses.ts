@@ -1,7 +1,8 @@
 export interface CreateExpensePayload {
   artistId?: string;
   expense_date: string;
-  category: string;
+  category?: string;
+  advance_type?: string;
   amount: number;
   currency: string;
   recoupable?: string;
