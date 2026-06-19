@@ -180,6 +180,8 @@ function FieldRow({ icon, label, value }: { icon: React.ReactNode; label: string
 const INPUT_CLASS =
   'h-10 w-full rounded-xl border border-[#B9B9B9] bg-white px-3 text-sm text-[#3C3C3C] outline-none placeholder:text-[#B0B0B0]';
 
+const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
 export default function LabelArtistAdvance() {
   const { user } = useAuth();
   const { advances, overview, marketingTrend, personalTrend, createAdvance, updateAdvanceStatus } = useAdvance();
@@ -294,7 +296,6 @@ export default function LabelArtistAdvance() {
   }, [personalTrend]);
 
 
-  const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const expensesTrendData = useMemo(() => {
     const rec = new Array<number>(12).fill(0);
     const nonRec = new Array<number>(12).fill(0);

@@ -585,8 +585,6 @@ export default function RecordLabelArtists() {
     artists: artistsResponse,
     isLoading: artistsLoading,
     inviteArtist,
-    activateArtist,
-    deactivateArtist,
     archiveArtist,
     unarchiveArtist,
   } = useRecordLabelArtists();
@@ -737,7 +735,7 @@ export default function RecordLabelArtists() {
         phone: '+234 000 000 0000',
         dateAdded: '01/01/2025',
         tracks: 0,
-        status: 'active',
+        status: 'active' as ArtistStatus,
       },
     [artists, selectedArtistId, user],
   );
@@ -916,21 +914,6 @@ export default function RecordLabelArtists() {
     setMenuPosition(null);
   };
 
-  const handleDeactivateOrActivateArtist = async (artist: ArtistRow) => {
-    try {
-      setPendingArtistActionId(artist.id);
-      if (artist.status === 'inactive') {
-        await activateArtist(artist.id);
-      } else {
-        await deactivateArtist(artist.id);
-      }
-      setMenuOpenForId(null);
-      setMenuAnchorEl(null);
-      setMenuPosition(null);
-    } finally {
-      setPendingArtistActionId(null);
-    }
-  };
 
   const handleArchiveOrUnarchiveArtist = async (artist: ArtistRow) => {
     try {
