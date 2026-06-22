@@ -293,6 +293,8 @@ export default function AddExpensesModal({
                 account_name: vals.account_name?.trim() || undefined,
               });
               onClose();
+            } catch {
+              // error already toasted by hook; keep modal open
             } finally {
               setSubmitting(false);
             }

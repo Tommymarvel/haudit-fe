@@ -34,6 +34,7 @@ type ExpenseRow = {
   id: string;
   docId: string;
   date: string;
+  year: number;
   artistId: string;
   artistName: string;
   advanceType: string;
@@ -127,6 +128,7 @@ const RecordLabelExpenses = () => {
         date: new Date((raw.expense_date as string) || (raw.createdAt as string))
           .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
           .replace(/ /g, '-'),
+        year: new Date((raw.expense_date as string) || (raw.createdAt as string)).getFullYear(),
         artistId: ((raw.artist_id || raw.artistId || raw.user || '') as string).toString(),
         artistName:
           (raw.user ? artistById.get(raw.user as string) : undefined) ||
@@ -166,6 +168,7 @@ const RecordLabelExpenses = () => {
   const filteredExpenses = useMemo(() => {
     const search = q.trim().toLowerCase();
     return rows.filter((item) => {
+      const matchesYear = !selectedYear || item.year === selectedYear;
       const matchesArtist = artistFromSidebarId === 'all' || item.artistId === '' || item.artistId === artistFromSidebarId;
       const matchesAdvanceType = advanceTypeFilter === 'all' || item.advanceType.toLowerCase() === advanceTypeFilter;
       const matchesLoggedBy = loggedByFilter === 'all' || item.loggedBy === loggedByFilter;
@@ -175,9 +178,9 @@ const RecordLabelExpenses = () => {
         item.artistName.toLowerCase().includes(search) ||
         item.advanceType.toLowerCase().includes(search) ||
         item.loggedBy.toLowerCase().includes(search);
-      return matchesArtist && matchesAdvanceType && matchesLoggedBy && matchesSearch;
+      return matchesYear && matchesArtist && matchesAdvanceType && matchesLoggedBy && matchesSearch;
     });
-  }, [artistFromSidebarId, advanceTypeFilter, loggedByFilter, q, rows]);
+  }, [artistFromSidebarId, advanceTypeFilter, loggedByFilter, q, rows, selectedYear]);
 
   const totalPages = Math.max(1, Math.ceil(filteredExpenses.length / PAGE_SIZE));
   const pagedExpenses = filteredExpenses.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -384,25 +387,20 @@ const RecordLabelExpenses = () => {
         recordLabelFields
         artistOptions={artistSelectOptions}
         onSubmit={async (payload: NewExpensesPayload) => {
-          try {
-            let receiptUrl = '';
-            if (payload.proofs && payload.proofs.length > 0) {
-              receiptUrl = await uploadFile(payload.proofs[0], 'expense');
-            }
-            await createExpense({
-              artistId: payload.artistId,
-              expense_date: payload.expense_date,
-              advance_type: payload.advance_type,
-              currency: payload.currency,
-              amount: payload.amount,
-              recoupable: payload.recoupable,
-              description: payload.description,
-              receipt_url: receiptUrl,
-            });
-            setOpenAdd(false);
-          } catch {
-            // error toasted by hook
+          let receiptUrl = '';
+          if (payload.proofs && payload.proofs.length > 0) {
+            receiptUrl = await uploadFile(payload.proofs[0], 'expense');
           }
+          await createExpense({
+            artistId: payload.artistId,
+            expense_date: payload.expense_date,
+            advance_type: payload.advance_type,
+            currency: payload.currency,
+            amount: payload.amount,
+            recoupable: payload.recoupable,
+            description: payload.description,
+            receipt_url: receiptUrl,
+          });
         }}
       />
 

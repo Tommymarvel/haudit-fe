@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import { useSearchParams } from 'next/navigation';
 import { useMemo } from 'react';
 import { appendQueryParam } from '@/lib/utils/query';
+import { getApiErrorMessage } from '@/lib/utils/apiError';
 
 const listFetcher = <T,>(url: string) =>
   axiosInstance.get(url).then((res) => {
@@ -82,8 +83,7 @@ export function useAdvance() {
       revalidateAdvanceEndpoints();
       return response.data;
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message || 'Failed to create advance');
+      toast.error(getApiErrorMessage(err, 'Failed to create advance'));
       throw err;
     }
   };
@@ -95,8 +95,7 @@ export function useAdvance() {
       revalidateAdvanceEndpoints();
       return response.data;
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message || 'Failed to create repayment');
+      toast.error(getApiErrorMessage(err, 'Failed to create repayment'));
       throw err;
     }
   };
@@ -106,8 +105,7 @@ export function useAdvance() {
       const response = await axiosInstance.get(`/advance/repayment/${advanceId}`);
       return response.data as Repayment[];
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message || 'Failed to fetch repayments');
+      toast.error(getApiErrorMessage(err, 'Failed to fetch repayments'));
       throw err;
     }
   };
@@ -122,8 +120,7 @@ export function useAdvance() {
       revalidateAdvanceEndpoints();
       return response.data;
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message || 'Failed to update advance status');
+      toast.error(getApiErrorMessage(err, 'Failed to update advance status'));
       throw err;
     }
   };
@@ -135,8 +132,7 @@ export function useAdvance() {
       revalidateAdvanceEndpoints();
       return response.data;
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message || 'Failed to approve advance');
+      toast.error(getApiErrorMessage(err, 'Failed to approve advance'));
       throw err;
     }
   };
@@ -148,8 +144,7 @@ export function useAdvance() {
       revalidateAdvanceEndpoints();
       return response.data;
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message || 'Failed to reject advance');
+      toast.error(getApiErrorMessage(err, 'Failed to reject advance'));
       throw err;
     }
   };

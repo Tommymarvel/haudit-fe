@@ -13,7 +13,8 @@ import IgnoreUnrecognizedConfirmModal from '@/components/ui/IgnoreUnrecognizedCo
 
 import Image from 'next/image';
 import Topbar from '@/components/layout/Topbar';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
+import { exportToPdf } from '@/lib/utils/exportPdf';
 import { useRoyalty } from '@/hooks/useRoyalty';
 import { useAdvance } from '@/hooks/useAdvance';
 import { useExpenses } from '@/hooks/useExpenses';
@@ -33,6 +34,8 @@ export default function SoloArtistDashboard() {
   const [openAdvance, setOpenAdvance] = useState(false);
   const [openExpense, setOpenExpense] = useState(false);
   const [openUnrecognizedModal, setOpenUnrecognizedModal] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const [openIgnoreConfirm, setOpenIgnoreConfirm] = useState(false);
   const [pendingUnmatchedArtists, setPendingUnmatchedArtists] = useState<string[]>([]);
 
@@ -177,8 +180,20 @@ export default function SoloArtistDashboard() {
     [albumInteractions]
   );
 
+  const handleExportPdf = async (filename: string) => {
+    if (!contentRef.current || isExporting) return;
+    setIsExporting(true);
+    try {
+      await exportToPdf(contentRef.current!, filename);
+    } catch (err) {
+      console.error('Export failed', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
-    <div>
+    <div ref={contentRef}>
       <div className="">
         {' '}
         <Topbar />
@@ -208,8 +223,8 @@ export default function SoloArtistDashboard() {
               { label: 'Add new royalty record', onClick: () => setOpenUpload(true) },
               { label: 'Add Advance', onClick: () => setOpenAdvance(true) },
               { label: 'Add Expense', onClick: () => setOpenExpense(true) },
-              { label: 'Export Table', onClick: () => {} },
-              { label: 'Export Analytics', onClick: () => {} },
+              { label: 'Export Table', onClick: () => handleExportPdf('dashboard-table.pdf') },
+              { label: 'Export Analytics', onClick: () => handleExportPdf('dashboard-analytics.pdf') },
             ]}
           />
         </div>

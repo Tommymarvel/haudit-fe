@@ -110,6 +110,8 @@ export default function AddAdvanceModal({
                 proofs: vals.proofs,
               });
               onClose();
+            } catch {
+              // error already toasted by hook; keep modal open
             } finally {
               setSubmitting(false);
             }

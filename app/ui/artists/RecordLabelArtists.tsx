@@ -175,6 +175,95 @@ function addArtistQueryState(
   return query ? `${pathname}?${query}` : pathname;
 }
 
+const PHONE_CODES = [
+  { label: '🇳🇬 +234', value: '+234' },
+  { label: '🇺🇸 +1',   value: '+1'   },
+  { label: '🇬🇧 +44',  value: '+44'  },
+  { label: '🇬🇭 +233', value: '+233' },
+  { label: '🇿🇦 +27',  value: '+27'  },
+  { label: '🇰🇪 +254', value: '+254' },
+];
+
+const CURRENCIES = [
+  { label: 'USD', value: 'USD' },
+  { label: 'NGN', value: 'NGN' },
+];
+
+function InlineDropdown({
+  value,
+  onChange,
+  options,
+  menuWidth = 'w-32',
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { label: string; value: string }[];
+  menuWidth?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const selected = options.find((o) => o.value === value) ?? options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      setMenuStyle({
+        position: 'fixed',
+        top: rect.bottom + 4,
+        left: rect.left,
+        zIndex: 9999,
+      });
+    }
+    const handler = (e: MouseEvent) => {
+      if (
+        !triggerRef.current?.contains(e.target as Node) &&
+        !menuRef.current?.contains(e.target as Node)
+      ) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div ref={triggerRef} className="shrink-0 border-r border-[#B6B6B6]">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-11 items-center gap-1.5 rounded-l-xl bg-[#F9F9F9] px-3 text-sm text-[#4A4A4A] outline-none"
+      >
+        <span>{selected.label}</span>
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#4A4A4A]" />
+      </button>
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          style={menuStyle}
+          className={`${menuWidth} overflow-hidden rounded-xl border border-neutral-200 bg-white py-1 shadow-lg`}
+        >
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors ${
+                opt.value === value
+                  ? 'bg-[#7B00D4] text-white'
+                  : 'text-neutral-700 hover:bg-[#EDE1FF] hover:text-[#7B00D4]'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
 function AddArtistModal({
   open,
   onClose,
@@ -202,6 +291,8 @@ function AddArtistModal({
   const [verifying, setVerifying] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emailError, setEmailError] = useState('');
+  const [phoneCountryCode, setPhoneCountryCode] = useState('+234');
+  const [phoneError, setPhoneError] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -249,11 +340,14 @@ function AddArtistModal({
   const isValidEmail = (value: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
+  const isValidPhone = (digits: string) => /^\d{7,11}$/.test(digits.replace(/^0/, ''));
+
   const canSubmit =
     form.name.trim() !== '' &&
     form.email.trim() !== '' &&
     isValidEmail(form.email) &&
     form.phone.trim() !== '' &&
+    isValidPhone(form.phone) &&
     form.accountNumber.trim() !== '' &&
     form.bank.trim() !== '' &&
     form.accountName.trim() !== '';
@@ -264,9 +358,11 @@ function AddArtistModal({
 
   const handleSubmit = async () => {
     if (!canSubmit || isSubmitting) return;
+    const normalizedDigits = form.phone.replace(/^0/, '');
+    const fullPhone = `${phoneCountryCode}${normalizedDigits}`;
     try {
       setIsSubmitting(true);
-      await onSubmit(form);
+      await onSubmit({ ...form, phone: fullPhone });
       onClose();
       setForm({
         name: '',
@@ -282,6 +378,8 @@ function AddArtistModal({
         marketingCurrency: 'USD',
       });
       setBankCode('');
+      setPhoneCountryCode('+234');
+      setPhoneError('');
     } finally {
       setIsSubmitting(false);
     }
@@ -339,12 +437,22 @@ function AddArtistModal({
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-[#5A5A5A]">Phone Number</label>
-            <input
-              value={form.phone}
-              onChange={(event) => handleChange('phone', event.target.value)}
-              placeholder="Enter artist phone number"
-              className="h-11 w-full rounded-xl border border-[#B6B6B6] px-3 text-sm outline-none focus:border-[#7B00D4]"
-            />
+            <div className={`flex h-11 w-full rounded-xl border focus-within:border-[#7B00D4] ${phoneError ? 'border-rose-500' : 'border-[#B6B6B6]'}`}>
+              <InlineDropdown value={phoneCountryCode} onChange={setPhoneCountryCode} options={PHONE_CODES} menuWidth="w-36" />
+              <input
+                value={form.phone}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
+                  handleChange('phone', digits);
+                  if (phoneError) setPhoneError(digits && !isValidPhone(digits) ? 'Enter a valid phone number' : '');
+                }}
+                onBlur={() => setPhoneError(form.phone && !isValidPhone(form.phone) ? 'Enter a valid phone number' : '')}
+                inputMode="numeric"
+                placeholder="08012345678"
+                className="h-full flex-1 bg-transparent px-3 text-sm outline-none"
+              />
+            </div>
+            {phoneError && <p className="mt-1 text-xs text-rose-600">{phoneError}</p>}
           </div>
 
           <div>
@@ -392,15 +500,8 @@ function AddArtistModal({
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-[#5A5A5A]">Personal Advance (optional)</label>
-            <div className="flex h-11 w-full overflow-hidden rounded-xl border border-[#B6B6B6] focus-within:border-[#7B00D4]">
-              <select
-                value={form.personalCurrency}
-                onChange={(event) => handleChange('personalCurrency', event.target.value)}
-                className="border-r border-[#B6B6B6] bg-[#F9F9F9] px-3 text-sm text-[#4A4A4A] outline-none"
-              >
-                <option value="USD">USD</option>
-                <option value="NGN">NGN</option>
-              </select>
+            <div className="flex h-11 w-full rounded-xl border border-[#B6B6B6] focus-within:border-[#7B00D4]">
+              <InlineDropdown value={form.personalCurrency} onChange={(v) => handleChange('personalCurrency', v)} options={CURRENCIES} menuWidth="w-20" />
               <input
                 value={form.personalAmount}
                 onChange={(event) => handleChange('personalAmount', event.target.value)}
@@ -414,15 +515,8 @@ function AddArtistModal({
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-[#5A5A5A]">Marketing Advance (optional)</label>
-            <div className="flex h-11 w-full overflow-hidden rounded-xl border border-[#B6B6B6] focus-within:border-[#7B00D4]">
-              <select
-                value={form.marketingCurrency}
-                onChange={(event) => handleChange('marketingCurrency', event.target.value)}
-                className="border-r border-[#B6B6B6] bg-[#F9F9F9] px-3 text-sm text-[#4A4A4A] outline-none"
-              >
-                <option value="USD">USD</option>
-                <option value="NGN">NGN</option>
-              </select>
+            <div className="flex h-11 w-full rounded-xl border border-[#B6B6B6] focus-within:border-[#7B00D4]">
+              <InlineDropdown value={form.marketingCurrency} onChange={(v) => handleChange('marketingCurrency', v)} options={CURRENCIES} menuWidth="w-20" />
               <input
                 value={form.marketingAmount}
                 onChange={(event) => handleChange('marketingAmount', event.target.value)}

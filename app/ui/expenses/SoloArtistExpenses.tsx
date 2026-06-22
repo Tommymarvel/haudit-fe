@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardBody } from '@/components/ui/Card';
 import { BRAND } from '@/lib/brand';
 import { CalendarDays, ChevronDown, FileText, Plus, Table2 } from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
+import { exportToPdf } from '@/lib/utils/exportPdf';
 import AddExpensesModal, { NewExpensesPayload } from './AddExpensesModal';
 import { useExpenses } from '@/hooks/useExpenses';
 import { uploadFile } from '@/lib/utils/upload';
@@ -27,6 +28,7 @@ type SoloExpenseRow = {
   id: string;
   docId: string;
   date: string;
+  year: number;
   advanceType: string;
   amount: number;
   currency: string;
@@ -53,7 +55,10 @@ function normalizeDetailStatus(value?: string): SoloExpenseRow['detailStatus'] {
 
 const SoloArtistExpenses = () => {
   const { expenses, trend, createExpense } = useExpenses();
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const [q, setQ] = useState('');
+  const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const [advanceTypeFilter, setAdvanceTypeFilter] = useState('all');
   const [openAdd, setOpenAdd] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<SoloExpenseRow | null>(null);
@@ -68,6 +73,7 @@ const SoloArtistExpenses = () => {
         date: new Date(item.expense_date || item.createdAt)
           .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
           .replace(/ /g, '-'),
+        year: new Date(item.expense_date || item.createdAt).getFullYear(),
         advanceType: AdvanceTypeDisplay[(item as { advance_type?: string }).advance_type || item.category || ''] || (item as { advance_type?: string }).advance_type || item.category || '-',
         amount: Number(item.amount ?? 0),
         currency: (item.currency || 'USD').toUpperCase(),
@@ -83,13 +89,14 @@ const SoloArtistExpenses = () => {
     () =>
       rows.filter(
         (r) =>
+          (!selectedYear || r.year === selectedYear) &&
           (advanceTypeFilter === 'all' || r.advanceType.toLowerCase() === advanceTypeFilter) &&
           (q === '' ||
             r.id.toLowerCase().includes(q.toLowerCase()) ||
             r.advanceType.toLowerCase().includes(q.toLowerCase()) ||
             r.description.toLowerCase().includes(q.toLowerCase()))
       ),
-    [q, advanceTypeFilter, rows]
+    [q, advanceTypeFilter, rows, selectedYear]
   );
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -103,8 +110,20 @@ const SoloArtistExpenses = () => {
     }));
   }, [trend]);
 
+  const handleExportPdf = async (filename: string) => {
+    if (!contentRef.current || isExporting) return;
+    setIsExporting(true);
+    try {
+      await exportToPdf(contentRef.current!, filename);
+    } catch (err) {
+      console.error('Export failed', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
-    <div>
+    <div ref={contentRef}>
       <div className="flex flex-col items-start gap-3 lg:flex-row lg:items-center justify-between ">
         <div>
           <h1 className="text-2xl font-medium text-[#3C3C3C]">
@@ -117,6 +136,8 @@ const SoloArtistExpenses = () => {
         <div className="w-full lg:w-fit grid grid-cols-2 gap-2 lg:flex">
           {/* Year — 1/2 width on mobile */}
           <YearFilterCalendar
+            value={selectedYear}
+            onChange={setSelectedYear}
             buttonClassName="w-full bg-[#EAEAEA] rounded-2xl lg:w-auto inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-neutral-800"
           />
 
@@ -145,8 +166,8 @@ const SoloArtistExpenses = () => {
                       </Button>
                     }
                     items={[
-                      { label: "Export analytics", onClick: () => {} },
-                      { label: "Export data", onClick: () => {} },
+                      { label: "Export analytics", onClick: () => handleExportPdf(`expenses-analytics-${selectedYear ?? 'all'}.pdf`) },
+                      { label: "Export data", onClick: () => handleExportPdf(`expenses-data-${selectedYear ?? 'all'}.pdf`) },
                     ]}
                   />
 

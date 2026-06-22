@@ -6,7 +6,8 @@ import { ChartCard } from "@/components/dashboard/ChartCard";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { Plus, ChevronDown, Table2 } from "lucide-react";
 import { Menu } from "@/components/ui/Menu";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
+import { exportToPdf } from '@/lib/utils/exportPdf';
 import Image from "next/image";
 import AdvanceRowActions from "./AdvanceRowActions";
 import AdvanceDetailsModal, { AdvanceDetails } from "./AdvanceDetailsModal";
@@ -23,6 +24,7 @@ import { Pagination } from "@/components/ui/Pagination";
 type Row = {
   id: string;
   date: string;
+  year: number;
   amount: number;
   currency: string;
   type: "Personal" | "Marketing";
@@ -38,7 +40,10 @@ type Row = {
 const SoloArtistAdvance = () => {
   const { advances, overview, marketingTrend, personalTrend, typePercentage, createAdvance, createRepayment, getRepayments } =
     useAdvance();
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const [tab, setTab] = useState<"analytics" | "source">("analytics");
+  const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("All");
   const [openDetails, setOpenDetails] = useState(false);
@@ -52,6 +57,7 @@ const SoloArtistAdvance = () => {
     return advances.map((adv) => ({
       id: adv._id,
       date: new Date((adv.createdAt || adv.created_at) as string).toLocaleDateString(),
+      year: new Date((adv.createdAt || adv.created_at) as string).getFullYear(),
       amount: adv.amount,
       currency: adv.currency || "USD",
       type: ((() => {
@@ -102,14 +108,27 @@ const SoloArtistAdvance = () => {
     };
   }, [marketingTrend, personalTrend, typePercentage]);
 
+  const handleExportPdf = async (filename: string) => {
+    if (!contentRef.current || isExporting) return;
+    setIsExporting(true);
+    try {
+      await exportToPdf(contentRef.current!, filename);
+    } catch (err) {
+      console.error('Export failed', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const filtered = useMemo(
     () =>
       rows.filter(
         (r) =>
+          (!selectedYear || r.year === selectedYear) &&
           (status === "All" || r.status === status) &&
           (q === "" || r.source.toLowerCase().includes(q.toLowerCase()))
       ),
-    [q, status, rows]
+    [q, status, rows, selectedYear]
   );
 
   const PAGE_SIZE = 10;
@@ -182,7 +201,7 @@ const SoloArtistAdvance = () => {
   }, [rows]);
 
   return (
-    <div>
+    <div ref={contentRef}>
       {/* Header row */}
       <div className="flex flex-col items-start gap-3 lg:flex-row lg:items-center justify-between ">
         <div>
@@ -196,6 +215,9 @@ const SoloArtistAdvance = () => {
         <div className="w-full lg:w-fit grid grid-cols-2 gap-2 lg:flex">
           {/* Year — 1/2 width on mobile */}
           <YearFilterCalendar
+            value={selectedYear}
+            onChange={setSelectedYear}
+            showYear
             buttonClassName="w-full bg-[#EAEAEA] rounded-2xl lg:w-auto inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-neutral-800"
           />
 
@@ -225,8 +247,8 @@ const SoloArtistAdvance = () => {
               </Button>
             }
             items={[
-              { label: "Export analytics", onClick: () => { } },
-              { label: "Export data", onClick: () => { } },
+              { label: "Export analytics", onClick: () => handleExportPdf(`advance-analytics-${selectedYear ?? 'all'}.pdf`) },
+              { label: "Export data", onClick: () => handleExportPdf(`advance-data-${selectedYear ?? 'all'}.pdf`) },
             ]}
           />
 
@@ -553,49 +575,40 @@ const SoloArtistAdvance = () => {
           const targetAdvanceId = advanceId || selectedAdvance?.id;
           if (!targetAdvanceId) return;
 
-          try {
-            let proofUrl = "";
-            if (files.length > 0) {
-              proofUrl = await uploadFile(files[0], "repayment");
-            }
-
-            await createRepayment({
-              advance_id: targetAdvanceId,
-              amount,
-              proof_of_payment: proofUrl,
-            });
-            setOpenRepay(false);
-            setSelectedAdvance(null);
-          } catch (error) {
-            console.error("Repayment failed", error);
+          let proofUrl = "";
+          if (files.length > 0) {
+            proofUrl = await uploadFile(files[0], "repayment");
           }
+
+          await createRepayment({
+            advance_id: targetAdvanceId,
+            amount,
+            proof_of_payment: proofUrl,
+          });
+          setOpenRepay(false);
+          setSelectedAdvance(null);
         }}
       />
       <AddAdvanceModal
         open={openAdd}
         onClose={() => setOpenAdd(false)}
         onSubmit={async (payload: NewAdvancePayload) => {
-          try {
-            let proofUrl = "";
-            if (payload.proofs && payload.proofs.length > 0) {
-              proofUrl = await uploadFile(payload.proofs[0], "advance");
-            }
-
-            await createAdvance({
-              amount: payload.amount,
-              currency: payload.currency,
-              advance_source_name: payload.sourceName,
-              advance_source_phn: payload.phone,
-              advance_source_email: payload.email,
-              advance_type: payload.advanceType,
-              repayment_status: payload.repaymentStatus,
-              proof_of_payment: proofUrl,
-              purpose: payload.purpose || "",
-            });
-            setOpenAdd(false);
-          } catch (error) {
-            console.error("Create advance failed", error);
+          let proofUrl = "";
+          if (payload.proofs && payload.proofs.length > 0) {
+            proofUrl = await uploadFile(payload.proofs[0], "advance");
           }
+
+          await createAdvance({
+            amount: payload.amount,
+            currency: payload.currency,
+            advance_source_name: payload.sourceName,
+            advance_source_phn: payload.phone,
+            advance_source_email: payload.email,
+            advance_type: payload.advanceType,
+            repayment_status: payload.repaymentStatus,
+            proof_of_payment: proofUrl,
+            purpose: payload.purpose || "",
+          });
         }}
       />
     </div>

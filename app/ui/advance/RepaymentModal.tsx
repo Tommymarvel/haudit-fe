@@ -75,12 +75,14 @@ export default function RepaymentModal({
         onSubmit={async (vals, { setSubmitting }) => {
           try {
             const parsedAmount = parseAmountInput(vals.amount);
-            await onSubmit({ 
+            await onSubmit({
               advanceId: vals.advanceId || preselectedAdvanceId,
-              amount: Number.isFinite(parsedAmount) ? parsedAmount : 0, 
-              files: vals.files 
+              amount: Number.isFinite(parsedAmount) ? parsedAmount : 0,
+              files: vals.files
             });
             onClose();
+          } catch {
+            // error already toasted by hook; keep modal open
           } finally {
             setSubmitting(false);
           }

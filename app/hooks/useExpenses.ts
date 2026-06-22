@@ -1,11 +1,11 @@
 import useSWR, { mutate } from 'swr';
 import axiosInstance from '@/lib/axiosinstance';
-import { AxiosError } from 'axios';
 import { CreateExpensePayload, Expense, ExpenseTrendItem } from '@/lib/types/expenses';
 import { toast } from 'react-toastify';
 import { useSearchParams } from 'next/navigation';
 import { useMemo } from 'react';
 import { appendQueryParam } from '@/lib/utils/query';
+import { getApiErrorMessage } from '@/lib/utils/apiError';
 
 const fetcher = (url: string) =>
   axiosInstance.get(url).then((res) => {
@@ -55,8 +55,7 @@ export function useExpenses() {
       if (expensesEndpoint !== '/expenses') mutate(expensesEndpoint);
       if (trendEndpoint !== '/expenses/trend') mutate(trendEndpoint);
     } catch (error) {
-      const err = error as AxiosError<{ message: string }>;
-      toast.error(err.response?.data?.message || 'Failed to create expense');
+      toast.error(getApiErrorMessage(error, 'Failed to create expense'));
       throw error;
     }
   };
@@ -68,8 +67,7 @@ export function useExpenses() {
       mutate(expensesEndpoint);
       mutate(trendEndpoint);
     } catch (error) {
-      const err = error as AxiosError<{ message: string }>;
-      toast.error(err.response?.data?.message || 'Failed to approve expense');
+      toast.error(getApiErrorMessage(error, 'Failed to approve expense'));
       throw error;
     }
   };
@@ -81,8 +79,7 @@ export function useExpenses() {
       mutate(expensesEndpoint);
       mutate(trendEndpoint);
     } catch (error) {
-      const err = error as AxiosError<{ message: string }>;
-      toast.error(err.response?.data?.message || 'Failed to reject expense');
+      toast.error(getApiErrorMessage(error, 'Failed to reject expense'));
       throw error;
     }
   };
@@ -95,8 +92,7 @@ export function useExpenses() {
       mutate(trendEndpoint);
       if (expensesEndpoint !== '/expenses') mutate(expensesEndpoint);
     } catch (error) {
-      const err = error as AxiosError<{ message: string }>;
-      toast.error(err.response?.data?.message || 'Failed to update expense status');
+      toast.error(getApiErrorMessage(error, 'Failed to update expense status'));
       throw error;
     }
   };

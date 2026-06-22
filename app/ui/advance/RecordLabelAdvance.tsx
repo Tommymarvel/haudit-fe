@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { exportToPdf } from '@/lib/utils/exportPdf';
 import { ChartCard } from '@/components/dashboard/ChartCard';
 import { Card, CardBody } from '@/components/ui/Card';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -40,6 +41,7 @@ type UpdateStatusValue = 'pending' | 'approved' | 'rejected';
 type AdvanceRow = {
   id: string;
   date: string;
+  year: number;
   amount: number;
   currency: string;
   type: AdvanceType;
@@ -136,7 +138,10 @@ const RecordLabelAdvance = () => {
     return getRecordLabelArtistName(artist || {}) || 'selected artist';
   }, [artists, selectedArtistId]);
 
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const [tab, setTab] = useState<AdvanceTab>('analytics');
+  const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const [q, setQ] = useState('');
   const [loggedByFilter, setLoggedByFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -182,6 +187,7 @@ const RecordLabelAdvance = () => {
       return {
         id,
         date: displayDate(rawDate),
+        year: new Date(rawDate).getFullYear(),
         amount: Number(advance.amount) || 0,
         currency: (advance.currency || 'USD').toUpperCase(),
         type: normalizeType(advance.advance_type || ''),
@@ -261,6 +267,7 @@ const RecordLabelAdvance = () => {
   const filtered = useMemo(() => {
     const keyword = q.trim().toLowerCase();
     return scopedRows.filter((row) => {
+      const yearOk = !selectedYear || row.year === selectedYear;
       const categoryOk = categoryFilter === 'all' || row.type === categoryFilter;
       const loggedOk = loggedByFilter === 'all' || row.artist === loggedByFilter;
       const keywordOk =
@@ -269,9 +276,9 @@ const RecordLabelAdvance = () => {
         row.artist.toLowerCase().includes(keyword) ||
         row.type.toLowerCase().includes(keyword) ||
         row.purpose.toLowerCase().includes(keyword);
-      return categoryOk && loggedOk && keywordOk;
+      return yearOk && categoryOk && loggedOk && keywordOk;
     });
-  }, [q, scopedRows, categoryFilter, loggedByFilter]);
+  }, [q, scopedRows, categoryFilter, loggedByFilter, selectedYear]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pagedFiltered = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -330,8 +337,20 @@ const RecordLabelAdvance = () => {
     }
   };
 
+  const handleExportPdf = async (filename: string) => {
+    if (!contentRef.current || isExporting) return;
+    setIsExporting(true);
+    try {
+      await exportToPdf(contentRef.current!, filename);
+    } catch (err) {
+      console.error('Export failed', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
-    <div>
+    <div ref={contentRef}>
       {/* Header */}
       <div className="flex flex-col items-start justify-between gap-3 lg:flex-row lg:items-center">
         <div>
@@ -345,13 +364,21 @@ const RecordLabelAdvance = () => {
           </p>
         </div>
         <div className="flex w-full gap-2 lg:w-auto">
-          <YearFilterCalendar buttonClassName="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-3 py-2 text-sm font-medium text-neutral-800" />
+          <YearFilterCalendar
+            value={selectedYear}
+            onChange={setSelectedYear}
+            showYear
+            buttonClassName="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-3 py-2 text-sm font-medium text-neutral-800"
+          />
           <button
             type="button"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#7B00D4] px-6 text-sm font-medium text-white"
+            disabled={isExporting}
+            data-pdf-exclude="true"
+            onClick={() => handleExportPdf(`advance-${selectedYear ?? 'all'}.pdf`)}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#7B00D4] px-6 text-sm font-medium text-white disabled:opacity-60"
           >
             <FileUp className="h-4 w-4" />
-            Export
+            {isExporting ? 'Exporting...' : 'Export'}
           </button>
         </div>
       </div>
@@ -512,6 +539,7 @@ const RecordLabelAdvance = () => {
                         Date <ArrowUpDown className="h-3 w-3" />
                       </span>
                     </th>
+                    <th className="px-4 py-3">Artist</th>
                     <th className="px-4 py-3">Category</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Amount</th>
@@ -522,7 +550,7 @@ const RecordLabelAdvance = () => {
                 <tbody className="divide-y divide-[#EAEAEA] text-sm text-[#4E4E4E]">
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-16 text-center text-sm text-[#8A8A8A]">
+                      <td colSpan={8} className="px-4 py-16 text-center text-sm text-[#8A8A8A]">
                         No advance requests found.
                       </td>
                     </tr>
@@ -531,6 +559,7 @@ const RecordLabelAdvance = () => {
                       <tr key={`${row.id}-${index}`}>
                         <td className="px-4 py-3 whitespace-nowrap">{row.id}</td>
                         <td className="px-4 py-3 whitespace-nowrap">{row.date}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">{row.artist || '--'}</td>
                         <td className="px-4 py-3 whitespace-nowrap">{row.type}</td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <StatusPill label={getStatusLabel(row.status, row.initiatedBy)} />

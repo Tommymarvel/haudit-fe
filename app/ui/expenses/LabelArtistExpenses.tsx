@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
+import { exportToPdf } from '@/lib/utils/exportPdf';
 import {
   ArrowUpDown,
   CalendarDays,
@@ -33,6 +34,7 @@ type ExpenseRow = {
   id: string;
   docId: string;
   date: string;
+  year: number;
   advanceType: string;
   status: ExpenseStatus;
   amount: number;
@@ -102,7 +104,10 @@ export default function LabelArtistExpenses() {
   const { user } = useAuth();
   const { expenses, createExpense, approveExpense, rejectExpense } = useExpenses();
   const { typePercentage } = useAdvance();
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const [q, setQ] = useState('');
+  const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const [advanceTypeFilter, setAdvanceTypeFilter] = useState('all');
   const [loggedByFilter, setLoggedByFilter] = useState('all');
   const [openAdd, setOpenAdd] = useState(false);
@@ -135,6 +140,7 @@ export default function LabelArtistExpenses() {
       date: new Date(item.expense_date || item.createdAt)
         .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
         .replace(/ /g, '-'),
+      year: new Date(item.expense_date || item.createdAt).getFullYear(),
       advanceType:
         CATEGORY_DISPLAY[(item as { advance_type?: string }).advance_type || item.category || ''] ||
         (item as { advance_type?: string }).advance_type || item.category || '-',
@@ -174,6 +180,7 @@ export default function LabelArtistExpenses() {
   const filteredRows = useMemo(() => {
     const keyword = q.trim().toLowerCase();
     return rows.filter((row) => {
+      const yearMatch = !selectedYear || row.year === selectedYear;
       const advanceTypeMatch = advanceTypeFilter === 'all' || row.advanceType.toLowerCase() === advanceTypeFilter;
       const loggedByMatch =
         loggedByFilter === 'all' ||
@@ -183,12 +190,24 @@ export default function LabelArtistExpenses() {
         row.id.toLowerCase().includes(keyword) ||
         row.advanceType.toLowerCase().includes(keyword) ||
         row.loggedBy.toLowerCase().includes(keyword);
-      return advanceTypeMatch && loggedByMatch && keywordMatch;
+      return yearMatch && advanceTypeMatch && loggedByMatch && keywordMatch;
     });
-  }, [rows, q, advanceTypeFilter, loggedByFilter]);
+  }, [rows, q, advanceTypeFilter, loggedByFilter, selectedYear]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const pagedRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const handleExportPdf = async () => {
+    if (!contentRef.current || isExporting) return;
+    setIsExporting(true);
+    try {
+      await exportToPdf(contentRef.current!, `expenses-${selectedYear ?? 'all'}.pdf`);
+    } catch (err) {
+      console.error('Export failed', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const closeDetailModal = () => {
     setSelectedExpense(null);
@@ -197,7 +216,7 @@ export default function LabelArtistExpenses() {
   };
 
   return (
-    <div>
+    <div ref={contentRef}>
       {/* ── Header ── */}
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
@@ -210,16 +229,21 @@ export default function LabelArtistExpenses() {
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
           <YearFilterCalendar
+            value={selectedYear}
+            onChange={setSelectedYear}
             label="Year"
-            showYear={false}
+            showYear
             buttonClassName="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-4 text-sm font-medium text-[#5A5A5A]"
           />
           <button
             type="button"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-4 text-sm font-medium text-[#5A5A5A]"
+            onClick={handleExportPdf}
+            disabled={isExporting}
+            data-pdf-exclude="true"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-4 text-sm font-medium text-[#5A5A5A] disabled:opacity-60"
           >
             <Download className="h-4 w-4" />
-            Export
+            {isExporting ? 'Exporting...' : 'Export'}
           </button>
           <Button
             variant="primary"
@@ -333,25 +357,20 @@ export default function LabelArtistExpenses() {
         marketingEligibleAmount={marketingEligibleAmount}
 
         onSubmit={async (payload: NewExpensesPayload) => {
-          try {
-            let receiptUrl = '';
-            if (payload.proofs && payload.proofs.length > 0) {
-              receiptUrl = await uploadFile(payload.proofs[0], 'expense');
-            }
-            await createExpense({
-              artistId: user?.id,
-              expense_date: payload.expense_date,
-              advance_type: payload.advance_type,
-              currency: payload.currency,
-              amount: payload.amount,
-              recoupable: payload.recoupable,
-              description: payload.description,
-              receipt_url: receiptUrl,
-            });
-            setOpenAdd(false);
-          } catch (error) {
-            console.error('Create expense failed', error);
+          let receiptUrl = '';
+          if (payload.proofs && payload.proofs.length > 0) {
+            receiptUrl = await uploadFile(payload.proofs[0], 'expense');
           }
+          await createExpense({
+            artistId: user?.id,
+            expense_date: payload.expense_date,
+            advance_type: payload.advance_type,
+            currency: payload.currency,
+            amount: payload.amount,
+            recoupable: payload.recoupable,
+            description: payload.description,
+            receipt_url: receiptUrl,
+          });
         }}
       />
 

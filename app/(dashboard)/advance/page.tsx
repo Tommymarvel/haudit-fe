@@ -1,4 +1,3 @@
-// app/(dashboard)/advance/page.tsx
 'use client';
 
 import AppShell from '@/components/layout/AppShell';
@@ -6,9 +5,12 @@ import SoloArtistAdvance from '@/ui/advance/SoloArtistAdvance';
 import RecordLabelAdvance from '@/ui/advance/RecordLabelAdvance';
 import LabelArtistAdvance from '@/ui/advance/LabelArtistAdvance';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSearchParams } from 'next/navigation';
 
 export default function AdvancePage() {
   const { user, isLoading } = useAuth();
+  const searchParams = useSearchParams();
+  const artistId = searchParams.get('artistId')?.trim() || '';
 
   if (isLoading) {
     return (
@@ -23,7 +25,7 @@ export default function AdvancePage() {
   if (user?.user_type === 'record_label') {
     return (
       <AppShell>
-        <RecordLabelAdvance />
+        {artistId ? <LabelArtistAdvance /> : <RecordLabelAdvance />}
       </AppShell>
     );
   }

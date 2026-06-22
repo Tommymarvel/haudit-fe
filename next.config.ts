@@ -5,6 +5,10 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: process.cwd(),
   experimental: {
     workerThreads: false,
+    staleTimes: {
+      dynamic: 0,
+      static: 0,
+    },
   },
 };
 

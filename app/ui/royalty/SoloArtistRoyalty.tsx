@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/Card";
 import useSWR from "swr";
 import axiosInstance from "@/lib/axiosinstance";
 import { RoyaltyDashboardMetrics, TrackStreamsDsp } from "@/lib/types/royalty";
-import generatePDF from "react-to-pdf";
+import { exportToPdf } from "@/lib/utils/exportPdf";
 
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -210,9 +210,7 @@ export default function SoloArtistRoyalty() {
 
     try {
       setIsExporting(true);
-      await generatePDF(exportRef, {
-        filename: `solo-royalty-${selectedYear}.pdf`,
-      });
+      await exportToPdf(exportRef.current!, `solo-royalty-${selectedYear}.pdf`);
     } catch (error) {
       console.error("Export PDF failed", error);
     } finally {
@@ -662,6 +660,7 @@ const handleUpload = async (
             <button
               onClick={handleExportPdf}
               disabled={isExporting}
+              data-pdf-exclude="true"
               className="w-full rounded-2xl bg-[#EAEAEA] px-3 py-2 text-sm font-medium text-neutral-800 lg:w-auto disabled:opacity-60"
             >
               <span className="inline-flex items-center gap-2">

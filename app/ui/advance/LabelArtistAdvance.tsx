@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { exportToPdf } from '@/lib/utils/exportPdf';
 import {
   ArrowUpDown,
   Calendar,
@@ -45,6 +46,7 @@ type AdvanceRow = {
   id: string;
   refId: string;
   date: string;
+  year: number;
   amount: number;
   currency: string;
   type: LabelAdvanceType;
@@ -187,7 +189,10 @@ export default function LabelArtistAdvance() {
   const { advances, overview, marketingTrend, personalTrend, createAdvance, updateAdvanceStatus } = useAdvance();
   const { expenses } = useExpenses();
 
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const [activeTab, setActiveTab] = useState<'analytics' | 'advance_request'>('analytics');
+  const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -237,6 +242,7 @@ export default function LabelArtistAdvance() {
         date: new Date((advance.createdAt || advance.created_at || new Date()).toString())
           .toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
           .replace(/ /g, '-'),
+        year: new Date((advance.createdAt || advance.created_at || new Date()).toString()).getFullYear(),
         amount: Number(advance.amount) || 0,
         currency: (advance.currency || 'USD').toUpperCase(),
         type: normalizeType(advance.advance_type || ''),
@@ -262,6 +268,7 @@ export default function LabelArtistAdvance() {
   const filteredRows = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     return rows.filter((row) => {
+      const yearMatch = !selectedYear || row.year === selectedYear;
       const statusMatch = statusFilter === 'all' || row.status.toLowerCase() === statusFilter;
       const categoryMatch =
         categoryFilter === 'all' || row.type.toLowerCase() === categoryFilter.toLowerCase();
@@ -270,9 +277,9 @@ export default function LabelArtistAdvance() {
         row.refId.toLowerCase().includes(keyword) ||
         row.type.toLowerCase().includes(keyword) ||
         row.purpose.toLowerCase().includes(keyword);
-      return statusMatch && categoryMatch && keywordMatch;
+      return yearMatch && statusMatch && categoryMatch && keywordMatch;
     });
-  }, [rows, search, statusFilter, categoryFilter]);
+  }, [rows, search, statusFilter, categoryFilter, selectedYear]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const pagedRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -297,24 +304,25 @@ export default function LabelArtistAdvance() {
 
 
   const expensesTrendData = useMemo(() => {
-    const rec = new Array<number>(12).fill(0);
-    const nonRec = new Array<number>(12).fill(0);
+    const personal = new Array<number>(12).fill(0);
+    const marketing = new Array<number>(12).fill(0);
     (expenses ?? []).forEach((exp) => {
       const month = new Date((exp as { expense_date?: string }).expense_date || exp.createdAt || Date.now()).getMonth();
       const amt = Number(exp.amount) || 0;
-      const recoupable = ((exp as { recoupable?: string }).recoupable || '').toLowerCase();
-      if (recoupable === 'yes') rec[month] += amt; else nonRec[month] += amt;
+      const advanceType = ((exp as { advance_type?: string }).advance_type || '').toLowerCase();
+      if (advanceType === 'marketting' || advanceType === 'marketing') marketing[month] += amt;
+      else personal[month] += amt;
     });
     const year = new Date().getFullYear();
     return MONTH_LABELS.map((label, i) => ({
       label,
       date: `${year}-${String(i + 1).padStart(2, '0')}-01`,
-      recoupable: rec[i],
-      nonRecoupable: nonRec[i],
+      personal: personal[i],
+      marketing: marketing[i],
     }));
   }, [expenses]);
-  const totalRecoupable = useMemo(() => expensesTrendData.reduce((s, d) => s + d.recoupable, 0), [expensesTrendData]);
-  const totalNonRecoupable = useMemo(() => expensesTrendData.reduce((s, d) => s + d.nonRecoupable, 0), [expensesTrendData]);
+  const totalPersonalExpenses = useMemo(() => expensesTrendData.reduce((s, d) => s + d.personal, 0), [expensesTrendData]);
+  const totalMarketingExpenses = useMemo(() => expensesTrendData.reduce((s, d) => s + d.marketing, 0), [expensesTrendData]);
 
   // Trend endpoints return totalUSD (currency-normalized) — always use them
   const personalTotalUSD = useMemo(
@@ -403,8 +411,20 @@ export default function LabelArtistAdvance() {
     }
   };
 
+  const handleExportPdf = async (filename: string) => {
+    if (!contentRef.current || isExporting) return;
+    setIsExporting(true);
+    try {
+      await exportToPdf(contentRef.current!, filename);
+    } catch (err) {
+      console.error('Export failed', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
-    <div>
+    <div ref={contentRef}>
       {/* ── Header ── */}
       <div className="flex flex-col items-start justify-between gap-3 lg:flex-row lg:items-center">
         <div>
@@ -414,13 +434,21 @@ export default function LabelArtistAdvance() {
           <p className="text-sm text-[#777777]">Track and get more info on your advance request</p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
-          <YearFilterCalendar buttonClassName="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-4 text-sm font-medium text-[#3C3C3C]" />
+          <YearFilterCalendar
+            value={selectedYear}
+            onChange={setSelectedYear}
+            showYear
+            buttonClassName="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-4 text-sm font-medium text-[#3C3C3C]"
+          />
           <button
             type="button"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-4 text-sm font-medium text-[#3C3C3C]"
+            disabled={isExporting}
+            data-pdf-exclude="true"
+            onClick={() => handleExportPdf(`advance-${selectedYear ?? 'all'}.pdf`)}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-4 text-sm font-medium text-[#3C3C3C] disabled:opacity-60"
           >
             <Download className="h-4 w-4" />
-            Export
+            {isExporting ? 'Exporting...' : 'Export'}
           </button>
           <button
             type="button"
@@ -495,8 +523,8 @@ export default function LabelArtistAdvance() {
               data={expensesTrendData}
               xKey="label"
               series={[
-                { key: 'nonRecoupable', label: 'Non-Recoupable', color: BRAND.purple },
-                { key: 'recoupable', label: 'Recoupable', color: '#00D447' },
+                { key: 'personal', label: 'Personal', color: BRAND.purple },
+                { key: 'marketing', label: 'Marketing', color: '#00D447' },
               ]}
               lineType="monotone"
               chartMarginTop={48}
@@ -505,19 +533,19 @@ export default function LabelArtistAdvance() {
                   <div>
                     <div className="flex items-center gap-1 text-[12px] text-[#AAAAAA]">
                       <span className="h-2 w-[2px] rounded" style={{ backgroundColor: BRAND.purple }} />
-                      Non-Recoupable
+                      Personal
                     </div>
                     <p className="text-[20px] font-medium text-[#3C3C3C]">
-                      {formatCurrencyAmount(totalNonRecoupable, rowCurrency)}
+                      {formatCurrencyAmount(totalPersonalExpenses, rowCurrency)}
                     </p>
                   </div>
                   <div>
                     <div className="flex items-center gap-1 text-[12px] text-[#AAAAAA]">
                       <span className="h-2 w-[2px] rounded bg-[#00D447]" />
-                      Recoupable
+                      Marketing
                     </div>
                     <p className="text-[20px] font-medium text-[#3C3C3C]">
-                      {formatCurrencyAmount(totalRecoupable, rowCurrency)}
+                      {formatCurrencyAmount(totalMarketingExpenses, rowCurrency)}
                     </p>
                   </div>
                 </div>

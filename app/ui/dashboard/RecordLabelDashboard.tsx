@@ -1,5 +1,6 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
+import { exportToPdf } from "@/lib/utils/exportPdf";
 import Topbar from "@/components/layout/Topbar";
 import { ChartCard, DonutSlice } from "@/components/dashboard/ChartCard";
 import { useRoyalty } from "@/hooks/useRoyalty";
@@ -75,6 +76,8 @@ export default function RecordLabelDashboard() {
     string[]
   >([]);
   const [openUnrecognizedModal, setOpenUnrecognizedModal] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const [openIgnoreConfirm, setOpenIgnoreConfirm] = useState(false);
 
   const handleUpload = async (
@@ -418,8 +421,20 @@ export default function RecordLabelDashboard() {
   const activeInteractionTypeData =
     activeTab === "Album" ? albumInteractionData : trackInteractionData;
 
+  const handleExportPdf = async (filename: string) => {
+    if (!contentRef.current || isExporting) return;
+    setIsExporting(true);
+    try {
+      await exportToPdf(contentRef.current!, filename);
+    } catch (err) {
+      console.error("Export failed", err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
-    <div>
+    <div ref={contentRef}>
       <Topbar />
 
       {/* Quick actions */}
@@ -454,8 +469,8 @@ export default function RecordLabelDashboard() {
                 onClick: () => setOpenUpload(true),
               },
               { label: "Add Expense", onClick: () => setOpenExpense(true) },
-              { label: "Export Table", onClick: () => {} },
-              { label: "Export Analytics", onClick: () => {} },
+              { label: "Export Table", onClick: () => handleExportPdf("dashboard-table.pdf") },
+              { label: "Export Analytics", onClick: () => handleExportPdf("dashboard-analytics.pdf") },
             ]}
           />
         </div>
