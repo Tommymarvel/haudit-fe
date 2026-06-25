@@ -199,6 +199,7 @@ export function Select({
           if (disabled) return;
           setOpen((prev) => !prev);
         }}
+        
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listboxId}
