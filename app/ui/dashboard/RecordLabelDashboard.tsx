@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { exportToPdf } from "@/lib/utils/exportPdf";
 import Topbar from "@/components/layout/Topbar";
 import { ChartCard, DonutSlice } from "@/components/dashboard/ChartCard";
@@ -58,6 +59,7 @@ type TopExpenseRow = {
 const ALBUM_INTERACTION_COLORS = ["#00D447", BRAND.purple, "#3B82F6", "#F59E0B", "#EF4444"];
 
 export default function RecordLabelDashboard() {
+  const router = useRouter();
   const { uploadRoyaltyFile, dashboardMetrics, albumPerformance, albumInteractions } = useRoyalty();
   const { createAdvance, marketingTrend, personalTrend, typePercentage } =
     useAdvance();
@@ -749,7 +751,7 @@ export default function RecordLabelDashboard() {
                   color={BRAND.purple}
                   lineType="monotone"
                   headerFilterLabel="Go to royalty"
-                  onHeaderFilterClick={() => {}}
+                  onHeaderFilterClick={() => router.push('/royalty')}
                 />
               </div>
               <div className="w-full xl:w-1/3">
@@ -875,7 +877,7 @@ export default function RecordLabelDashboard() {
                   color={BRAND.purple}
                   lineType="monotone"
                   headerFilterLabel="Go to advance"
-                  onHeaderFilterClick={() => {}}
+                  onHeaderFilterClick={() => router.push('/advance')}
                 />
               </div>
               <div className="w-full xl:w-1/3">
@@ -1005,7 +1007,7 @@ export default function RecordLabelDashboard() {
                 color={BRAND.purple}
                 lineType="monotone"
                 headerFilterLabel="Go to Expenses"
-                onHeaderFilterClick={() => {}}
+                onHeaderFilterClick={() => router.push('/expenses')}
               />
             </div>
 

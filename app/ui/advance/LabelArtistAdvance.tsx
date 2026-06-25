@@ -14,9 +14,7 @@ import {
   RefreshCcw,
   Search,
   TrendingUp,
-  Upload,
   WalletCards,
-  X,
 } from 'lucide-react';
 import Image from 'next/image';
 import { createPortal } from 'react-dom';
@@ -31,7 +29,6 @@ import { useExpenses } from '@/hooks/useExpenses';
 import { useAuth } from '@/contexts/AuthContext';
 import { BRAND } from '@/lib/brand';
 import { toast } from 'react-toastify';
-import axiosInstance from '@/lib/axiosinstance';
 import {
   deriveSingleCurrency,
   formatAmountInput,
@@ -208,7 +205,6 @@ export default function LabelArtistAdvance() {
   const [statusUpdate, setStatusUpdate] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [statusDescription, setStatusDescription] = useState('');
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
   useEffect(() => {
     const closeMenu = (event: MouseEvent) => {
@@ -221,6 +217,8 @@ export default function LabelArtistAdvance() {
     document.addEventListener('mousedown', closeMenu);
     return () => document.removeEventListener('mousedown', closeMenu);
   }, []);
+
+  useEffect(() => { setPage(1); }, [selectedYear]);
 
   const displayName = [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim();
   const artistName = user?.first_name?.trim() || 'Diamond';
@@ -285,42 +283,48 @@ export default function LabelArtistAdvance() {
   const pagedRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const marketingSeries = useMemo(() => {
-    if (!marketingTrend?.length) return [];
-    return marketingTrend.map((p) => ({
+    const src = selectedYear
+      ? (marketingTrend ?? []).filter(p => new Date(p.date).getFullYear() === selectedYear)
+      : (marketingTrend ?? []);
+    return src.map((p) => ({
       label: new Date(p.date).toLocaleDateString('en-US', { month: 'short' }),
       date: p.date,
       value: p.totalUSD,
     }));
-  }, [marketingTrend]);
+  }, [marketingTrend, selectedYear]);
 
   const personalSeries = useMemo(() => {
-    if (!personalTrend?.length) return [];
-    return personalTrend.map((p) => ({
+    const src = selectedYear
+      ? (personalTrend ?? []).filter(p => new Date(p.date).getFullYear() === selectedYear)
+      : (personalTrend ?? []);
+    return src.map((p) => ({
       label: new Date(p.date).toLocaleDateString('en-US', { month: 'short' }),
       date: p.date,
       value: p.totalUSD,
     }));
-  }, [personalTrend]);
+  }, [personalTrend, selectedYear]);
 
 
   const expensesTrendData = useMemo(() => {
     const personal = new Array<number>(12).fill(0);
     const marketing = new Array<number>(12).fill(0);
-    (expenses ?? []).forEach((exp) => {
-      const month = new Date((exp as { expense_date?: string }).expense_date || exp.createdAt || Date.now()).getMonth();
-      const amt = Number(exp.amount) || 0;
-      const advanceType = ((exp as { advance_type?: string }).advance_type || '').toLowerCase();
-      if (advanceType === 'marketting' || advanceType === 'marketing') marketing[month] += amt;
-      else personal[month] += amt;
-    });
-    const year = new Date().getFullYear();
+    (expenses ?? [])
+      .filter((exp) => !selectedYear || new Date((exp as { expense_date?: string }).expense_date || exp.createdAt || Date.now()).getFullYear() === selectedYear)
+      .forEach((exp) => {
+        const month = new Date((exp as { expense_date?: string }).expense_date || exp.createdAt || Date.now()).getMonth();
+        const amt = Number(exp.amount) || 0;
+        const advanceType = ((exp as { advance_type?: string }).advance_type || '').toLowerCase();
+        if (advanceType === 'marketting' || advanceType === 'marketing') marketing[month] += amt;
+        else personal[month] += amt;
+      });
+    const year = selectedYear ?? new Date().getFullYear();
     return MONTH_LABELS.map((label, i) => ({
       label,
       date: `${year}-${String(i + 1).padStart(2, '0')}-01`,
       personal: personal[i],
       marketing: marketing[i],
     }));
-  }, [expenses]);
+  }, [expenses, selectedYear]);
   const totalPersonalExpenses = useMemo(() => expensesTrendData.reduce((s, d) => s + d.personal, 0), [expensesTrendData]);
   const totalMarketingExpenses = useMemo(() => expensesTrendData.reduce((s, d) => s + d.marketing, 0), [expensesTrendData]);
 
@@ -383,27 +387,14 @@ export default function LabelArtistAdvance() {
     event.preventDefault();
     if (!statusRow || isUpdatingStatus) return;
     if (!statusDescription.trim()) { toast.error('Description is required'); return; }
-    if (!receiptFile) { toast.error('Receipt is required'); return; }
     try {
       setIsUpdatingStatus(true);
-      let receiptUrl: string | undefined;
-      if (receiptFile) {
-        const fd = new FormData();
-        fd.append('file', receiptFile);
-        fd.append('folderType', 'advance');
-        const { data } = await axiosInstance.post('/upload', fd, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        receiptUrl = data?.secure_url;
-      }
       await updateAdvanceStatus(statusRow.id, {
         status: statusUpdate,
         status_desc: statusDescription.trim(),
-        ...(receiptUrl && { advance_paid_receipt: receiptUrl }),
       });
       setStatusRow(null);
       setStatusDescription('');
-      setReceiptFile(null);
     } catch {
       // toast shown by hook
     } finally {
@@ -955,26 +946,6 @@ export default function LabelArtistAdvance() {
               </div>
             </div>
 
-            <div>
-              <label className="text-sm font-medium text-[#2D2D2D]">Receipt</label>
-              {receiptFile ? (
-                <div className="mt-1.5 flex items-center justify-between rounded-xl border border-[#B9B9B9] bg-[#F9F9F9] px-3 py-2.5">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <FileText className="h-4 w-4 shrink-0 text-[#7B00D4]" />
-                    <span className="truncate text-sm text-[#3C3C3C]">{receiptFile.name}</span>
-                  </div>
-                  <button type="button" onClick={() => setReceiptFile(null)} className="ml-2 shrink-0 text-[#B0B0B0] hover:text-rose-500">
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ) : (
-                <label className="mt-1.5 flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#D5D5D5] py-4 text-sm text-[#9C9C9C] transition hover:border-[#7B00D4] hover:text-[#7B00D4]">
-                  <Upload className="h-4 w-4" />
-                  Click to upload receipt
-                  <input type="file" accept="image/*,.pdf" className="hidden" onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)} />
-                </label>
-              )}
-            </div>
 
             <div>
               <label className="text-sm font-medium text-[#2D2D2D]">Description</label>

@@ -12,18 +12,14 @@ import Image from 'next/image';
 import {
   ArrowUpDown,
   CheckCheck,
-  FileText,
   FileUp,
   Hourglass,
   MoreVertical,
   Search,
-  Upload,
   WalletCards,
-  X,
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
-import axiosInstance from '@/lib/axiosinstance';
 import { useAdvance } from '@/hooks/useAdvance';
 import { useExpenses } from '@/hooks/useExpenses';
 import { Advance } from '@/lib/types/advance';
@@ -153,7 +149,6 @@ const RecordLabelAdvance = () => {
   const [statusUpdate, setStatusUpdate] = useState<UpdateStatusValue>('pending');
   const [statusDescription, setStatusDescription] = useState('');
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
   const [rowStatusOverrides, setRowStatusOverrides] = useState<Record<string, AdvanceStatus>>({});
@@ -169,6 +164,8 @@ const RecordLabelAdvance = () => {
     document.addEventListener('mousedown', closeMenu);
     return () => document.removeEventListener('mousedown', closeMenu);
   }, []);
+
+  useEffect(() => { setPage(1); }, [selectedYear]);
 
   const openRowActionsMenu = (event: React.MouseEvent<HTMLButtonElement>, rowId: string) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -232,31 +229,43 @@ const RecordLabelAdvance = () => {
     { value: formatCurrencyAmount(totalAdvance, 'USD'), label: 'Given Advance', icon: <WalletCards className="h-4 w-4" /> },
   ];
 
-  const personalSeries = useMemo(() => mapApiTrendToSeries(personalTrend), [personalTrend]);
-  const marketingSeries = useMemo(() => mapApiTrendToSeries(marketingTrend), [marketingTrend]);
+  const personalSeries = useMemo(() => {
+    const src = selectedYear
+      ? (personalTrend ?? []).filter(p => new Date(p.date).getFullYear() === selectedYear)
+      : (personalTrend ?? []);
+    return mapApiTrendToSeries(src);
+  }, [personalTrend, selectedYear]);
+  const marketingSeries = useMemo(() => {
+    const src = selectedYear
+      ? (marketingTrend ?? []).filter(p => new Date(p.date).getFullYear() === selectedYear)
+      : (marketingTrend ?? []);
+    return mapApiTrendToSeries(src);
+  }, [marketingTrend, selectedYear]);
 
-  // Build dual-line expenses trend (recoupable vs non-recoupable)
+  // Build dual-line expenses trend (personal vs marketing)
   const expensesTrendData = useMemo(() => {
-    const rec = new Array<number>(12).fill(0);
-    const nonRec = new Array<number>(12).fill(0);
-    (expenses ?? []).forEach((exp) => {
-      const month = new Date((exp as { expense_date?: string }).expense_date || (exp as { createdAt?: string }).createdAt || Date.now()).getMonth();
-      const amt = Number((exp as { amount?: number }).amount) || 0;
-      const recoupable = ((exp as { recoupable?: string }).recoupable || '').toLowerCase();
-      if (recoupable === 'yes') rec[month] += amt;
-      else nonRec[month] += amt;
-    });
-    const year = new Date().getFullYear();
+    const per = new Array<number>(12).fill(0);
+    const mkt = new Array<number>(12).fill(0);
+    (expenses ?? [])
+      .filter((exp) => !selectedYear || new Date((exp as { expense_date?: string }).expense_date || (exp as { createdAt?: string }).createdAt || Date.now()).getFullYear() === selectedYear)
+      .forEach((exp) => {
+        const month = new Date((exp as { expense_date?: string }).expense_date || (exp as { createdAt?: string }).createdAt || Date.now()).getMonth();
+        const amt = Number((exp as { amount?: number }).amount) || 0;
+        const advanceType = ((exp as { advance_type?: string }).advance_type || '').toLowerCase();
+        if (advanceType === 'marketting' || advanceType === 'marketing') mkt[month] += amt;
+        else per[month] += amt;
+      });
+    const year = selectedYear ?? new Date().getFullYear();
     return MONTH_LABELS.map((label, i) => ({
       label,
       date: `${year}-${String(i + 1).padStart(2, '0')}-01`,
-      recoupable: rec[i],
-      nonRecoupable: nonRec[i],
+      personal: per[i],
+      marketing: mkt[i],
     }));
-  }, [expenses]);
+  }, [expenses, selectedYear]);
 
-  const totalRecoupable = useMemo(() => expensesTrendData.reduce((s, d) => s + d.recoupable, 0), [expensesTrendData]);
-  const totalNonRecoupable = useMemo(() => expensesTrendData.reduce((s, d) => s + d.nonRecoupable, 0), [expensesTrendData]);
+  const totalPersonalExpenses = useMemo(() => expensesTrendData.reduce((s, d) => s + d.personal, 0), [expensesTrendData]);
+  const totalMarketingExpenses = useMemo(() => expensesTrendData.reduce((s, d) => s + d.marketing, 0), [expensesTrendData]);
 
   // Logged-by options derived from row artists
   const loggedByOptions = useMemo(() => {
@@ -286,7 +295,6 @@ const RecordLabelAdvance = () => {
   const resetStatusModal = () => {
     setStatusUpdate('pending');
     setStatusDescription('');
-    setReceiptFile(null);
   };
 
   const openStatusModal = (row: AdvanceRow) => {
@@ -303,26 +311,11 @@ const RecordLabelAdvance = () => {
       toast.error('Description is required');
       return;
     }
-    if (!receiptFile) {
-      toast.error('Receipt is required');
-      return;
-    }
     try {
       setIsUpdatingStatus(true);
-      let receiptUrl: string | undefined;
-      if (receiptFile) {
-        const fd = new FormData();
-        fd.append('file', receiptFile);
-        fd.append('folderType', 'advance');
-        const { data } = await axiosInstance.post('/upload', fd, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        receiptUrl = data?.secure_url;
-      }
       await updateAdvanceStatus(statusRow.id, {
         status: statusUpdate,
         status_desc: statusDescription.trim(),
-        ...(receiptUrl && { advance_paid_receipt: receiptUrl }),
       });
       const newStatus: AdvanceStatus =
         statusUpdate === 'approved' ? 'Approved' :
@@ -466,8 +459,8 @@ const RecordLabelAdvance = () => {
             data={expensesTrendData}
             xKey="label"
             series={[
-              { key: 'nonRecoupable', label: 'Non Recoupable Expenses', color: '#7B00D4' },
-              { key: 'recoupable', label: 'Recoupable Expenses', color: '#00AA39' },
+              { key: 'personal', label: 'Personal Expenses', color: '#7B00D4' },
+              { key: 'marketing', label: 'Marketing Expenses', color: '#00AA39' },
             ]}
             bandFill="#F4F4F4"
             lineType="monotone"
@@ -477,19 +470,19 @@ const RecordLabelAdvance = () => {
                 <div>
                   <div className="flex items-center gap-1 text-[12px] text-[#AAAAAA]">
                     <span className="h-2 w-[2px] rounded bg-[#7B00D4]" />
-                    Non Recoupable Expenses
+                    Personal Expenses
                   </div>
                   <p className="mt-1 text-[20px] font-medium text-[#3C3C3C]">
-                    {formatCurrencyAmount(totalNonRecoupable, rowCurrency)}
+                    {formatCurrencyAmount(totalPersonalExpenses, rowCurrency)}
                   </p>
                 </div>
                 <div>
                   <div className="flex items-center gap-1 text-[12px] text-[#AAAAAA]">
                     <span className="h-2 w-[2px] rounded bg-[#00AA39]" />
-                    Recoupable Expenses
+                    Marketing Expenses
                   </div>
                   <p className="mt-1 text-[20px] font-medium text-[#3C3C3C]">
-                    {formatCurrencyAmount(totalRecoupable, rowCurrency)}
+                    {formatCurrencyAmount(totalMarketingExpenses, rowCurrency)}
                   </p>
                 </div>
               </div>
@@ -728,26 +721,6 @@ const RecordLabelAdvance = () => {
               </div>
             </div>
 
-            <div>
-              <label className="text-sm font-medium text-[#2D2D2D]">Receipt</label>
-              {receiptFile ? (
-                <div className="mt-1.5 flex items-center justify-between rounded-xl border border-[#B9B9B9] bg-[#F9F9F9] px-3 py-2.5">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <FileText className="h-4 w-4 shrink-0 text-[#7B00D4]" />
-                    <span className="truncate text-sm text-[#3C3C3C]">{receiptFile.name}</span>
-                  </div>
-                  <button type="button" onClick={() => setReceiptFile(null)} className="ml-2 shrink-0 text-[#B0B0B0] hover:text-rose-500">
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ) : (
-                <label className="mt-1.5 flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#D5D5D5] py-4 text-sm text-[#9C9C9C] transition hover:border-[#7B00D4] hover:text-[#7B00D4]">
-                  <Upload className="h-4 w-4" />
-                  Click to upload receipt
-                  <input type="file" accept="image/*,.pdf" className="hidden" onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)} />
-                </label>
-              )}
-            </div>
 
             <div>
               <label className="text-sm font-medium text-[#2D2D2D]">Description</label>

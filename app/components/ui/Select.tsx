@@ -138,7 +138,7 @@ export function Select({
       role="listbox"
       style={menuStyle}
       className={cn(
-        'mt-1 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg',
+        'mt-1 overflow-hidden rounded-[8px] border border-neutral-200 bg-white shadow-lg',
         menuClassName,
       )}
     >
@@ -205,7 +205,7 @@ export function Select({
         aria-disabled={disabled}
         disabled={disabled}
         className={cn(
-          'h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 pr-10 text-left text-sm text-neutral-700 outline-none transition focus:border-[#7B00D4] focus:ring-1 focus:ring-[#7B00D4]',
+          'h-10 w-full rounded-[8px] border border-neutral-200 bg-white px-3 pr-10 text-left text-sm text-neutral-700 outline-none transition focus:border-[#7B00D4] focus:ring-1 focus:ring-[#7B00D4]',
           disabled && 'cursor-not-allowed bg-[#F6F6F6] text-neutral-400 focus:border-neutral-200 focus:ring-0',
           className,
         )}
