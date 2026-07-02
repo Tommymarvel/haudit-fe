@@ -70,3 +70,14 @@ export interface TypePercentage {
     percentage: number;
   };
 }
+
+export interface AvailableBalance {
+  personal?: {
+    available?: number;
+    availableInCurrency?: number;
+  };
+  marketting?: {
+    available?: number;
+    availableInCurrency?: number;
+  };
+}

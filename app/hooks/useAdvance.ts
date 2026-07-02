@@ -1,6 +1,6 @@
 import useSWR, { mutate } from 'swr';
 import axiosInstance from '@/lib/axiosinstance';
-import { Advance, CreateAdvancePayload, CreateRepaymentPayload, Repayment, AdvanceOverview, AdvanceTrendItem, TypePercentage } from '@/lib/types/advance';
+import { Advance, AvailableBalance, CreateAdvancePayload, CreateRepaymentPayload, Repayment, AdvanceOverview, AdvanceTrendItem, TypePercentage } from '@/lib/types/advance';
 import { toast } from 'react-toastify';
 import { useSearchParams } from 'next/navigation';
 import { useMemo } from 'react';
@@ -45,20 +45,34 @@ export function useAdvance() {
     () => appendQueryParam('/advance/type-percentage', 'artistId', artistId),
     [artistId]
   );
+  const availableBalanceEndpoint = useMemo(
+    () => appendQueryParam('/advance/dashboard/available', 'artistId', artistId),
+    [artistId]
+  );
 
-  const { data: advances, error, isLoading } = useSWR<Advance[]>(advancesEndpoint, listFetcher<Advance>);
-  const { data: overview } = useSWR<AdvanceOverview>(overviewEndpoint, objectFetcher<AdvanceOverview>);
+  const POLL_INTERVAL = 30_000;
+
+  const { data: advances, error, isLoading } = useSWR<Advance[]>(advancesEndpoint, listFetcher<Advance>, { refreshInterval: POLL_INTERVAL });
+  const { data: overview } = useSWR<AdvanceOverview>(overviewEndpoint, objectFetcher<AdvanceOverview>, { refreshInterval: POLL_INTERVAL });
   const { data: marketingTrend } = useSWR<AdvanceTrendItem[]>(
     marketingTrendEndpoint,
-    listFetcher<AdvanceTrendItem>
+    listFetcher<AdvanceTrendItem>,
+    { refreshInterval: POLL_INTERVAL }
   );
   const { data: personalTrend } = useSWR<AdvanceTrendItem[]>(
     personalTrendEndpoint,
-    listFetcher<AdvanceTrendItem>
+    listFetcher<AdvanceTrendItem>,
+    { refreshInterval: POLL_INTERVAL }
   );
   const { data: typePercentage } = useSWR<TypePercentage>(
     typePercentageEndpoint,
-    objectFetcher<TypePercentage>
+    objectFetcher<TypePercentage>,
+    { refreshInterval: POLL_INTERVAL }
+  );
+  const { data: availableBalance } = useSWR<AvailableBalance>(
+    availableBalanceEndpoint,
+    objectFetcher<AvailableBalance>,
+    { refreshInterval: POLL_INTERVAL }
   );
 
   const revalidateAdvanceEndpoints = () => {
@@ -68,6 +82,7 @@ export function useAdvance() {
       ['/advance/trend/marketting', marketingTrendEndpoint],
       ['/advance/trend/personal', personalTrendEndpoint],
       ['/advance/type-percentage', typePercentageEndpoint],
+      ['/advance/dashboard/available', availableBalanceEndpoint],
     ];
 
     pairs.forEach(([baseKey, scopedKey]) => {
@@ -157,6 +172,7 @@ export function useAdvance() {
     marketingTrend,
     personalTrend,
     typePercentage,
+    availableBalance,
     createAdvance,
     createRepayment,
     getRepayments,

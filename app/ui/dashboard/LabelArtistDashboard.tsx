@@ -214,7 +214,7 @@ export default function LabelArtistDashboard() {
     trackStreamsDsp,
   } = useRoyalty();
   const { topTracks, topAlbums } = useTopPerformance(5);
-  const { advances, marketingTrend, personalTrend, createAdvance } = useAdvance();
+  const { advances, marketingTrend, personalTrend, createAdvance, availableBalance } = useAdvance();
   const { expenses, trend: expensesTrend, createExpense } = useExpenses();
 
   const totalRevenueValue = useMemo(
@@ -842,7 +842,13 @@ export default function LabelArtistDashboard() {
       </div>
 
       <AddAdvanceModal open={openAdvance} onClose={() => setOpenAdvance(false)} onSubmit={handleAddAdvance} />
-      <AddExpensesModal open={openExpense} onClose={() => setOpenExpense(false)} onSubmit={handleAddExpense} />
+      <AddExpensesModal
+        open={openExpense}
+        onClose={() => setOpenExpense(false)}
+        onSubmit={handleAddExpense}
+        personalEligibleAmount={availableBalance?.personal?.available !== undefined ? `$${availableBalance.personal.available.toFixed(2)}` : undefined}
+        marketingEligibleAmount={availableBalance?.marketting?.available !== undefined ? `$${availableBalance.marketting.available.toFixed(2)}` : undefined}
+      />
     </div>
   );
 }

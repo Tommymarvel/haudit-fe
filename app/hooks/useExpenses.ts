@@ -33,8 +33,10 @@ export function useExpenses() {
     [artistId]
   );
 
-  const { data, error, isLoading } = useSWR<Expense[]>(expensesEndpoint, fetcher);
-  const { data: trendData } = useSWR<{ trend: ExpenseTrendItem[]; netTotal: number }>(trendEndpoint, trendFetcher);
+  const POLL_INTERVAL = 30_000;
+
+  const { data, error, isLoading } = useSWR<Expense[]>(expensesEndpoint, fetcher, { refreshInterval: POLL_INTERVAL });
+  const { data: trendData } = useSWR<{ trend: ExpenseTrendItem[]; netTotal: number }>(trendEndpoint, trendFetcher, { refreshInterval: POLL_INTERVAL });
 
   const createExpense = async (payload: CreateExpensePayload) => {
     try {

@@ -103,8 +103,17 @@ export default function SoloArtistDashboard() {
     }
   };
 
-  // API endpoint for track interaction type is not connected yet.
-  const interactionData: DonutSlice[] = [];
+  const interactionData = useMemo<DonutSlice[]>(
+    () =>
+      (albumInteractions ?? [])
+        .map((item, index) => ({
+          name: item.saleType,
+          value: Number(item.count ?? 0),
+          color: ALBUM_INTERACTION_COLORS[index % ALBUM_INTERACTION_COLORS.length],
+        }))
+        .filter((item) => item.value > 0),
+    [albumInteractions],
+  );
 
   const totalRevenueValue = useMemo(
     () => `$${Math.floor((dashboardMetrics?.totalRevenue ?? 0) * 1000) / 1000}`,
@@ -208,7 +217,10 @@ export default function SoloArtistDashboard() {
             onAddFile={() => setOpenUpload(true)}
             onAddAdvance={() => setOpenAdvance(true)}
             onAddExpense={() => setOpenExpense(true)}
-            onMore={() => {}}
+            onMore={(key) => {
+              if (key === 'export-table') handleExportPdf('dashboard-table.pdf');
+              if (key === 'export-analytics') handleExportPdf('dashboard-analytics.pdf');
+            }}
           />
         </div>
 
@@ -317,7 +329,7 @@ export default function SoloArtistDashboard() {
             data={interactionData}
             donutInnerText={'Total\nInteraction'}
             emptyStateTitle="No track interaction data"
-            emptyStateDescription="This graph is not connected to an API endpoint yet."
+            emptyStateDescription="No interaction data available yet."
           />
         </div>
         <div className="w-full xl:flex-1">
@@ -333,6 +345,7 @@ export default function SoloArtistDashboard() {
       <UploadFileModal
         isOpen={openUpload}
         onClose={() => setOpenUpload(false)}
+        templateUrl="/Haudit Template.xlsx"
         onUpload={handleUpload}
       />
       <AddAdvanceModal

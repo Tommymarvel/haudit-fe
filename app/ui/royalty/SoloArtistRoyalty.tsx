@@ -332,8 +332,24 @@ const handleUpload = async (
   }, [effectiveTrackRevenueDsp]);
 
   const donutParts = useMemo(() => {
-    if (!effectiveTrackStreamsDsp?.dspSummary) return [];
     const palette = ["#7B00D4", "#00C853", "#FFC24D", "#E9D7FE", "#FF8A65", "#26C6DA"];
+    const breakdown = effectiveTrackStreamsDsp?.trackBreakdown;
+    if (breakdown && breakdown.length > 0) {
+      const dspTotals = new Map<string, number>();
+      breakdown.forEach((track) => {
+        track.dsps.forEach((dsp) => {
+          dspTotals.set(dsp.dsp, (dspTotals.get(dsp.dsp) ?? 0) + (dsp.streams ?? 0));
+        });
+      });
+      return Array.from(dspTotals.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, streams], idx) => ({
+          name,
+          value: streams,
+          color: palette[idx % palette.length],
+        }));
+    }
+    if (!effectiveTrackStreamsDsp?.dspSummary) return [];
     return effectiveTrackStreamsDsp.dspSummary.map((dsp, idx) => ({
       name: dsp.dsp,
       value: dsp.streams,
@@ -370,8 +386,25 @@ const handleUpload = async (
   );
 
   const revenueBySourceData = useMemo((): { legend: Array<{ label: string; color: string; value: number }> } => {
-    if (!effectiveTrackStreamsDsp?.dspSummary || effectiveTrackStreamsDsp.dspSummary.length === 0) return { legend: [] };
     const colors = [PURPLE, "#00C853", "#FFC24D", "#E9D7FE", "#FFDFAF"];
+    const breakdown = effectiveTrackStreamsDsp?.trackBreakdown;
+    if (breakdown && breakdown.length > 0) {
+      const dspTotals = new Map<string, number>();
+      breakdown.forEach((track) => {
+        track.dsps.forEach((dsp) => {
+          dspTotals.set(dsp.dsp, (dspTotals.get(dsp.dsp) ?? 0) + (dsp.streams ?? 0));
+        });
+      });
+      const sorted = Array.from(dspTotals.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      return {
+        legend: sorted.map(([name, streams], idx) => ({
+          label: name,
+          color: colors[idx % colors.length],
+          value: streams,
+        })),
+      };
+    }
+    if (!effectiveTrackStreamsDsp?.dspSummary || effectiveTrackStreamsDsp.dspSummary.length === 0) return { legend: [] };
     return {
       legend: effectiveTrackStreamsDsp.dspSummary.slice(0, 5).map((dsp, idx) => ({
         label: dsp.dsp,
@@ -1351,6 +1384,7 @@ const handleUpload = async (
           onClose={() => setIsUploadModalOpen(false)}
           showArtistSelect={user?.user_type === "record_label"}
           artistOptions={recordLabelArtists}
+          templateUrl="/Haudit Template.xlsx"
           onUpload={handleUpload}
         />
       )}

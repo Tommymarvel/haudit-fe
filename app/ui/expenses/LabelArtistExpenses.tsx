@@ -1,7 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useRef } from 'react';
-import { exportToPdf } from '@/lib/utils/exportPdf';
+import React, { useMemo, useState } from 'react';
 import {
   ArrowUpDown,
   CalendarDays,
@@ -103,8 +102,7 @@ function DetailPair({
 export default function LabelArtistExpenses() {
   const { user } = useAuth();
   const { expenses, createExpense, approveExpense, rejectExpense } = useExpenses();
-  const { typePercentage } = useAdvance();
-  const contentRef = useRef<HTMLDivElement>(null);
+  const { availableBalance } = useAdvance();
   const [isExporting, setIsExporting] = useState(false);
   const [q, setQ] = useState('');
   const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
@@ -123,13 +121,13 @@ export default function LabelArtistExpenses() {
     [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim() || '';
 
   const personalEligibleAmount = useMemo(
-    () => formatCurrencyAmount(typePercentage?.personal?.totalUSD ?? 0, 'USD'),
-    [typePercentage],
+    () => formatCurrencyAmount(availableBalance?.personal?.available ?? 0, 'USD'),
+    [availableBalance],
   );
 
   const marketingEligibleAmount = useMemo(
-    () => formatCurrencyAmount(typePercentage?.marketting?.totalUSD ?? 0, 'USD'),
-    [typePercentage],
+    () => formatCurrencyAmount(availableBalance?.marketting?.available ?? 0, 'USD'),
+    [availableBalance],
   );
 
   const mappedApiRows = useMemo<ExpenseRow[]>(() => {
@@ -197,13 +195,26 @@ export default function LabelArtistExpenses() {
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const pagedRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const handleExportPdf = async () => {
-    if (!contentRef.current || isExporting) return;
+  const handleExportCsv = () => {
+    if (isExporting) return;
     setIsExporting(true);
     try {
-      await exportToPdf(contentRef.current!, `expenses-${selectedYear ?? 'all'}.pdf`);
-    } catch (err) {
-      console.error('Export failed', err);
+      const headers = ['ID', 'Date', 'Advance Type', 'Status', 'Amount', 'Currency', 'Logged By', 'Artist Name', 'Approved By', 'Description', 'Recoupable'];
+      const csvRows = [
+        headers.join(','),
+        ...filteredRows.map((row) =>
+          [row.id, row.date, row.advanceType, row.status, row.amount, row.currency, row.loggedBy, row.artistName, row.approvedBy, `"${row.description.replace(/"/g, '""')}"`, row.recoupable].join(',')
+        ),
+      ];
+      const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `expenses-${selectedYear ?? 'all'}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } finally {
       setIsExporting(false);
     }
@@ -216,7 +227,7 @@ export default function LabelArtistExpenses() {
   };
 
   return (
-    <div ref={contentRef}>
+    <div>
       {/* ── Header ── */}
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
@@ -237,13 +248,12 @@ export default function LabelArtistExpenses() {
           />
           <button
             type="button"
-            onClick={handleExportPdf}
+            onClick={handleExportCsv}
             disabled={isExporting}
-            data-pdf-exclude="true"
             className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-4 text-sm font-medium text-[#5A5A5A] disabled:opacity-60"
           >
             <Download className="h-4 w-4" />
-            {isExporting ? 'Exporting...' : 'Export'}
+            {isExporting ? 'Exporting...' : 'Export CSV'}
           </button>
           <Button
             variant="primary"

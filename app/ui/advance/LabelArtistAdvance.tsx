@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState, useRef } from 'react';
-import { exportToPdf } from '@/lib/utils/exportPdf';
+import axiosInstance from '@/lib/axiosinstance';
 import {
   ArrowUpDown,
   Calendar,
@@ -309,6 +309,7 @@ export default function LabelArtistAdvance() {
     const personal = new Array<number>(12).fill(0);
     const marketing = new Array<number>(12).fill(0);
     (expenses ?? [])
+      .filter((exp) => ((exp as { status?: string }).status ?? '').toLowerCase() === 'approved')
       .filter((exp) => !selectedYear || new Date((exp as { expense_date?: string }).expense_date || exp.createdAt || Date.now()).getFullYear() === selectedYear)
       .forEach((exp) => {
         const month = new Date((exp as { expense_date?: string }).expense_date || exp.createdAt || Date.now()).getMonth();
@@ -402,13 +403,29 @@ export default function LabelArtistAdvance() {
     }
   };
 
-  const handleExportPdf = async (filename: string) => {
-    if (!contentRef.current || isExporting) return;
+  const handleExportCsv = async () => {
+    if (isExporting) return;
     setIsExporting(true);
     try {
-      await exportToPdf(contentRef.current!, filename);
+      const params: Record<string, string | number> = {};
+      if (selectedYear) params.year = selectedYear;
+      if (user?.user_type === 'record_label') {
+        const artistId = (new URLSearchParams(window.location.search)).get('artistId') || '';
+        if (artistId) params.artistId = artistId;
+      }
+      const response = await axiosInstance.get('/advance/export', { params, responseType: 'blob' });
+      const blob = new Blob([response.data as BlobPart], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `advance-${selectedYear ?? 'all'}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Export failed', err);
+      toast.error('Failed to export advances');
     } finally {
       setIsExporting(false);
     }
@@ -434,20 +451,21 @@ export default function LabelArtistAdvance() {
           <button
             type="button"
             disabled={isExporting}
-            data-pdf-exclude="true"
-            onClick={() => handleExportPdf(`advance-${selectedYear ?? 'all'}.pdf`)}
+            onClick={handleExportCsv}
             className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-4 text-sm font-medium text-[#3C3C3C] disabled:opacity-60"
           >
             <Download className="h-4 w-4" />
-            {isExporting ? 'Exporting...' : 'Export'}
+            {isExporting ? 'Exporting...' : 'Export CSV'}
           </button>
-          <button
-            type="button"
-            onClick={openRequestForm}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#7B00D4] px-4 text-sm font-medium text-white"
-          >
-            Request Advance
-          </button>
+          {user?.user_type !== 'record_label' && (
+            <button
+              type="button"
+              onClick={openRequestForm}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#7B00D4] px-4 text-sm font-medium text-white"
+            >
+              Request Advance
+            </button>
+          )}
         </div>
       </div>
 
@@ -500,7 +518,7 @@ export default function LabelArtistAdvance() {
               icon={<TrendingUp className="h-4 w-4" />}
             />
             <SmallMetricCard
-              value="---"
+              value={formatCurrencyAmount(totalPersonalExpenses + totalMarketingExpenses, rowCurrency)}
               label="Total Expenses"
               icon={<DollarSign className="h-4 w-4" />}
             />

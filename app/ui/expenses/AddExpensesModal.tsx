@@ -29,7 +29,7 @@ const parseAmountForValidation = (originalValue: unknown) => {
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 };
 
-function createSchema(requireArtistName: boolean, requireDate: boolean) {
+function createSchema(requireArtistName: boolean, requireDate: boolean, requireBankDetails: boolean) {
   return Yup.object({
     artistId: requireArtistName
       ? Yup.string().trim().required('Artist is required')
@@ -50,8 +50,12 @@ function createSchema(requireArtistName: boolean, requireDate: boolean) {
       .of(Yup.mixed<File>())
       .min(1, 'Supporting document is required')
       .required('Supporting document is required'),
-    account_number: Yup.string().optional(),
-    bank: Yup.string().optional(),
+    account_number: requireBankDetails
+      ? Yup.string().trim().required('Account number is required')
+      : Yup.string().optional(),
+    bank: requireBankDetails
+      ? Yup.string().required('Bank is required')
+      : Yup.string().optional(),
     bank_code: Yup.string().optional(),
     account_name: Yup.string().optional(),
   });
@@ -240,8 +244,8 @@ export default function AddExpensesModal({
 
   const showBankingDetails = !recordLabelFields;
   const validationSchema = useMemo(
-    () => createSchema(recordLabelFields, recordLabelFields),
-    [recordLabelFields],
+    () => createSchema(recordLabelFields, recordLabelFields, showBankingDetails),
+    [recordLabelFields, showBankingDetails],
   );
 
   const fieldClass =

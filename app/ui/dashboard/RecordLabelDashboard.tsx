@@ -320,13 +320,14 @@ export default function RecordLabelDashboard() {
   );
 
   const trackInteractionData = useMemo<DonutSlice[]>(() => {
-    const totalStreams = (topTracks ?? []).reduce(
-      (sum, item) => sum + Number(item.totalStreams || 0),
-      0,
-    );
-    if (totalStreams <= 0) return [];
-    return [{ name: "Stream", value: totalStreams, color: "#00D447" }];
-  }, [topTracks]);
+    return (albumInteractions ?? [])
+      .map((item, index) => ({
+        name: item.saleType,
+        value: Number(item.count ?? 0),
+        color: ALBUM_INTERACTION_COLORS[index % ALBUM_INTERACTION_COLORS.length],
+      }))
+      .filter((item) => item.value > 0);
+  }, [albumInteractions]);
 
   const albumInteractionData = useMemo<DonutSlice[]>(() => {
     return (albumInteractions ?? [])
@@ -450,7 +451,10 @@ export default function RecordLabelDashboard() {
             onAddFile={() => setOpenUpload(true)}
             onAddAdvance={() => setOpenExpense(true)}
             onAddExpense={() => setOpenExpense(true)}
-            onMore={() => {}}
+            onMore={(key) => {
+              if (key === "export-table") handleExportPdf("dashboard-table.pdf");
+              if (key === "export-analytics") handleExportPdf("dashboard-analytics.pdf");
+            }}
             secondaryActionLabel="Add expense"
           />
         </div>
@@ -1138,6 +1142,7 @@ export default function RecordLabelDashboard() {
         onClose={() => setOpenUpload(false)}
         showArtistSelect
         artistOptions={recordLabelArtistOptions}
+        templateUrl="/Haudit Template.xlsx"
         onUpload={handleUpload}
       />
       <AddAdvanceModal

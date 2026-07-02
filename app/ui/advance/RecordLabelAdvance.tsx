@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState, useRef } from 'react';
-import { exportToPdf } from '@/lib/utils/exportPdf';
+import axiosInstance from '@/lib/axiosinstance';
 import { ChartCard } from '@/components/dashboard/ChartCard';
 import { Card, CardBody } from '@/components/ui/Card';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -242,11 +242,12 @@ const RecordLabelAdvance = () => {
     return mapApiTrendToSeries(src);
   }, [marketingTrend, selectedYear]);
 
-  // Build dual-line expenses trend (personal vs marketing)
+  // Build dual-line expenses trend (personal vs marketing) — only approved expenses
   const expensesTrendData = useMemo(() => {
     const per = new Array<number>(12).fill(0);
     const mkt = new Array<number>(12).fill(0);
     (expenses ?? [])
+      .filter((exp) => ((exp as { status?: string }).status ?? '').toLowerCase() === 'approved')
       .filter((exp) => !selectedYear || new Date((exp as { expense_date?: string }).expense_date || (exp as { createdAt?: string }).createdAt || Date.now()).getFullYear() === selectedYear)
       .forEach((exp) => {
         const month = new Date((exp as { expense_date?: string }).expense_date || (exp as { createdAt?: string }).createdAt || Date.now()).getMonth();
@@ -330,13 +331,26 @@ const RecordLabelAdvance = () => {
     }
   };
 
-  const handleExportPdf = async (filename: string) => {
-    if (!contentRef.current || isExporting) return;
+  const handleExportCsv = async () => {
+    if (isExporting) return;
     setIsExporting(true);
     try {
-      await exportToPdf(contentRef.current!, filename);
+      const params: Record<string, string | number> = {};
+      if (selectedYear) params.year = selectedYear;
+      if (selectedArtistId) params.artistId = selectedArtistId;
+      const response = await axiosInstance.get('/advance/export', { params, responseType: 'blob' });
+      const blob = new Blob([response.data as BlobPart], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `advance-${selectedYear ?? 'all'}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Export failed', err);
+      toast.error('Failed to export advances');
     } finally {
       setIsExporting(false);
     }
@@ -367,7 +381,7 @@ const RecordLabelAdvance = () => {
             type="button"
             disabled={isExporting}
             data-pdf-exclude="true"
-            onClick={() => handleExportPdf(`advance-${selectedYear ?? 'all'}.pdf`)}
+            onClick={handleExportCsv}
             className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#7B00D4] px-6 text-sm font-medium text-white disabled:opacity-60"
           >
             <FileUp className="h-4 w-4" />
