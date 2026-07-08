@@ -32,19 +32,14 @@ export function useSignupFlow(onSuccess?: (email: string) => void) {
       const idToken = await cred.user.getIdToken();
       const refreshToken = cred.user.refreshToken;
 
-      // 3) tell your backend
+      // 3) tell your backend (this also triggers the verification OTP email)
       await axiosInstance.post('/auth/signup', {
         idToken,
         refreshToken,
         email: email,
       });
 
-      // 4) Request OTP immediately after signup
-      await axiosInstance.post('/auth/request-verify-email', {
-        email,
-      });
-
-      // 5) stash email and trigger success callback (for modal)
+      // 4) stash email and trigger success callback (for modal)
       sessionStorage.setItem('verifyEmail', email);
       toast.info('Account created. Check email to verify.');
       
@@ -118,15 +113,10 @@ export function useGoogleSignup(onSuccess?: (email: string) => void) {
       sessionEmail = result.user.email || '';
       sessionStorage.setItem('verifyEmail', sessionEmail);
 
-      // Call signup endpoint to create new account
+      // Call signup endpoint to create new account (this also triggers the verification OTP email)
       await axiosInstance.post('/auth/signup', {
         idToken,
         refreshToken,
-        email: sessionEmail,
-      });
-
-      // Request OTP immediately after signup
-      await axiosInstance.post('/auth/request-verify-email', {
         email: sessionEmail,
       });
 
@@ -269,7 +259,6 @@ export function useGoogleLogin(onVerifyEmail?: (email: string) => void) {
         const responseData = axiosError.response?.data;
         const errorMessage = responseData?.message || axiosError.message || 'An error occurred';
         
-        console.log('Login error:', { statusCode: responseData?.statusCode, message: errorMessage });
         
         // Check for unverified email error
         if (

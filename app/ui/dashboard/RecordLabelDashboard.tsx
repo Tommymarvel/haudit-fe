@@ -60,7 +60,7 @@ const ALBUM_INTERACTION_COLORS = ["#00D447", BRAND.purple, "#3B82F6", "#F59E0B",
 
 export default function RecordLabelDashboard() {
   const router = useRouter();
-  const { uploadRoyaltyFile, dashboardMetrics, albumPerformance, albumInteractions } = useRoyalty();
+  const { uploadRoyaltyFile, dashboardMetrics, albumPerformance, albumInteractions, trackStreamsDsp } = useRoyalty();
   const { createAdvance, marketingTrend, personalTrend, typePercentage } =
     useAdvance();
   const { createExpense, trend: expensesTrend } = useExpenses();
@@ -320,14 +320,15 @@ export default function RecordLabelDashboard() {
   );
 
   const trackInteractionData = useMemo<DonutSlice[]>(() => {
-    return (albumInteractions ?? [])
+    const dspSummary = trackStreamsDsp?.dspSummary ?? [];
+    return dspSummary
       .map((item, index) => ({
-        name: item.saleType,
-        value: Number(item.count ?? 0),
+        name: item.dsp,
+        value: Number(item.streams ?? 0),
         color: ALBUM_INTERACTION_COLORS[index % ALBUM_INTERACTION_COLORS.length],
       }))
       .filter((item) => item.value > 0);
-  }, [albumInteractions]);
+  }, [trackStreamsDsp]);
 
   const albumInteractionData = useMemo<DonutSlice[]>(() => {
     return (albumInteractions ?? [])

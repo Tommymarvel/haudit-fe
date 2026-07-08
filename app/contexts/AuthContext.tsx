@@ -145,14 +145,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         await clearAuthCookie();
         
-        const isAuthPage = pathname?.startsWith('/login') ||
+        const isPublicPage = pathname === '/' ||
+                           pathname?.startsWith('/login') ||
                            pathname?.startsWith('/signup') ||
                            pathname?.startsWith('/forgot-password') ||
                            pathname?.startsWith('/reset-password') ||
                            pathname?.startsWith('/whoareyou') ||
                            pathname?.startsWith('/complete-profile');
 
-        if (!isAuthPage) {
+        if (!isPublicPage) {
           router.push('/login');
         }
       } finally {

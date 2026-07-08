@@ -99,6 +99,27 @@ export function useExpenses() {
     }
   };
 
+  const bulkUploadExpenses = async (file: File, uploadArtistId?: string): Promise<{ rowsProcessed?: number; count?: number }> => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const resolvedArtistId = uploadArtistId ?? artistId;
+      if (resolvedArtistId) formData.append('artistId', resolvedArtistId);
+      const response = await axiosInstance.post<{ rowsProcessed?: number; count?: number }>('/expenses/bulk-upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      toast.success('Expenses uploaded successfully');
+      mutate('/expenses');
+      mutate('/expenses/trend');
+      if (expensesEndpoint !== '/expenses') mutate(expensesEndpoint);
+      if (trendEndpoint !== '/expenses/trend') mutate(trendEndpoint);
+      return response.data;
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to upload expenses'));
+      throw error;
+    }
+  };
+
   return {
     expenses: data,
     trend: trendData?.trend,
@@ -106,6 +127,7 @@ export function useExpenses() {
     isLoading,
     isError: error,
     createExpense,
+    bulkUploadExpenses,
     approveExpense,
     rejectExpense,
     updateExpenseStatus,

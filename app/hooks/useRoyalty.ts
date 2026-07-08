@@ -79,11 +79,11 @@ export function useRoyalty() {
 
   const { data: uploads, error: uploadsError, isLoading: isUploadsLoading } = useSWR<RoyaltyUploadsResponse>(uploadsEndpoint, fetcher);
 
-  const { data: albumPerformance, error: albumPerformanceError, isLoading: isAlbumPerformanceLoading } = useSWR<Array<{ streams: number; day: string }>>(albumPerformanceEndpoint, fetcher);
+  const { data: albumPerformance, error: albumPerformanceError, isLoading: isAlbumPerformanceLoading } = useSWR<Array<{ streams: number; day: string }>>(albumPerformanceEndpoint, listFetcher<{ streams: number; day: string }>);
 
-  const { data: albumRevenue, error: albumRevenueError, isLoading: isAlbumRevenueLoading } = useSWR<Array<{ revenue: number; day: string }>>(albumRevenueEndpoint, fetcher);
+  const { data: albumRevenue, error: albumRevenueError, isLoading: isAlbumRevenueLoading } = useSWR<Array<{ revenue: number; day: string }>>(albumRevenueEndpoint, listFetcher<{ revenue: number; day: string }>);
 
-  const { data: albumInteractions, error: albumInteractionsError, isLoading: isAlbumInteractionsLoading } = useSWR<AlbumInteractionItem[]>(albumInteractionsEndpoint, fetcher);
+  const { data: albumInteractions, error: albumInteractionsError, isLoading: isAlbumInteractionsLoading } = useSWR<AlbumInteractionItem[]>(albumInteractionsEndpoint, listFetcher<AlbumInteractionItem>);
 
   const { data: trackRevenueDsp, error: trackRevenueDspError, isLoading: isTrackRevenueDspLoading } = useSWR<Array<{ assetId: string; assetTitle: string; dsps: Array<{ dsp: string; revenue: number }> }>>(trackRevenueDspEndpoint, fetcher);
 

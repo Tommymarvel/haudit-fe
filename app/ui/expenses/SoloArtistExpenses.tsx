@@ -3,9 +3,10 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardBody } from '@/components/ui/Card';
 import { BRAND } from '@/lib/brand';
 import { CalendarDays, ChevronDown, FileText, Plus, Table2 } from 'lucide-react';
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { exportToPdf } from '@/lib/utils/exportPdf';
 import AddExpensesModal, { NewExpensesPayload } from './AddExpensesModal';
+import BulkUploadExpensesModal from './BulkUploadExpensesModal';
 import { useExpenses } from '@/hooks/useExpenses';
 import { uploadFile } from '@/lib/utils/upload';
 import { Menu } from '@/components/ui/Menu';
@@ -54,16 +55,29 @@ function normalizeDetailStatus(value?: string): SoloExpenseRow['detailStatus'] {
 }
 
 const SoloArtistExpenses = () => {
-  const { expenses, trend, createExpense } = useExpenses();
+  const { expenses, trend, createExpense, bulkUploadExpenses } = useExpenses();
   const contentRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [q, setQ] = useState('');
   const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const [advanceTypeFilter, setAdvanceTypeFilter] = useState('all');
   const [openAdd, setOpenAdd] = useState(false);
+  const [openBulk, setOpenBulk] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const [selectedExpense, setSelectedExpense] = useState<SoloExpenseRow | null>(null);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const rows = useMemo<SoloExpenseRow[]>(
     () =>
@@ -172,14 +186,36 @@ const SoloArtistExpenses = () => {
                   />
 
           {/* Add Advance — full width on mobile (spans 2 cols), normal on lg */}
-          <Button
-            variant="primary"
-            className="col-span-2 w-full rounded-2xl lg:col-span-1 lg:w-auto"
-            style={{ backgroundColor: BRAND.purple }}
-            onClick={() => setOpenAdd(true)}
-          >
-            <Plus className="h-4 w-4" /> Add Expenses
-          </Button>
+          <div ref={dropdownRef} className="relative col-span-2 w-full lg:col-span-1 lg:w-auto">
+            <button
+              type="button"
+              onClick={() => setDropdownOpen((v) => !v)}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-2.5 text-sm font-medium text-white lg:w-auto"
+              style={{ backgroundColor: BRAND.purple }}
+            >
+              <Plus className="h-4 w-4" /> Add Expenses
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </button>
+            {dropdownOpen && (
+              <div className="absolute right-0 top-full z-50 mt-1 w-52 overflow-hidden rounded-xl bg-[#1A1A1A] py-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => { setDropdownOpen(false); setOpenAdd(true); }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-white/10"
+                >
+                  Single Expense
+                </button>
+                <div className="mx-4 border-t border-white/10" />
+                <button
+                  type="button"
+                  onClick={() => { setDropdownOpen(false); setOpenBulk(true); }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-white/10"
+                >
+                  Bulk Upload Expenses
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
       <div className="mt-10">
@@ -385,6 +421,12 @@ const SoloArtistExpenses = () => {
           </div>
         )}
       </Modal>
+
+      <BulkUploadExpensesModal
+        open={openBulk}
+        onClose={() => setOpenBulk(false)}
+        onUpload={(file) => bulkUploadExpenses(file)}
+      />
     </div>
   );
 };

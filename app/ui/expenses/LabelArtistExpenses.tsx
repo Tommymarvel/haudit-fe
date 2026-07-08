@@ -12,7 +12,6 @@ import {
   Search,
   UserRound,
 } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -109,6 +108,7 @@ export default function LabelArtistExpenses() {
   const [advanceTypeFilter, setAdvanceTypeFilter] = useState('all');
   const [loggedByFilter, setLoggedByFilter] = useState('all');
   const [openAdd, setOpenAdd] = useState(false);
+
   const [selectedExpense, setSelectedExpense] = useState<ExpenseRow | null>(null);
   const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -255,14 +255,14 @@ export default function LabelArtistExpenses() {
             <Download className="h-4 w-4" />
             {isExporting ? 'Exporting...' : 'Export CSV'}
           </button>
-          <Button
-            variant="primary"
-            className="h-10 rounded-2xl px-6 text-sm"
-            style={{ backgroundColor: BRAND.purple }}
+          <button
+            type="button"
             onClick={() => setOpenAdd(true)}
+            className="inline-flex h-10 items-center gap-2 rounded-2xl px-6 text-sm font-medium text-white"
+            style={{ backgroundColor: BRAND.purple }}
           >
             Add New Expenses
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -566,6 +566,7 @@ export default function LabelArtistExpenses() {
           </div>
         )}
       </Modal>
+
     </div>
   );
 }

@@ -1,11 +1,15 @@
 'use client';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Formik, Form, Field, ErrorMessage } from 'formik';
 import * as Yup from 'yup';
 import { Eye, EyeOff, Check } from 'lucide-react';
 import clsx from 'clsx';
 import Image from 'next/image';
+import { toast } from 'react-toastify';
+import { AxiosError } from 'axios';
+import axiosInstance from '@/lib/axiosinstance';
 
 const schema = Yup.object({
   password: Yup.string()
@@ -19,8 +23,43 @@ const schema = Yup.object({
 });
 
 export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={null}>
+      <ResetPasswordForm />
+    </Suspense>
+  );
+}
+
+function ResetPasswordForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get('token');
+
+  if (!token) {
+    return (
+      <>
+        <div className="grid place-items-center">
+          <Image src="/lock-icon.svg" alt="Lock" width={48} height={48} />
+        </div>
+        <h1 className="mt-6 text-2xl text-center font-medium text-[#1F1F1F]">
+          Invalid or expired link
+        </h1>
+        <p className="mt-1 text-sm text-center text-neutral-500">
+          This password reset link is missing or no longer valid. Request a new one to continue.
+        </p>
+        <div className="mt-6 max-w-[550px] w-full mx-auto">
+          <Link
+            href="/forgot-password"
+            className="w-full inline-flex items-center justify-center rounded-2xl bg-[#7B00D4] py-3 font-medium text-white hover:bg-[#6A00B8] transition-colors"
+          >
+            Request new link
+          </Link>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -37,9 +76,22 @@ export default function ResetPasswordPage() {
       <Formik
         initialValues={{ password: '', confirm: '' }}
         validationSchema={schema}
-        onSubmit={async ({ password }) => {
-          // TODO: await api.post('/auth/password/reset', { password, token: ... })
-          console.log('reset', password);
+        onSubmit={async ({ password }, { setSubmitting }) => {
+          try {
+            await axiosInstance.post('/auth/reset-password', {
+              token,
+              newPassword: password,
+            });
+            toast.success('Password reset successfully. Please sign in.');
+            router.push('/login');
+          } catch (error) {
+            const msg =
+              error instanceof AxiosError
+                ? error.response?.data?.message || error.message
+                : 'Failed to reset password. Please try again.';
+            toast.error(msg);
+            setSubmitting(false);
+          }
         }}
       >
         {({ values, isSubmitting }) => {
@@ -146,7 +198,7 @@ export default function ResetPasswordPage() {
                 disabled={!isFormValid || isSubmitting}
                 className="w-full rounded-2xl text-white py-3 font-medium transition-colors disabled:bg-[#959595] enabled:bg-[#7B00D4] enabled:hover:bg-[#6A00B8]"
               >
-                Continue
+                {isSubmitting ? 'Resetting…' : 'Continue'}
               </button>
               <Link
                 href="/login"

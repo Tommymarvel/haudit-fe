@@ -18,9 +18,10 @@ import {
   UserRound,
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import AddExpensesModal, { NewExpensesPayload } from './AddExpensesModal';
+import BulkUploadExpensesModal from './BulkUploadExpensesModal';
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 import Modal from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
@@ -93,6 +94,9 @@ const RecordLabelExpenses = () => {
   const [q, setQ] = useState('');
   const [advanceTypeFilter, setAdvanceTypeFilter] = useState('all');
   const [openAdd, setOpenAdd] = useState(false);
+  const [openBulk, setOpenBulk] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const [selectedExpense, setSelectedExpense] = useState<ExpenseRow | null>(null);
   const [menuOpenForId, setMenuOpenForId] = useState<string | null>(null);
@@ -104,7 +108,7 @@ const RecordLabelExpenses = () => {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
 
-  const { expenses, createExpense, updateExpenseStatus } = useExpenses();
+  const { expenses, createExpense, bulkUploadExpenses, updateExpenseStatus } = useExpenses();
   const { artists } = useRecordLabelArtists();
   const searchParams = useSearchParams();
 
@@ -192,6 +196,17 @@ const RecordLabelExpenses = () => {
     return () => document.removeEventListener('mousedown', close);
   }, [menuOpenForId]);
 
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const close = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [dropdownOpen]);
+
   // Menu portal helpers
   const openRowMenu = (e: React.MouseEvent<HTMLButtonElement>, id: string) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -249,13 +264,35 @@ const RecordLabelExpenses = () => {
             showYear={true}
             buttonClassName="inline-flex items-center gap-2 rounded-2xl bg-[#E9E9E9] px-3 py-2 text-[14px] font-medium text-[#5A5A5A]"
           />
-          <button
-            type="button"
-            onClick={() => setOpenAdd(true)}
-            className="inline-flex items-center gap-2 rounded-2xl bg-[#7B00D4] px-5 py-2 text-[14px] font-medium text-white hover:bg-[#6A00B8]"
-          >
-            Add New Expenses
-          </button>
+          <div ref={dropdownRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setDropdownOpen((v) => !v)}
+              className="inline-flex items-center gap-2 rounded-2xl bg-[#7B00D4] px-5 py-2 text-[14px] font-medium text-white hover:bg-[#6A00B8]"
+            >
+              Add Expenses
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </button>
+            {dropdownOpen && (
+              <div className="absolute right-0 top-full z-50 mt-1 w-48 overflow-hidden rounded-xl bg-[#1A1A1A] py-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => { setDropdownOpen(false); setOpenAdd(true); }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-white/10"
+                >
+                  Single Expense
+                </button>
+                <div className="mx-4 border-t border-white/10" />
+                <button
+                  type="button"
+                  onClick={() => { setDropdownOpen(false); setOpenBulk(true); }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-white/10"
+                >
+                  Bulk Upload Expenses
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -550,6 +587,12 @@ const RecordLabelExpenses = () => {
           </form>
         </div>
       </Modal>
+
+      <BulkUploadExpensesModal
+        open={openBulk}
+        onClose={() => setOpenBulk(false)}
+        onUpload={(file) => bulkUploadExpenses(file, artistFromSidebarId !== 'all' ? artistFromSidebarId : undefined)}
+      />
     </div>
   );
 };

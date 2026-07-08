@@ -26,7 +26,7 @@ const ALBUM_INTERACTION_COLORS = ['#7B00D4', '#00D447', '#3B82F6', '#F59E0B', '#
 
 export default function SoloArtistDashboard() {
   const { user } = useAuth();
-  const { dashboardMetrics, albumPerformance, albumRevenue, albumInteractions, uploadRoyaltyFile } = useRoyalty();
+  const { dashboardMetrics, albumPerformance, albumRevenue, albumInteractions, trackStreamsDsp, uploadRoyaltyFile } = useRoyalty();
   const { createAdvance } = useAdvance();
   const { createExpense } = useExpenses();
   const { assignPendingArtists, refreshPendingArtists } = useUnrecognizedArtists();
@@ -103,17 +103,16 @@ export default function SoloArtistDashboard() {
     }
   };
 
-  const interactionData = useMemo<DonutSlice[]>(
-    () =>
-      (albumInteractions ?? [])
-        .map((item, index) => ({
-          name: item.saleType,
-          value: Number(item.count ?? 0),
-          color: ALBUM_INTERACTION_COLORS[index % ALBUM_INTERACTION_COLORS.length],
-        }))
-        .filter((item) => item.value > 0),
-    [albumInteractions],
-  );
+  const interactionData = useMemo<DonutSlice[]>(() => {
+    const dspSummary = trackStreamsDsp?.dspSummary ?? [];
+    return dspSummary
+      .map((item, index) => ({
+        name: item.dsp,
+        value: Number(item.streams ?? 0),
+        color: ALBUM_INTERACTION_COLORS[index % ALBUM_INTERACTION_COLORS.length],
+      }))
+      .filter((item) => item.value > 0);
+  }, [trackStreamsDsp]);
 
   const totalRevenueValue = useMemo(
     () => `$${Math.floor((dashboardMetrics?.totalRevenue ?? 0) * 1000) / 1000}`,
@@ -327,7 +326,7 @@ export default function SoloArtistDashboard() {
             title="Track Interaction Type"
             variant="donut"
             data={interactionData}
-            donutInnerText={'Total\nInteraction'}
+            donutInnerText={'Total\nStreams'}
             emptyStateTitle="No track interaction data"
             emptyStateDescription="No interaction data available yet."
           />
