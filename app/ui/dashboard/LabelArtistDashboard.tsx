@@ -20,7 +20,7 @@ import { Menu } from '@/components/ui/Menu';
 import { ChartCard, DonutSlice } from '@/components/dashboard/ChartCard';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { Select } from '@/components/ui/Select';
-import AddAdvanceModal, { NewAdvancePayload } from '@/ui/advance/AddAdvanceModal';
+import LabelAdvanceRequestModal from '@/ui/advance/LabelAdvanceRequestModal';
 import AddExpensesModal, { NewExpensesPayload } from '@/ui/expenses/AddExpensesModal';
 import { Pagination } from '@/components/ui/Pagination';
 import { uploadFile } from '@/lib/utils/upload';
@@ -31,6 +31,7 @@ import { useTopPerformance } from '@/hooks/useTopPerformance';
 import { Expense } from '@/lib/types/expenses';
 import { BRAND } from '@/lib/brand';
 import { deriveSingleCurrency, formatCurrencyAmount } from '@/lib/utils/currency';
+import { getAvailableBucket } from '@/lib/utils/advance';
 
 const ALBUM_INTERACTION_COLORS = ['#00D447', '#7B00D4', '#3B82F6', '#F59E0B', '#EF4444'];
 
@@ -214,8 +215,13 @@ export default function LabelArtistDashboard() {
     trackStreamsDsp,
   } = useRoyalty();
   const { topTracks, topAlbums } = useTopPerformance(5);
-  const { advances, marketingTrend, personalTrend, createAdvance, availableBalance } = useAdvance();
+  const { advances, marketingTrend, personalTrend, availableBalance } = useAdvance();
   const { expenses, trend: expensesTrend, createExpense } = useExpenses();
+
+  // Available balance (USD) from /advance/dashboard/available — already net of
+  // approved expenses. `undefined` means the endpoint has no data for that bucket.
+  const personalAvailable = getAvailableBucket(availableBalance, 'personal', 'USD')?.available;
+  const marketingAvailable = getAvailableBucket(availableBalance, 'marketting', 'USD')?.available;
 
   const totalRevenueValue = useMemo(
     () => formatCurrencyAmount(Number(dashboardMetrics?.totalRevenue ?? 0), 'USD'),
@@ -320,7 +326,7 @@ export default function LabelArtistDashboard() {
         date: formatDate((row.createdAt || row.created_at || '').toString()),
         amount: formatCurrencyAmount(Number(row.amount ?? 0), row.currency || 'USD'),
         type: toTitleCase(row.advance_type),
-        status: normalizeStatus(row.repayment_status),
+        status: normalizeStatus(row.status || row.repayment_status),
         purpose: row.purpose || '-',
       })),
     [advances]
@@ -424,30 +430,6 @@ export default function LabelArtistDashboard() {
   const performanceSeries = activeTab === 'Track' ? trackPerformanceSeries : albumPerformanceSeries;
   const topRows = activeTab === 'Track' ? trackTopRows : albumTopRows;
   const interactionSeries = activeTab === 'Track' ? trackInteractionSeries : albumInteractionSeries;
-
-  const handleAddAdvance = async (payload: NewAdvancePayload) => {
-    try {
-      let proofUrl = '';
-      if (payload.proofs && payload.proofs.length > 0) {
-        proofUrl = await uploadFile(payload.proofs[0], 'advance');
-      }
-
-      await createAdvance({
-        amount: payload.amount,
-        currency: payload.currency,
-        advance_source_name: payload.sourceName,
-        advance_source_phn: payload.phone,
-        advance_source_email: payload.email,
-        advance_type: payload.advanceType,
-        repayment_status: payload.repaymentStatus,
-        proof_of_payment: proofUrl,
-        purpose: payload.purpose || '',
-      });
-      setOpenAdvance(false);
-    } catch (error) {
-      console.error('Create advance failed', error);
-    }
-  };
 
   const handleAddExpense = async (payload: NewExpensesPayload) => {
     try {
@@ -841,13 +823,13 @@ export default function LabelArtistDashboard() {
         )}
       </div>
 
-      <AddAdvanceModal open={openAdvance} onClose={() => setOpenAdvance(false)} onSubmit={handleAddAdvance} />
+      <LabelAdvanceRequestModal open={openAdvance} onClose={() => setOpenAdvance(false)} />
       <AddExpensesModal
         open={openExpense}
         onClose={() => setOpenExpense(false)}
         onSubmit={handleAddExpense}
-        personalEligibleAmount={availableBalance?.personal?.available !== undefined ? `$${availableBalance.personal.available.toFixed(2)}` : undefined}
-        marketingEligibleAmount={availableBalance?.marketting?.available !== undefined ? `$${availableBalance.marketting.available.toFixed(2)}` : undefined}
+        personalEligibleAmount={personalAvailable !== undefined ? `$${personalAvailable.toFixed(2)}` : undefined}
+        marketingEligibleAmount={marketingAvailable !== undefined ? `$${marketingAvailable.toFixed(2)}` : undefined}
       />
     </div>
   );

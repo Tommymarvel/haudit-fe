@@ -35,6 +35,7 @@ import {
   formatCurrencyAmount,
   parseAmountInput,
 } from '@/lib/utils/currency';
+import { getAvailableAmount } from '@/lib/utils/advance';
 
 type LabelAdvanceStatus = 'Paid' | 'Pending' | 'Approved' | 'Rejected';
 type LabelAdvanceType = 'Personal' | 'Marketing';
@@ -183,7 +184,7 @@ const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct
 
 export default function LabelArtistAdvance() {
   const { user } = useAuth();
-  const { advances, overview, marketingTrend, personalTrend, createAdvance, updateAdvanceStatus } = useAdvance();
+  const { advances, overview, marketingTrend, personalTrend, availableBalance, createAdvance, updateAdvanceStatus } = useAdvance();
   const { expenses } = useExpenses();
 
   const contentRef = useRef<HTMLDivElement>(null);
@@ -329,7 +330,7 @@ export default function LabelArtistAdvance() {
   const totalPersonalExpenses = useMemo(() => expensesTrendData.reduce((s, d) => s + d.personal, 0), [expensesTrendData]);
   const totalMarketingExpenses = useMemo(() => expensesTrendData.reduce((s, d) => s + d.marketing, 0), [expensesTrendData]);
 
-  // Trend endpoints return totalUSD (currency-normalized) — always use them
+  // Trend endpoints return totalUSD (currency-normalized) — total funds received.
   const personalTotalUSD = useMemo(
     () => (personalTrend ?? []).reduce((s, p) => s + Number(p.totalUSD || 0), 0),
     [personalTrend],
@@ -337,6 +338,18 @@ export default function LabelArtistAdvance() {
   const marketingTotalUSD = useMemo(
     () => (marketingTrend ?? []).reduce((s, m) => s + Number(m.totalUSD || 0), 0),
     [marketingTrend],
+  );
+
+  // Available balance comes from /advance/dashboard/available (USD bucket), which
+  // already subtracts approved expenses, repayments and pending-held amounts. The
+  // trend sums above are total funds received and must NOT be used for "available".
+  const personalAvailableUSD = useMemo(
+    () => getAvailableAmount(availableBalance, 'personal', 'USD'),
+    [availableBalance],
+  );
+  const marketingAvailableUSD = useMemo(
+    () => getAvailableAmount(availableBalance, 'marketting', 'USD'),
+    [availableBalance],
   );
 
   const topMetrics = useMemo(() => {
@@ -495,8 +508,8 @@ export default function LabelArtistAdvance() {
           {/* Top metric card */}
           <div className="mt-5">
             <AdvanceDualCard
-              personalValue={formatCurrencyAmount(personalTotalUSD, 'USD')}
-              marketingValue={formatCurrencyAmount(marketingTotalUSD, 'USD')}
+              personalValue={formatCurrencyAmount(personalAvailableUSD, 'USD')}
+              marketingValue={formatCurrencyAmount(marketingAvailableUSD, 'USD')}
             />
           </div>
 
@@ -590,7 +603,7 @@ export default function LabelArtistAdvance() {
                       Balance
                     </div>
                     <p className="text-[20px] font-medium text-[#3C3C3C]">
-                      {formatCurrencyAmount(marketingTotalUSD, 'USD')}
+                      {formatCurrencyAmount(marketingAvailableUSD, 'USD')}
                     </p>
                   </div>
                 </div>
@@ -622,7 +635,7 @@ export default function LabelArtistAdvance() {
                       Balance
                     </div>
                     <p className="text-[20px] font-medium text-[#3C3C3C]">
-                      {formatCurrencyAmount(personalTotalUSD, 'USD')}
+                      {formatCurrencyAmount(personalAvailableUSD, 'USD')}
                     </p>
                   </div>
                 </div>

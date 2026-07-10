@@ -71,13 +71,19 @@ export interface TypePercentage {
   };
 }
 
+export interface AvailableBalanceBucket {
+  available?: number;
+  approvedTotal?: number;
+  repaid?: number;
+  expensed?: number;
+  pendingHeld?: number;
+}
+
+// `/advance/dashboard/available` returns balances nested by advance type then
+// by currency code, e.g. { personal: { USD: {...}, NGN: {...} }, marketting: {...} }.
+export type AvailableBalanceByCurrency = Record<string, AvailableBalanceBucket | undefined>;
+
 export interface AvailableBalance {
-  personal?: {
-    available?: number;
-    availableInCurrency?: number;
-  };
-  marketting?: {
-    available?: number;
-    availableInCurrency?: number;
-  };
+  personal?: AvailableBalanceByCurrency;
+  marketting?: AvailableBalanceByCurrency;
 }

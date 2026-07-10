@@ -32,6 +32,19 @@ export function useExpenses() {
     () => appendQueryParam('/expenses/trend', 'artistId', artistId),
     [artistId]
   );
+  const availableBalanceEndpoint = useMemo(
+    () => appendQueryParam('/advance/dashboard/available', 'artistId', artistId),
+    [artistId]
+  );
+
+  // Approving/creating/updating an expense changes the advance "available" balance,
+  // so revalidate that endpoint too (both the base key and the artist-scoped key).
+  const revalidateAvailableBalance = () => {
+    mutate('/advance/dashboard/available');
+    if (availableBalanceEndpoint !== '/advance/dashboard/available') {
+      mutate(availableBalanceEndpoint);
+    }
+  };
 
   const POLL_INTERVAL = 30_000;
 
@@ -56,6 +69,7 @@ export function useExpenses() {
       mutate('/expenses/trend');
       if (expensesEndpoint !== '/expenses') mutate(expensesEndpoint);
       if (trendEndpoint !== '/expenses/trend') mutate(trendEndpoint);
+      revalidateAvailableBalance();
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to create expense'));
       throw error;
@@ -68,6 +82,7 @@ export function useExpenses() {
       toast.success('Expense approved successfully');
       mutate(expensesEndpoint);
       mutate(trendEndpoint);
+      revalidateAvailableBalance();
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to approve expense'));
       throw error;
@@ -80,6 +95,7 @@ export function useExpenses() {
       toast.success('Expense rejected successfully');
       mutate(expensesEndpoint);
       mutate(trendEndpoint);
+      revalidateAvailableBalance();
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to reject expense'));
       throw error;
@@ -93,6 +109,7 @@ export function useExpenses() {
       mutate(expensesEndpoint);
       mutate(trendEndpoint);
       if (expensesEndpoint !== '/expenses') mutate(expensesEndpoint);
+      revalidateAvailableBalance();
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to update expense status'));
       throw error;
@@ -113,6 +130,7 @@ export function useExpenses() {
       mutate('/expenses/trend');
       if (expensesEndpoint !== '/expenses') mutate(expensesEndpoint);
       if (trendEndpoint !== '/expenses/trend') mutate(trendEndpoint);
+      revalidateAvailableBalance();
       return response.data;
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to upload expenses'));

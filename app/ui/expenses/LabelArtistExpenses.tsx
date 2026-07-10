@@ -25,6 +25,7 @@ import { BRAND } from '@/lib/brand';
 import Modal from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { formatCurrencyAmount } from '@/lib/utils/currency';
+import { getAvailableAmount } from '@/lib/utils/advance';
 
 type ExpenseStatus = 'Approved' | 'Pending' | 'Rejected';
 
@@ -121,12 +122,12 @@ export default function LabelArtistExpenses() {
     [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim() || '';
 
   const personalEligibleAmount = useMemo(
-    () => formatCurrencyAmount(availableBalance?.personal?.available ?? 0, 'USD'),
+    () => formatCurrencyAmount(getAvailableAmount(availableBalance, 'personal', 'USD'), 'USD'),
     [availableBalance],
   );
 
   const marketingEligibleAmount = useMemo(
-    () => formatCurrencyAmount(availableBalance?.marketting?.available ?? 0, 'USD'),
+    () => formatCurrencyAmount(getAvailableAmount(availableBalance, 'marketting', 'USD'), 'USD'),
     [availableBalance],
   );
 
