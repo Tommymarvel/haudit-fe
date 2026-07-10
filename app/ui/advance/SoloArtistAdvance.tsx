@@ -20,6 +20,7 @@ import { Select } from "@/components/ui/Select";
 import YearFilterCalendar from "@/components/ui/YearFilterCalendar";
 import { formatCurrencyAmount } from "@/lib/utils/currency";
 import { Pagination } from "@/components/ui/Pagination";
+import { downloadAdvanceCsv } from "@/lib/utils/exportCsv";
 
 type Row = {
   id: string;
@@ -113,6 +114,21 @@ const SoloArtistAdvance = () => {
     setIsExporting(true);
     try {
       await exportToPdf(contentRef.current!, filename);
+    } catch (err) {
+      console.error('Export failed', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // "Export data" pulls a CSV from the server-side /advance/export endpoint.
+  const handleExportCsv = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const params: Record<string, string | number> = {};
+      if (selectedYear) params.year = selectedYear;
+      await downloadAdvanceCsv(params, `advance-${selectedYear ?? 'all'}.csv`);
     } catch (err) {
       console.error('Export failed', err);
     } finally {
@@ -247,8 +263,8 @@ const SoloArtistAdvance = () => {
               </Button>
             }
             items={[
-              { label: "Export analytics", onClick: () => handleExportPdf(`advance-analytics-${selectedYear ?? 'all'}.pdf`) },
-              { label: "Export data", onClick: () => handleExportPdf(`advance-data-${selectedYear ?? 'all'}.pdf`) },
+              { label: "Export data", onClick: handleExportCsv },
+              { label: "Export Analytics", onClick: () => handleExportPdf(`advance-analytics-${selectedYear ?? 'all'}.pdf`) },
             ]}
           />
 

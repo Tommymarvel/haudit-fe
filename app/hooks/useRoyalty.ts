@@ -38,9 +38,10 @@ const listFetcher = <T,>(url: string) =>
     return [] as T[];
   });
 
-export function useRoyalty() {
+export function useRoyalty(options?: { year?: number | null }) {
   const searchParams = useSearchParams();
   const artistId = (searchParams.get('artistId') || '').trim();
+  const year = typeof options?.year === 'number' ? options.year : null;
 
   const dashboardEndpoint = useMemo(
     () => appendQueryParam('/royalties/dashboard', 'artistId', artistId),
@@ -62,14 +63,20 @@ export function useRoyalty() {
     () => appendQueryParam('/royalties/album-interactions', 'artistId', artistId),
     [artistId]
   );
-  const trackRevenueDspEndpoint = useMemo(
-    () => appendQueryParam('/royalties/track-revenue-dsp', 'artistId', artistId),
-    [artistId]
-  );
-  const trackStreamsDspEndpoint = useMemo(
-    () => appendQueryParam('/royalties/track-streams-dsp?monthly=false', 'artistId', artistId),
-    [artistId]
-  );
+  // track-revenue-dsp and track-streams-dsp are the only royalty endpoints that
+  // accept a `year` query param (per the OpenAPI); append it when a year is set.
+  const trackRevenueDspEndpoint = useMemo(() => {
+    const base = typeof year === 'number'
+      ? `/royalties/track-revenue-dsp?year=${year}`
+      : '/royalties/track-revenue-dsp';
+    return appendQueryParam(base, 'artistId', artistId);
+  }, [artistId, year]);
+  const trackStreamsDspEndpoint = useMemo(() => {
+    const base = typeof year === 'number'
+      ? `/royalties/track-streams-dsp?monthly=false&year=${year}`
+      : '/royalties/track-streams-dsp?monthly=false';
+    return appendQueryParam(base, 'artistId', artistId);
+  }, [artistId, year]);
   const territoryAnalysisEndpoint = useMemo(
     () => appendQueryParam('/royalties/territory-analysis', 'artistId', artistId),
     [artistId]

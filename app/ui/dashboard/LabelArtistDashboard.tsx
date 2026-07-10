@@ -32,6 +32,7 @@ import { Expense } from '@/lib/types/expenses';
 import { BRAND } from '@/lib/brand';
 import { deriveSingleCurrency, formatCurrencyAmount } from '@/lib/utils/currency';
 import { getAvailableBucket } from '@/lib/utils/advance';
+import { isInYear } from '@/lib/utils/date';
 
 const ALBUM_INTERACTION_COLORS = ['#00D447', '#7B00D4', '#3B82F6', '#F59E0B', '#EF4444'];
 
@@ -205,6 +206,7 @@ export default function LabelArtistDashboard() {
   const [expenseCategory, setExpenseCategory] = useState('all');
   const [advancePage, setAdvancePage] = useState(1);
   const [expensePage, setExpensePage] = useState(1);
+  const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const DASH_PAGE_SIZE = 10;
 
   const {
@@ -213,10 +215,20 @@ export default function LabelArtistDashboard() {
     albumRevenue,
     albumInteractions,
     trackStreamsDsp,
-  } = useRoyalty();
+  } = useRoyalty({ year: selectedYear });
   const { topTracks, topAlbums } = useTopPerformance(5);
   const { advances, marketingTrend, personalTrend, availableBalance } = useAdvance();
-  const { expenses, trend: expensesTrend, createExpense } = useExpenses();
+  const { expenses, trend: expensesTrend, createExpense } = useExpenses({ year: selectedYear });
+
+  // /advance and /expenses lists have no year param — filter client-side by date.
+  const yearAdvances = useMemo(
+    () => (advances ?? []).filter((row) => isInYear(row.createdAt || row.created_at, selectedYear)),
+    [advances, selectedYear]
+  );
+  const yearExpenses = useMemo(
+    () => (expenses ?? []).filter((row) => isInYear(row.expense_date || row.createdAt, selectedYear)),
+    [expenses, selectedYear]
+  );
 
   // Available balance (USD) from /advance/dashboard/available — already net of
   // approved expenses. `undefined` means the endpoint has no data for that bucket.
@@ -264,22 +276,26 @@ export default function LabelArtistDashboard() {
   const albumRevenueSeries = useMemo(
     () =>
       aggregateSeriesByMonth(
-        (albumRevenue ?? []).map((item) => ({
-          date: item.day,
-          value: Number(item.revenue ?? 0),
-        }))
+        (albumRevenue ?? [])
+          .filter((item) => isInYear(item.day, selectedYear))
+          .map((item) => ({
+            date: item.day,
+            value: Number(item.revenue ?? 0),
+          }))
       ),
-    [albumRevenue]
+    [albumRevenue, selectedYear]
   );
   const albumPerformanceSeries = useMemo(
     () =>
       aggregateSeriesByMonth(
-        (albumPerformance ?? []).map((item) => ({
-          date: item.day,
-          value: Number(item.streams ?? 0),
-        }))
+        (albumPerformance ?? [])
+          .filter((item) => isInYear(item.day, selectedYear))
+          .map((item) => ({
+            date: item.day,
+            value: Number(item.streams ?? 0),
+          }))
       ),
-    [albumPerformance]
+    [albumPerformance, selectedYear]
   );
 
   const trackTopRows = useMemo<PerformanceRow[]>(
@@ -321,7 +337,7 @@ export default function LabelArtistDashboard() {
 
   const advanceRows = useMemo<AdvanceRow[]>(
     () =>
-      (advances ?? []).map((row, index) => ({
+      yearAdvances.map((row, index) => ({
         id: row._id || `ADV-${index + 1}`,
         date: formatDate((row.createdAt || row.created_at || '').toString()),
         amount: formatCurrencyAmount(Number(row.amount ?? 0), row.currency || 'USD'),
@@ -329,22 +345,23 @@ export default function LabelArtistDashboard() {
         status: normalizeStatus(row.status || row.repayment_status),
         purpose: row.purpose || '-',
       })),
-    [advances]
+    [yearAdvances]
   );
 
   const advanceTrendSeries = useMemo(
     () =>
-      aggregateSeriesByMonth([
-        ...(marketingTrend ?? []).map((point) => ({
-          date: point.date,
-          value: Number(point.totalUSD ?? 0),
-        })),
-        ...(personalTrend ?? []).map((point) => ({
-          date: point.date,
-          value: Number(point.totalUSD ?? 0),
-        })),
-      ]),
-    [marketingTrend, personalTrend]
+      aggregateSeriesByMonth(
+        [
+          ...(marketingTrend ?? []),
+          ...(personalTrend ?? []),
+        ]
+          .filter((point) => isInYear(point.date, selectedYear))
+          .map((point) => ({
+            date: point.date,
+            value: Number(point.totalUSD ?? 0),
+          }))
+      ),
+    [marketingTrend, personalTrend, selectedYear]
   );
 
   const filteredAdvanceRows = useMemo(() => {
@@ -365,7 +382,7 @@ export default function LabelArtistDashboard() {
 
   const expenseRows = useMemo<ExpenseRow[]>(
     () =>
-      (expenses ?? []).map((row, index) => {
+      yearExpenses.map((row, index) => {
         const rawStatus = (row as Expense & { status?: string }).status;
         const rawArtistName =
           (row as Expense & { artist_name?: string; artistName?: string }).artist_name ||
@@ -380,7 +397,7 @@ export default function LabelArtistDashboard() {
           loggedBy: rawArtistName || 'Admin',
         };
       }),
-    [expenses]
+    [yearExpenses]
   );
 
   const expenseTrendSeries = useMemo(
@@ -395,12 +412,12 @@ export default function LabelArtistDashboard() {
   );
 
   const totalExpensesValue = useMemo(
-    () => (expenses ?? []).reduce((sum, row) => sum + Number(row.amount ?? 0), 0),
-    [expenses]
+    () => yearExpenses.reduce((sum, row) => sum + Number(row.amount ?? 0), 0),
+    [yearExpenses]
   );
   const totalExpensesCurrency = useMemo(
-    () => deriveSingleCurrency((expenses ?? []).map((row) => row.currency), 'USD'),
-    [expenses]
+    () => deriveSingleCurrency(yearExpenses.map((row) => row.currency), 'USD'),
+    [yearExpenses]
   );
 
   const filteredExpenseRows = useMemo(() => {
@@ -455,7 +472,7 @@ export default function LabelArtistDashboard() {
 
   return (
     <div>
-      <Topbar />
+      <Topbar year={selectedYear} onYearChange={setSelectedYear} />
 
       <div className="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <p className="text-base text-[#5A5A5A]">Quick actions</p>

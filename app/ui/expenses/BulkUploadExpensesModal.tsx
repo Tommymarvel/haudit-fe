@@ -69,13 +69,13 @@ export default function BulkUploadExpensesModal({ open, onClose, onUpload }: Pro
             </div>
 
             <a
-              href="/Haudit Template.xlsx"
+              href="/Expense Upload Template.xlsx"
               download
               onClick={(e) => e.stopPropagation()}
               className="mt-4 flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-violet-300 bg-violet-50 px-6 py-8 transition-colors hover:bg-violet-100"
             >
               <FileSpreadsheet className="h-10 w-10 text-violet-500" />
-              <span className="text-sm font-medium text-[#1A1A1A]">Haudit Template</span>
+              <span className="text-sm font-medium text-[#1A1A1A]">Expense Upload Template</span>
               <span className="text-sm text-violet-600 underline">Download template</span>
             </a>
 

@@ -33,6 +33,7 @@ export type RecordLabelTopAdvance = {
   currency?: string;
   advance_type?: string;
   status?: string;
+  repayment_status?: string;
   purpose?: string;
 };
 

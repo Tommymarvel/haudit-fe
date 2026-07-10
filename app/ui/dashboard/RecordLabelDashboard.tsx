@@ -2,6 +2,7 @@
 import { useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { exportToPdf } from "@/lib/utils/exportPdf";
+import { downloadAdvanceCsv } from "@/lib/utils/exportCsv";
 import Topbar from "@/components/layout/Topbar";
 import { ChartCard, DonutSlice } from "@/components/dashboard/ChartCard";
 import { useRoyalty } from "@/hooks/useRoyalty";
@@ -28,6 +29,7 @@ import IgnoreUnrecognizedConfirmModal from "@/components/ui/IgnoreUnrecognizedCo
 import QuickActionsBar from "@/components/dashboard/QuickActionsBar";
 import { Pagination } from "@/components/ui/Pagination";
 import { getRecordLabelArtistName } from "@/lib/utils/recordLabelArtist";
+import { isInYear } from "@/lib/utils/date";
 
 type Tab = "Track" | "Album" | "Advance" | "Expenses";
 
@@ -60,10 +62,11 @@ const ALBUM_INTERACTION_COLORS = ["#00D447", BRAND.purple, "#3B82F6", "#F59E0B",
 
 export default function RecordLabelDashboard() {
   const router = useRouter();
-  const { uploadRoyaltyFile, dashboardMetrics, albumPerformance, albumInteractions, trackStreamsDsp } = useRoyalty();
+  const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
+  const { uploadRoyaltyFile, dashboardMetrics, albumPerformance, albumInteractions, trackStreamsDsp } = useRoyalty({ year: selectedYear });
   const { createAdvance, marketingTrend, personalTrend, typePercentage } =
     useAdvance();
-  const { createExpense, trend: expensesTrend } = useExpenses();
+  const { createExpense, trend: expensesTrend } = useExpenses({ year: selectedYear });
   const { dashboard, topTracks, topAlbums, topAdvances, topExpenses } =
     useRecordLabel();
   const { artists: recordLabelArtistsList } = useRecordLabelArtists();
@@ -278,7 +281,7 @@ export default function RecordLabelDashboard() {
       { label: string; date: string; value: number }
     >();
 
-    (albumPerformance ?? []).forEach((point) => {
+    (albumPerformance ?? []).filter((point) => isInYear(point.day, selectedYear)).forEach((point) => {
       const parsed = new Date(point.day);
       if (Number.isNaN(parsed.getTime())) return;
       const key = `${parsed.getUTCFullYear()}-${String(
@@ -299,7 +302,7 @@ export default function RecordLabelDashboard() {
     return Array.from(monthMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, value]) => value);
-  }, [albumPerformance]);
+  }, [albumPerformance, selectedYear]);
 
   const topTracksData: TopPerformanceRow[] = (topTracks ?? []).map(
     (item, index) => ({
@@ -345,7 +348,9 @@ export default function RecordLabelDashboard() {
       string,
       { label: string; date: string; value: number }
     >();
-    [...(marketingTrend ?? []), ...(personalTrend ?? [])].forEach((point) => {
+    [...(marketingTrend ?? []), ...(personalTrend ?? [])]
+      .filter((point) => isInYear(point.date, selectedYear))
+      .forEach((point) => {
       const parsed = new Date(point.date);
       if (Number.isNaN(parsed.getTime())) return;
       const key = `${parsed.getUTCFullYear()}-${String(
@@ -366,7 +371,7 @@ export default function RecordLabelDashboard() {
     return Array.from(monthMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, value]) => value);
-  }, [marketingTrend, personalTrend]);
+  }, [marketingTrend, personalTrend, selectedYear]);
 
   const advanceInteractionData = useMemo<DonutSlice[]>(() => {
     const marketingTotal = Number(typePercentage?.marketting?.totalUSD ?? 0);
@@ -384,7 +389,8 @@ export default function RecordLabelDashboard() {
       date: formatDate(advance.createdAt),
       amount: formatAmountWithCurrency(advance.amount, advance.currency),
       type: titleCase(advance.advance_type),
-      status: normalizeStatus(advance.status),
+      // Show approval status (pending/approved/rejected), not repayment_status.
+      status: normalizeStatus(advance.status || advance.repayment_status),
       purpose: advance.purpose || "-",
     }),
   );
@@ -437,9 +443,24 @@ export default function RecordLabelDashboard() {
     }
   };
 
+  // "Export data" → CSV from the server-side /advance/export endpoint.
+  const handleExportCsv = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const params: Record<string, string | number> = {};
+      if (selectedYear) params.year = selectedYear;
+      await downloadAdvanceCsv(params, `dashboard-advance-${selectedYear ?? 'all'}.csv`);
+    } catch (err) {
+      console.error("Export failed", err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div ref={contentRef}>
-      <Topbar />
+      <Topbar year={selectedYear} onYearChange={setSelectedYear} />
 
       {/* Quick actions */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between mt-6">
@@ -453,7 +474,7 @@ export default function RecordLabelDashboard() {
             onAddAdvance={() => setOpenExpense(true)}
             onAddExpense={() => setOpenExpense(true)}
             onMore={(key) => {
-              if (key === "export-table") handleExportPdf("dashboard-table.pdf");
+              if (key === "export-data") handleExportCsv();
               if (key === "export-analytics") handleExportPdf("dashboard-analytics.pdf");
             }}
             secondaryActionLabel="Add expense"
@@ -476,7 +497,7 @@ export default function RecordLabelDashboard() {
                 onClick: () => setOpenUpload(true),
               },
               { label: "Add Expense", onClick: () => setOpenExpense(true) },
-              { label: "Export Table", onClick: () => handleExportPdf("dashboard-table.pdf") },
+              { label: "Export data", onClick: handleExportCsv },
               { label: "Export Analytics", onClick: () => handleExportPdf("dashboard-analytics.pdf") },
             ]}
           />

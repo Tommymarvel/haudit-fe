@@ -11,12 +11,17 @@ import { formatCurrencyAmount } from '@/lib/utils/currency';
 import {
   ArrowUpDown,
   CalendarDays,
+  ChevronDown,
   CircleDollarSign,
+  Download,
   FileText,
   MoreVertical,
   Search,
   UserRound,
 } from 'lucide-react';
+import { Menu } from '@/components/ui/Menu';
+import { exportToPdf } from '@/lib/utils/exportPdf';
+import { downloadCsv } from '@/lib/utils/exportCsv';
 import { useSearchParams } from 'next/navigation';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -97,6 +102,8 @@ const RecordLabelExpenses = () => {
   const [openBulk, setOpenBulk] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const [selectedExpense, setSelectedExpense] = useState<ExpenseRow | null>(null);
   const [menuOpenForId, setMenuOpenForId] = useState<string | null>(null);
@@ -189,6 +196,35 @@ const RecordLabelExpenses = () => {
   const totalPages = Math.max(1, Math.ceil(filteredExpenses.length / PAGE_SIZE));
   const pagedExpenses = filteredExpenses.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  // No server-side expenses export endpoint exists — "Export data" builds a CSV
+  // client-side from the filtered rows; "Export Analytics" renders the page to PDF.
+  const handleExportCsv = () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      downloadCsv(
+        `artist-expenses-${selectedYear ?? 'all'}.csv`,
+        ['ID', 'Date', 'Artist', 'Advance Type', 'Status', 'Amount', 'Currency', 'Logged By', 'Description'],
+        filteredExpenses.map((r) => [r.id, r.date, r.artistName, r.advanceType, r.status, r.amount, r.currency, r.loggedBy, r.description]),
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (!contentRef.current || isExporting) return;
+    setIsExporting(true);
+    try {
+      await exportToPdf(contentRef.current, `artist-expenses-analytics-${selectedYear ?? 'all'}.pdf`);
+    } catch (err) {
+      console.error('Export failed', err);
+      toast.error('Failed to export analytics');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   useEffect(() => {
     if (!menuOpenForId) return;
     const close = () => { setMenuOpenForId(null); setMenuPosition(null); };
@@ -247,7 +283,7 @@ const RecordLabelExpenses = () => {
   };
 
   return (
-    <div>
+    <div ref={contentRef}>
       {/* Header */}
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
@@ -263,6 +299,24 @@ const RecordLabelExpenses = () => {
             label="Year"
             showYear={true}
             buttonClassName="inline-flex items-center gap-2 rounded-2xl bg-[#E9E9E9] px-3 py-2 text-[14px] font-medium text-[#5A5A5A]"
+          />
+          <Menu
+            trigger={
+              <button
+                type="button"
+                disabled={isExporting}
+                data-pdf-exclude="true"
+                className="inline-flex items-center gap-2 rounded-2xl bg-[#E9E9E9] px-3 py-2 text-[14px] font-medium text-[#5A5A5A] disabled:opacity-60"
+              >
+                <Download className="h-4 w-4" />
+                {isExporting ? 'Exporting...' : 'Export'}
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            }
+            items={[
+              { label: 'Export data', onClick: handleExportCsv },
+              { label: 'Export Analytics', onClick: handleExportPdf },
+            ]}
           />
           <div ref={dropdownRef} className="relative">
             <button

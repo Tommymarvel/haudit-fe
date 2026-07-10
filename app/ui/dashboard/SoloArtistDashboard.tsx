@@ -15,18 +15,21 @@ import Image from 'next/image';
 import Topbar from '@/components/layout/Topbar';
 import { useMemo, useState, useRef } from 'react';
 import { exportToPdf } from '@/lib/utils/exportPdf';
+import { downloadAdvanceCsv } from '@/lib/utils/exportCsv';
 import { useRoyalty } from '@/hooks/useRoyalty';
 import { useAdvance } from '@/hooks/useAdvance';
 import { useExpenses } from '@/hooks/useExpenses';
 import { useUnrecognizedArtists } from '@/hooks/useUnrecognizedArtists';
 import { useAuth } from '@/contexts/AuthContext';
 import { uploadFile } from '@/lib/utils/upload';
+import { isInYear } from '@/lib/utils/date';
 
 const ALBUM_INTERACTION_COLORS = ['#7B00D4', '#00D447', '#3B82F6', '#F59E0B', '#EF4444'];
 
 export default function SoloArtistDashboard() {
   const { user } = useAuth();
-  const { dashboardMetrics, albumPerformance, albumRevenue, albumInteractions, trackStreamsDsp, uploadRoyaltyFile } = useRoyalty();
+  const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
+  const { dashboardMetrics, albumPerformance, albumRevenue, albumInteractions, trackStreamsDsp, uploadRoyaltyFile } = useRoyalty({ year: selectedYear });
   const { createAdvance } = useAdvance();
   const { createExpense } = useExpenses();
   const { assignPendingArtists, refreshPendingArtists } = useUnrecognizedArtists();
@@ -160,20 +163,24 @@ export default function SoloArtistDashboard() {
 
   const albumPerformanceData = useMemo(
     () =>
-      (albumPerformance ?? []).map((item) => ({
-        label: item.day,
-        value: item.streams,
-      })),
-    [albumPerformance]
+      (albumPerformance ?? [])
+        .filter((item) => isInYear(item.day, selectedYear))
+        .map((item) => ({
+          label: item.day,
+          value: item.streams,
+        })),
+    [albumPerformance, selectedYear]
   );
 
   const albumRevenueData = useMemo(
     () =>
-      (albumRevenue ?? []).map((item) => ({
-        label: item.day,
-        value: item.revenue,
-      })),
-    [albumRevenue]
+      (albumRevenue ?? [])
+        .filter((item) => isInYear(item.day, selectedYear))
+        .map((item) => ({
+          label: item.day,
+          value: item.revenue,
+        })),
+    [albumRevenue, selectedYear]
   );
 
   const albumInteractionData: DonutSlice[] = useMemo(
@@ -200,11 +207,26 @@ export default function SoloArtistDashboard() {
     }
   };
 
+  // "Export data" → CSV from the server-side /advance/export endpoint.
+  const handleExportCsv = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const params: Record<string, string | number> = {};
+      if (selectedYear) params.year = selectedYear;
+      await downloadAdvanceCsv(params, `dashboard-advance-${selectedYear ?? 'all'}.csv`);
+    } catch (err) {
+      console.error('Export failed', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div ref={contentRef}>
       <div className="">
         {' '}
-        <Topbar />
+        <Topbar year={selectedYear} onYearChange={setSelectedYear} />
       </div>
 
       {/* Quick actions */}
@@ -217,7 +239,7 @@ export default function SoloArtistDashboard() {
             onAddAdvance={() => setOpenAdvance(true)}
             onAddExpense={() => setOpenExpense(true)}
             onMore={(key) => {
-              if (key === 'export-table') handleExportPdf('dashboard-table.pdf');
+              if (key === 'export-data') handleExportCsv();
               if (key === 'export-analytics') handleExportPdf('dashboard-analytics.pdf');
             }}
           />
@@ -234,7 +256,7 @@ export default function SoloArtistDashboard() {
               { label: 'Add new royalty record', onClick: () => setOpenUpload(true) },
               { label: 'Add Advance', onClick: () => setOpenAdvance(true) },
               { label: 'Add Expense', onClick: () => setOpenExpense(true) },
-              { label: 'Export Table', onClick: () => handleExportPdf('dashboard-table.pdf') },
+              { label: 'Export data', onClick: handleExportCsv },
               { label: 'Export Analytics', onClick: () => handleExportPdf('dashboard-analytics.pdf') },
             ]}
           />

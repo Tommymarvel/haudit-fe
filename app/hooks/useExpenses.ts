@@ -23,15 +23,20 @@ const trendFetcher = (url: string) =>
     return { trend: [] as ExpenseTrendItem[], netTotal: 0 };
   });
 
-export function useExpenses() {
+export function useExpenses(options?: { year?: number | null }) {
   const searchParams = useSearchParams();
   const artistId = (searchParams.get('artistId') || '').trim();
+  const year = typeof options?.year === 'number' ? options.year : null;
 
   const expensesEndpoint = useMemo(() => appendQueryParam('/expenses', 'artistId', artistId), [artistId]);
-  const trendEndpoint = useMemo(
-    () => appendQueryParam('/expenses/trend', 'artistId', artistId),
-    [artistId]
-  );
+  // /expenses/trend accepts startDate/endDate (not year) — map the year to a
+  // full-year range so the trend is server-scoped to the selected year.
+  const trendEndpoint = useMemo(() => {
+    const base = typeof year === 'number'
+      ? `/expenses/trend?startDate=${year}-01-01&endDate=${year}-12-31`
+      : '/expenses/trend';
+    return appendQueryParam(base, 'artistId', artistId);
+  }, [artistId, year]);
   const availableBalanceEndpoint = useMemo(
     () => appendQueryParam('/advance/dashboard/available', 'artistId', artistId),
     [artistId]

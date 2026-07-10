@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   ArrowUpDown,
   CalendarDays,
   CheckCheck,
+  ChevronDown,
   Download,
   FileText,
   MoreVertical,
@@ -12,6 +13,8 @@ import {
   Search,
   UserRound,
 } from 'lucide-react';
+import { Menu } from '@/components/ui/Menu';
+import { exportToPdf } from '@/lib/utils/exportPdf';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -103,6 +106,7 @@ export default function LabelArtistExpenses() {
   const { user } = useAuth();
   const { expenses, createExpense, approveExpense, rejectExpense } = useExpenses();
   const { availableBalance } = useAdvance();
+  const contentRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [q, setQ] = useState('');
   const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
@@ -221,6 +225,20 @@ export default function LabelArtistExpenses() {
     }
   };
 
+  // No server-side expenses export endpoint exists, so "Export Analytics" renders
+  // the page to PDF via the pdf library (CSV above is built client-side).
+  const handleExportPdf = async () => {
+    if (!contentRef.current || isExporting) return;
+    setIsExporting(true);
+    try {
+      await exportToPdf(contentRef.current, `expenses-analytics-${selectedYear ?? 'all'}.pdf`);
+    } catch (err) {
+      console.error('Export failed', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const closeDetailModal = () => {
     setSelectedExpense(null);
     setDeclineMode(false);
@@ -228,7 +246,7 @@ export default function LabelArtistExpenses() {
   };
 
   return (
-    <div>
+    <div ref={contentRef}>
       {/* ── Header ── */}
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
@@ -247,15 +265,23 @@ export default function LabelArtistExpenses() {
             showYear
             buttonClassName="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-4 text-sm font-medium text-[#5A5A5A]"
           />
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            disabled={isExporting}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-4 text-sm font-medium text-[#5A5A5A] disabled:opacity-60"
-          >
-            <Download className="h-4 w-4" />
-            {isExporting ? 'Exporting...' : 'Export CSV'}
-          </button>
+          <Menu
+            trigger={
+              <button
+                type="button"
+                disabled={isExporting}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-4 text-sm font-medium text-[#5A5A5A] disabled:opacity-60"
+              >
+                <Download className="h-4 w-4" />
+                {isExporting ? 'Exporting...' : 'Export'}
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            }
+            items={[
+              { label: 'Export data', onClick: handleExportCsv },
+              { label: 'Export Analytics', onClick: handleExportPdf },
+            ]}
+          />
           <button
             type="button"
             onClick={() => setOpenAdd(true)}
@@ -402,7 +428,7 @@ export default function LabelArtistExpenses() {
               </p>
               <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium text-[#7B00D4]" style={{ backgroundColor: '#F3E8FF' }}>
                 <FileText className="h-3 w-3" />
-                Logged by {selectedExpense.loggedBy === 'record_label' || selectedExpense.loggedBy === 'admin' ? 'Label' : 'Artist'}
+                Logged by {['record_label', 'admin', 'label'].includes((selectedExpense.loggedBy || '').toLowerCase()) ? 'Label' : 'Artist'}
               </span>
             </div>
 

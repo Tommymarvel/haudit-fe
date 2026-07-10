@@ -1,14 +1,15 @@
 // StreamPerDSPPanel.tsx
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import axiosInstance from '@/lib/axiosinstance';
 import AppShell from '@/components/layout/AppShell';
 import { ViewToggle } from '@/components/dashboard/ViewToggle';
-import { Button } from '@/components/ui/Button';
 import { ChevronLeft, ChevronRight, Table2 } from 'lucide-react';
-import { BRAND } from '@/lib/brand';
+import { TableExportMenu } from '@/components/dashboard/TableExportMenu';
+import { exportToPdf } from '@/lib/utils/exportPdf';
+import { downloadCsv } from '@/lib/utils/exportCsv';
 import {
   Line,
   XAxis,

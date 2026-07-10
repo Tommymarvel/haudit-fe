@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useMemo, useState, useRef } from 'react';
-import axiosInstance from '@/lib/axiosinstance';
 import { ChartCard } from '@/components/dashboard/ChartCard';
 import { Card, CardBody } from '@/components/ui/Card';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -12,12 +11,16 @@ import Image from 'next/image';
 import {
   ArrowUpDown,
   CheckCheck,
+  ChevronDown,
   FileUp,
   Hourglass,
   MoreVertical,
   Search,
   WalletCards,
 } from 'lucide-react';
+import { Menu } from '@/components/ui/Menu';
+import { exportToPdf } from '@/lib/utils/exportPdf';
+import { downloadAdvanceCsv } from '@/lib/utils/exportCsv';
 import { useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { useAdvance } from '@/hooks/useAdvance';
@@ -331,6 +334,7 @@ const RecordLabelAdvance = () => {
     }
   };
 
+  // "Export data" → CSV from the server-side /advance/export endpoint.
   const handleExportCsv = async () => {
     if (isExporting) return;
     setIsExporting(true);
@@ -338,19 +342,24 @@ const RecordLabelAdvance = () => {
       const params: Record<string, string | number> = {};
       if (selectedYear) params.year = selectedYear;
       if (selectedArtistId) params.artistId = selectedArtistId;
-      const response = await axiosInstance.get('/advance/export', { params, responseType: 'blob' });
-      const blob = new Blob([response.data as BlobPart], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `advance-${selectedYear ?? 'all'}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      await downloadAdvanceCsv(params, `advance-${selectedYear ?? 'all'}.csv`);
     } catch (err) {
       console.error('Export failed', err);
       toast.error('Failed to export advances');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // "Export Analytics" → PDF of the page via the pdf library.
+  const handleExportPdf = async () => {
+    if (!contentRef.current || isExporting) return;
+    setIsExporting(true);
+    try {
+      await exportToPdf(contentRef.current, `advance-analytics-${selectedYear ?? 'all'}.pdf`);
+    } catch (err) {
+      console.error('Export failed', err);
+      toast.error('Failed to export analytics');
     } finally {
       setIsExporting(false);
     }
@@ -377,16 +386,24 @@ const RecordLabelAdvance = () => {
             showYear
             buttonClassName="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-3 py-2 text-sm font-medium text-neutral-800"
           />
-          <button
-            type="button"
-            disabled={isExporting}
-            data-pdf-exclude="true"
-            onClick={handleExportCsv}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#7B00D4] px-6 text-sm font-medium text-white disabled:opacity-60"
-          >
-            <FileUp className="h-4 w-4" />
-            {isExporting ? 'Exporting...' : 'Export'}
-          </button>
+          <Menu
+            trigger={
+              <button
+                type="button"
+                disabled={isExporting}
+                data-pdf-exclude="true"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#7B00D4] px-6 text-sm font-medium text-white disabled:opacity-60"
+              >
+                <FileUp className="h-4 w-4" />
+                {isExporting ? 'Exporting...' : 'Export'}
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            }
+            items={[
+              { label: 'Export data', onClick: handleExportCsv },
+              { label: 'Export Analytics', onClick: handleExportPdf },
+            ]}
+          />
         </div>
       </div>
 

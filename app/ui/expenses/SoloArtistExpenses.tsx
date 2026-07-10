@@ -5,6 +5,7 @@ import { BRAND } from '@/lib/brand';
 import { CalendarDays, ChevronDown, FileText, Plus, Table2 } from 'lucide-react';
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { exportToPdf } from '@/lib/utils/exportPdf';
+import { downloadCsv } from '@/lib/utils/exportCsv';
 import AddExpensesModal, { NewExpensesPayload } from './AddExpensesModal';
 import BulkUploadExpensesModal from './BulkUploadExpensesModal';
 import { useExpenses } from '@/hooks/useExpenses';
@@ -136,6 +137,22 @@ const SoloArtistExpenses = () => {
     }
   };
 
+  // No server-side expenses export endpoint exists, so "Export data" builds the
+  // CSV client-side from the currently filtered rows.
+  const handleExportCsv = () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      downloadCsv(
+        `expenses-${selectedYear ?? 'all'}.csv`,
+        ['ID', 'Date', 'Advance Type', 'Amount', 'Currency', 'Status', 'Description'],
+        filtered.map((r) => [r.id, r.date, r.advanceType, r.amount, r.currency, r.status, r.description]),
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div ref={contentRef}>
       <div className="flex flex-col items-start gap-3 lg:flex-row lg:items-center justify-between ">
@@ -180,8 +197,8 @@ const SoloArtistExpenses = () => {
                       </Button>
                     }
                     items={[
-                      { label: "Export analytics", onClick: () => handleExportPdf(`expenses-analytics-${selectedYear ?? 'all'}.pdf`) },
-                      { label: "Export data", onClick: () => handleExportPdf(`expenses-data-${selectedYear ?? 'all'}.pdf`) },
+                      { label: "Export data", onClick: handleExportCsv },
+                      { label: "Export Analytics", onClick: () => handleExportPdf(`expenses-analytics-${selectedYear ?? 'all'}.pdf`) },
                     ]}
                   />
 

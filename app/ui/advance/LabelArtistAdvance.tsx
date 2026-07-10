@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useMemo, useState, useRef } from 'react';
-import axiosInstance from '@/lib/axiosinstance';
 import {
   ArrowUpDown,
   Calendar,
@@ -35,7 +34,10 @@ import {
   formatCurrencyAmount,
   parseAmountInput,
 } from '@/lib/utils/currency';
-import { getAvailableAmount } from '@/lib/utils/advance';
+import { getAvailableAmount, getAvailableBucket } from '@/lib/utils/advance';
+import { downloadAdvanceCsv } from '@/lib/utils/exportCsv';
+import { exportToPdf } from '@/lib/utils/exportPdf';
+import { Menu } from '@/components/ui/Menu';
 
 type LabelAdvanceStatus = 'Paid' | 'Pending' | 'Approved' | 'Rejected';
 type LabelAdvanceType = 'Personal' | 'Marketing';
@@ -184,7 +186,7 @@ const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct
 
 export default function LabelArtistAdvance() {
   const { user } = useAuth();
-  const { advances, overview, marketingTrend, personalTrend, availableBalance, createAdvance, updateAdvanceStatus } = useAdvance();
+  const { advances, marketingTrend, personalTrend, availableBalance, createAdvance, updateAdvanceStatus, approveAdvance, rejectAdvance } = useAdvance();
   const { expenses } = useExpenses();
 
   const contentRef = useRef<HTMLDivElement>(null);
@@ -352,12 +354,19 @@ export default function LabelArtistAdvance() {
     [availableBalance],
   );
 
+  // All advance metric cards derive from /advance/dashboard/available (USD bucket),
+  // summed across personal + marketing. This is the single source of truth:
+  //   approvedTotal = Total Funds Received, repaid = Recouped,
+  //   available = Unspent (approvedTotal - repaid - expensed - pendingHeld).
+  // Using `available` for "Unspent" is what makes it reflect approved expenses.
   const topMetrics = useMemo(() => {
-    const totalAdvance = personalTotalUSD + marketingTotalUSD;
-    const repaidAdvance = Number(overview?.totalRepaidUSD ?? 0);
-    const outstanding = Math.max(totalAdvance - repaidAdvance, 0);
-    return { totalAdvance, repaidAdvance, outstanding };
-  }, [personalTotalUSD, marketingTotalUSD, overview]);
+    const p = getAvailableBucket(availableBalance, 'personal', 'USD');
+    const m = getAvailableBucket(availableBalance, 'marketting', 'USD');
+    const totalAdvance = Number(p?.approvedTotal ?? 0) + Number(m?.approvedTotal ?? 0);
+    const repaidAdvance = Number(p?.repaid ?? 0) + Number(m?.repaid ?? 0);
+    const unspent = Number(p?.available ?? 0) + Number(m?.available ?? 0);
+    return { totalAdvance, repaidAdvance, unspent };
+  }, [availableBalance]);
 
   const openRequestForm = () => {
     setRequestForm(buildInitialRequestForm());
@@ -400,13 +409,23 @@ export default function LabelArtistAdvance() {
   const submitStatusUpdate = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!statusRow || isUpdatingStatus) return;
-    if (!statusDescription.trim()) { toast.error('Description is required'); return; }
+    // Label admins (record_label) resolve requests via the status endpoint, which
+    // requires a description. Label artists approve/reject a label-initiated
+    // advance via the dedicated approve/reject endpoints (no description).
+    const isLabelAdmin = user?.user_type === 'record_label';
+    if (isLabelAdmin && !statusDescription.trim()) { toast.error('Description is required'); return; }
     try {
       setIsUpdatingStatus(true);
-      await updateAdvanceStatus(statusRow.id, {
-        status: statusUpdate,
-        status_desc: statusDescription.trim(),
-      });
+      if (!isLabelAdmin && statusUpdate === 'approved') {
+        await approveAdvance(statusRow.id);
+      } else if (!isLabelAdmin && statusUpdate === 'rejected') {
+        await rejectAdvance(statusRow.id);
+      } else {
+        await updateAdvanceStatus(statusRow.id, {
+          status: statusUpdate,
+          status_desc: statusDescription.trim(),
+        });
+      }
       setStatusRow(null);
       setStatusDescription('');
     } catch {
@@ -416,6 +435,7 @@ export default function LabelArtistAdvance() {
     }
   };
 
+  // "Export data" → CSV from the server-side /advance/export endpoint.
   const handleExportCsv = async () => {
     if (isExporting) return;
     setIsExporting(true);
@@ -426,19 +446,24 @@ export default function LabelArtistAdvance() {
         const artistId = (new URLSearchParams(window.location.search)).get('artistId') || '';
         if (artistId) params.artistId = artistId;
       }
-      const response = await axiosInstance.get('/advance/export', { params, responseType: 'blob' });
-      const blob = new Blob([response.data as BlobPart], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `advance-${selectedYear ?? 'all'}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      await downloadAdvanceCsv(params, `advance-${selectedYear ?? 'all'}.csv`);
     } catch (err) {
       console.error('Export failed', err);
       toast.error('Failed to export advances');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // "Export Analytics" → PDF of the page via the pdf library.
+  const handleExportPdf = async () => {
+    if (!contentRef.current || isExporting) return;
+    setIsExporting(true);
+    try {
+      await exportToPdf(contentRef.current, `advance-analytics-${selectedYear ?? 'all'}.pdf`);
+    } catch (err) {
+      console.error('Export failed', err);
+      toast.error('Failed to export analytics');
     } finally {
       setIsExporting(false);
     }
@@ -461,15 +486,23 @@ export default function LabelArtistAdvance() {
             showYear
             buttonClassName="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-4 text-sm font-medium text-[#3C3C3C]"
           />
-          <button
-            type="button"
-            disabled={isExporting}
-            onClick={handleExportCsv}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-4 text-sm font-medium text-[#3C3C3C] disabled:opacity-60"
-          >
-            <Download className="h-4 w-4" />
-            {isExporting ? 'Exporting...' : 'Export CSV'}
-          </button>
+          <Menu
+            trigger={
+              <button
+                type="button"
+                disabled={isExporting}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-4 text-sm font-medium text-[#3C3C3C] disabled:opacity-60"
+              >
+                <Download className="h-4 w-4" />
+                {isExporting ? 'Exporting...' : 'Export'}
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            }
+            items={[
+              { label: 'Export data', onClick: handleExportCsv },
+              { label: 'Export Analytics', onClick: handleExportPdf },
+            ]}
+          />
           {user?.user_type !== 'record_label' && (
             <button
               type="button"
@@ -526,7 +559,7 @@ export default function LabelArtistAdvance() {
               icon={<RefreshCcw className="h-4 w-4" />}
             />
             <SmallMetricCard
-              value={formatCurrencyAmount(topMetrics.outstanding, 'USD')}
+              value={formatCurrencyAmount(topMetrics.unspent, 'USD')}
               label="Unspent Advance"
               icon={<TrendingUp className="h-4 w-4" />}
             />
