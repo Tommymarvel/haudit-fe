@@ -1,12 +1,13 @@
 // StreamPerTrackPanel.tsx
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import axiosInstance from '@/lib/axiosinstance';
 import AppShell from '@/components/layout/AppShell';
 import { ViewToggle } from '@/components/dashboard/ViewToggle';
-import { ChevronLeft, ChevronRight, Table2 } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { ChevronLeft, ChevronRight, Download, Table2 } from 'lucide-react';
 import {
   Line,
   XAxis,
@@ -19,11 +20,9 @@ import {
 import { ReportInsightDropdown } from '@/components/report-insight/ReportInsightDropdown';
 import { ChartEmptyState } from '@/components/dashboard/ChartEmptyState';
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
-import { TableExportMenu } from '@/components/dashboard/TableExportMenu';
+import { BRAND } from '@/lib/brand';
 import { appendQueryParam } from '@/lib/utils/query';
 import { exportToPdf } from '@/lib/utils/exportPdf';
-import { downloadCsv } from '@/lib/utils/exportCsv';
-import { useRef } from 'react';
 
 type Row = {
   track: string;
@@ -202,22 +201,6 @@ export default function StreamPerTrackPanel() {
     setCurrentPage(1);
   }, [rows.length, selectedYear, viewMode]);
 
-  // No royalty export endpoint exists — build the CSV client-side from the table.
-  const handleExportCsv = () => {
-    if (isExporting) return;
-    setIsExporting(true);
-    try {
-      const label = viewMode === 'revenue' ? 'Revenue' : 'Streams';
-      downloadCsv(
-        `${viewMode}-per-track-${selectedYear ?? 'all'}.csv`,
-        ['Track', ...monthLabels.map((m) => `${m} (${label})`)],
-        rows.map((r) => [r.track, ...r.values]),
-      );
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   const handleExportPdf = async () => {
     if (!contentRef.current || isExporting) return;
     setIsExporting(true);
@@ -253,11 +236,16 @@ export default function StreamPerTrackPanel() {
               showYear={true}
               buttonClassName="w-full rounded-2xl bg-[#EAEAEA] px-3 py-2 text-sm font-medium text-neutral-800 lg:w-auto"
             />
-            <TableExportMenu
+            <Button
+              variant="primary"
               disabled={isExporting}
-              onExportData={handleExportCsv}
-              onExportAnalytics={handleExportPdf}
-            />
+              onClick={handleExportPdf}
+              className="w-full rounded-2xl lg:w-auto gap-2"
+              style={{ backgroundColor: BRAND.purple }}
+            >
+              <Download className="h-4 w-4" />
+              {isExporting ? 'Exporting...' : 'Export'}
+            </Button>
           </div>
         </div>
 
