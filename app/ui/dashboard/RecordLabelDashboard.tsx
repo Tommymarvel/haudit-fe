@@ -2,7 +2,6 @@
 import { useMemo, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { exportToPdf } from "@/lib/utils/exportPdf";
-import { downloadAdvanceCsv } from "@/lib/utils/exportCsv";
 import Topbar from "@/components/layout/Topbar";
 import { ChartCard, DonutSlice } from "@/components/dashboard/ChartCard";
 import { useRoyalty } from "@/hooks/useRoyalty";
@@ -64,10 +63,10 @@ export default function RecordLabelDashboard() {
   const router = useRouter();
   const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const { uploadRoyaltyFile, dashboardMetrics, albumPerformance, albumInteractions, trackStreamsDsp } = useRoyalty({ year: selectedYear });
-  const { createAdvance, marketingTrend, personalTrend, typePercentage } =
+  const { advances, createAdvance, marketingTrend, personalTrend, typePercentage } =
     useAdvance();
   const { createExpense, trend: expensesTrend } = useExpenses({ year: selectedYear });
-  const { dashboard, topTracks, topAlbums, topAdvances, topExpenses } =
+  const { dashboard, topTracks, topAlbums, topExpenses } =
     useRecordLabel();
   const { artists: recordLabelArtistsList } = useRecordLabelArtists();
   const { assignPendingArtists, refreshPendingArtists } =
@@ -383,17 +382,20 @@ export default function RecordLabelDashboard() {
     ];
   }, [typePercentage]);
 
-  const topAdvanceData: TopAdvanceRow[] = (topAdvances ?? []).map(
-    (advance, index) => ({
-      id: advance.id || advance._id || `ADV-${index + 1}`,
-      date: formatDate(advance.createdAt),
+  // Source the top-advances table from the main /advance endpoint (top 5 by amount).
+  // The /record-label/top-advances endpoint returns the repayment value in its
+  // `status` field, so it can't show the approval status (pending/approved/rejected).
+  const topAdvanceData: TopAdvanceRow[] = [...(advances ?? [])]
+    .sort((a, b) => Number(b.amount ?? 0) - Number(a.amount ?? 0))
+    .slice(0, 5)
+    .map((advance, index) => ({
+      id: advance._id || `ADV-${index + 1}`,
+      date: formatDate(advance.createdAt || advance.created_at),
       amount: formatAmountWithCurrency(advance.amount, advance.currency),
       type: titleCase(advance.advance_type),
-      // Show approval status (pending/approved/rejected), not repayment_status.
       status: normalizeStatus(advance.status || advance.repayment_status),
       purpose: advance.purpose || "-",
-    }),
-  );
+    }));
 
   const expensesTrendData = useMemo(
     () =>
@@ -443,21 +445,6 @@ export default function RecordLabelDashboard() {
     }
   };
 
-  // "Export data" → CSV from the server-side /advance/export endpoint.
-  const handleExportCsv = async () => {
-    if (isExporting) return;
-    setIsExporting(true);
-    try {
-      const params: Record<string, string | number> = {};
-      if (selectedYear) params.year = selectedYear;
-      await downloadAdvanceCsv(params, `dashboard-advance-${selectedYear ?? 'all'}.csv`);
-    } catch (err) {
-      console.error("Export failed", err);
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   return (
     <div ref={contentRef}>
       <Topbar year={selectedYear} onYearChange={setSelectedYear} />
@@ -474,8 +461,7 @@ export default function RecordLabelDashboard() {
             onAddAdvance={() => setOpenExpense(true)}
             onAddExpense={() => setOpenExpense(true)}
             onMore={(key) => {
-              if (key === "export-data") handleExportCsv();
-              if (key === "export-analytics") handleExportPdf("dashboard-analytics.pdf");
+              if (key === "export") handleExportPdf("dashboard-analytics.pdf");
             }}
             secondaryActionLabel="Add expense"
           />
@@ -497,8 +483,7 @@ export default function RecordLabelDashboard() {
                 onClick: () => setOpenUpload(true),
               },
               { label: "Add Expense", onClick: () => setOpenExpense(true) },
-              { label: "Export data", onClick: handleExportCsv },
-              { label: "Export Analytics", onClick: () => handleExportPdf("dashboard-analytics.pdf") },
+              { label: "Export", onClick: () => handleExportPdf("dashboard-analytics.pdf") },
             ]}
           />
         </div>

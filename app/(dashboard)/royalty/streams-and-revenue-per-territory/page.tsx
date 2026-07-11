@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import AppShell from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { BRAND } from '@/lib/brand';
@@ -10,6 +10,7 @@ import { ChartEmptyState } from '@/components/dashboard/ChartEmptyState';
 import { useRoyalty } from '@/hooks/useRoyalty';
 import TerritoryWorldMap from '@/components/royalty/TerritoryWorldMap';
 import { getCountryDisplayName } from '@/lib/utils/country';
+import { exportToPdf } from '@/lib/utils/exportPdf';
 
 type TerritoryRow = {
   name: string;
@@ -20,6 +21,20 @@ type TerritoryRow = {
 
 export default function StreamsAndRevenuePerTerritory() {
   const { territoryAnalysis, isTerritoryAnalysisLoading } = useRoyalty();
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportPdf = async () => {
+    if (!contentRef.current || isExporting) return;
+    setIsExporting(true);
+    try {
+      await exportToPdf(contentRef.current, 'streams-revenue-per-territory.pdf');
+    } catch (err) {
+      console.error('Export failed', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const rows = useMemo<TerritoryRow[]>(
     () =>
@@ -39,7 +54,7 @@ export default function StreamsAndRevenuePerTerritory() {
 
   return (
     <AppShell>
-      <div className="space-y-8">
+      <div ref={contentRef} className="space-y-8">
         <div className="flex flex-col items-start justify-between gap-3 lg:flex-row lg:items-center">
           <div>
             <ReportInsightDropdown currentLabel="Streams and revenue per Territory" />
@@ -50,8 +65,14 @@ export default function StreamsAndRevenuePerTerritory() {
           </div>
           <div className="flex w-full gap-2 lg:w-fit">
             <YearFilterCalendar buttonClassName="w-full rounded-2xl bg-[#EAEAEA] text-sm font-medium text-neutral-600 lg:w-auto" />
-            <Button variant="primary" className="w-full rounded-2xl lg:w-auto" style={{ backgroundColor: BRAND.purple }}>
-              Export as PDF
+            <Button
+              variant="primary"
+              disabled={isExporting}
+              onClick={handleExportPdf}
+              className="w-full rounded-2xl lg:w-auto"
+              style={{ backgroundColor: BRAND.purple }}
+            >
+              {isExporting ? 'Exporting...' : 'Export as PDF'}
             </Button>
           </div>
         </div>

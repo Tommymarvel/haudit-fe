@@ -13,20 +13,6 @@ export function downloadCsvBlob(data: BlobPart, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-/** Serialises rows to a CSV string, quoting/escaping values as needed. */
-export function toCsv(headers: string[], rows: Array<Array<string | number>>): string {
-  const escape = (value: string | number) => {
-    const text = String(value ?? '');
-    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-  };
-  return [headers, ...rows].map((row) => row.map(escape).join(',')).join('\n');
-}
-
-/** Builds a CSV from rows and downloads it. */
-export function downloadCsv(filename: string, headers: string[], rows: Array<Array<string | number>>) {
-  downloadCsvBlob(toCsv(headers, rows), filename);
-}
-
 /**
  * Downloads the advances CSV from the server-side `/advance/export` endpoint,
  * which is the only export endpoint the API exposes. Returns nothing; the caller

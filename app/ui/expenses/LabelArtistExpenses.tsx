@@ -5,7 +5,6 @@ import {
   ArrowUpDown,
   CalendarDays,
   CheckCheck,
-  ChevronDown,
   Download,
   FileText,
   MoreVertical,
@@ -13,7 +12,6 @@ import {
   Search,
   UserRound,
 } from 'lucide-react';
-import { Menu } from '@/components/ui/Menu';
 import { exportToPdf } from '@/lib/utils/exportPdf';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
@@ -200,33 +198,7 @@ export default function LabelArtistExpenses() {
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const pagedRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const handleExportCsv = () => {
-    if (isExporting) return;
-    setIsExporting(true);
-    try {
-      const headers = ['ID', 'Date', 'Advance Type', 'Status', 'Amount', 'Currency', 'Logged By', 'Artist Name', 'Approved By', 'Description', 'Recoupable'];
-      const csvRows = [
-        headers.join(','),
-        ...filteredRows.map((row) =>
-          [row.id, row.date, row.advanceType, row.status, row.amount, row.currency, row.loggedBy, row.artistName, row.approvedBy, `"${row.description.replace(/"/g, '""')}"`, row.recoupable].join(',')
-        ),
-      ];
-      const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `expenses-${selectedYear ?? 'all'}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  // No server-side expenses export endpoint exists, so "Export Analytics" renders
-  // the page to PDF via the pdf library (CSV above is built client-side).
+  // Expenses have no server-side export endpoint yet, so export is PDF-only.
   const handleExportPdf = async () => {
     if (!contentRef.current || isExporting) return;
     setIsExporting(true);
@@ -265,23 +237,15 @@ export default function LabelArtistExpenses() {
             showYear
             buttonClassName="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-4 text-sm font-medium text-[#5A5A5A]"
           />
-          <Menu
-            trigger={
-              <button
-                type="button"
-                disabled={isExporting}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-4 text-sm font-medium text-[#5A5A5A] disabled:opacity-60"
-              >
-                <Download className="h-4 w-4" />
-                {isExporting ? 'Exporting...' : 'Export'}
-                <ChevronDown className="h-4 w-4" />
-              </button>
-            }
-            items={[
-              { label: 'Export data', onClick: handleExportCsv },
-              { label: 'Export Analytics', onClick: handleExportPdf },
-            ]}
-          />
+          <button
+            type="button"
+            disabled={isExporting}
+            onClick={handleExportPdf}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[#EAEAEA] px-4 text-sm font-medium text-[#5A5A5A] disabled:opacity-60"
+          >
+            <Download className="h-4 w-4" />
+            {isExporting ? 'Exporting...' : 'Export'}
+          </button>
           <button
             type="button"
             onClick={() => setOpenAdd(true)}

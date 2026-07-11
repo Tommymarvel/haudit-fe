@@ -74,11 +74,7 @@ export default function QuickActionsBar({
         }
         items={[
           { label: "Add new expense", onClick: onAddExpense },
-          { label: "Export data", onClick: () => onMore?.("export-data") },
-          {
-            label: "Export Analytics",
-            onClick: () => onMore?.("export-analytics"),
-          },
+          { label: "Export", onClick: () => onMore?.("export") },
         ]}
       />
     </div>
