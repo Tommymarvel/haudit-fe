@@ -109,7 +109,7 @@ export default function BulkUploadExpensesModal({
               <button
                 type="button"
                 onClick={() => setStep('upload')}
-                className="flex-1 rounded-xl bg-[#888] py-2.5 text-sm font-medium text-white hover:bg-[#666]"
+                className="flex-1 rounded-xl bg-[#7B00D4] py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#6A00B8]"
               >
                 Next
               </button>
@@ -178,7 +178,7 @@ export default function BulkUploadExpensesModal({
                 type="button"
                 onClick={handleUpload}
                 disabled={!file || uploading || (showArtistField && !artistId)}
-                className="flex-1 rounded-xl bg-[#888] py-2.5 text-sm font-medium text-white transition-colors disabled:opacity-50 enabled:hover:bg-[#666]"
+                className="flex-1 rounded-xl py-2.5 text-sm font-medium text-white transition-colors disabled:bg-[#959595] enabled:bg-[#7B00D4] enabled:hover:bg-[#6A00B8]"
               >
                 {uploading ? 'Uploading...' : 'Upload Expenses'}
               </button>
