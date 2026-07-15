@@ -1,30 +1,49 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Modal from '@/components/ui/Modal';
+import { Select } from '@/components/ui/Select';
 import { CheckCircle, CloudUpload, FileSpreadsheet } from 'lucide-react';
 
 type Step = 'template' | 'upload' | 'success';
 
+type ArtistOption = { id: string; name: string };
+
 interface Props {
   open: boolean;
   onClose: () => void;
-  onUpload: (file: File) => Promise<{ rowsProcessed?: number; count?: number }>;
+  onUpload: (file: File, artistId?: string) => Promise<{ rowsProcessed?: number; count?: number }>;
+  artistOptions?: ArtistOption[];
+  initialArtistId?: string;
 }
 
-export default function BulkUploadExpensesModal({ open, onClose, onUpload }: Props) {
+export default function BulkUploadExpensesModal({
+  open,
+  onClose,
+  onUpload,
+  artistOptions,
+  initialArtistId = '',
+}: Props) {
   const [step, setStep] = useState<Step>('template');
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [recordsProcessed, setRecordsProcessed] = useState(0);
+  const [artistId, setArtistId] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const showArtistField = Boolean(artistOptions && artistOptions.length > 0);
+
+  useEffect(() => {
+    if (open) setArtistId(initialArtistId);
+  }, [open, initialArtistId]);
 
   const handleClose = () => {
     setStep('template');
     setFile(null);
     setDragging(false);
     setUploading(false);
+    setArtistId('');
     onClose();
   };
 
@@ -36,10 +55,10 @@ export default function BulkUploadExpensesModal({ open, onClose, onUpload }: Pro
   };
 
   const handleUpload = async () => {
-    if (!file || uploading) return;
+    if (!file || uploading || (showArtistField && !artistId)) return;
     setUploading(true);
     try {
-      const result = await onUpload(file);
+      const result = await onUpload(file, artistId || undefined);
       setRecordsProcessed(result?.rowsProcessed ?? result?.count ?? 0);
       setStep('success');
     } catch {
@@ -103,6 +122,21 @@ export default function BulkUploadExpensesModal({ open, onClose, onUpload }: Pro
             <h2 className="text-[20px] font-semibold text-[#1A1A1A]">Bulk Upload Expenses</h2>
             <p className="mt-1 text-sm text-[#777777]">Upload multiple artist expenses at once using a spreadsheet template.</p>
 
+            {showArtistField && (
+              <div className="mt-4">
+                <label className="mb-1 block text-sm font-medium text-[#1A1A1A]">
+                  Artist Name
+                </label>
+                <Select
+                  value={artistId}
+                  onChange={setArtistId}
+                  placeholder="Select artist name"
+                  options={(artistOptions ?? []).map((a) => ({ label: a.name, value: a.id }))}
+                  searchable={(artistOptions ?? []).length > 5}
+                />
+              </div>
+            )}
+
             <div
               onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
@@ -143,7 +177,7 @@ export default function BulkUploadExpensesModal({ open, onClose, onUpload }: Pro
               <button
                 type="button"
                 onClick={handleUpload}
-                disabled={!file || uploading}
+                disabled={!file || uploading || (showArtistField && !artistId)}
                 className="flex-1 rounded-xl bg-[#888] py-2.5 text-sm font-medium text-white transition-colors disabled:opacity-50 enabled:hover:bg-[#666]"
               >
                 {uploading ? 'Uploading...' : 'Upload Expenses'}

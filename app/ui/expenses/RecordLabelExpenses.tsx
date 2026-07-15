@@ -619,7 +619,9 @@ const RecordLabelExpenses = () => {
       <BulkUploadExpensesModal
         open={openBulk}
         onClose={() => setOpenBulk(false)}
-        onUpload={(file) => bulkUploadExpenses(file, artistFromSidebarId !== 'all' ? artistFromSidebarId : undefined)}
+        artistOptions={artistSelectOptions}
+        initialArtistId={artistFromSidebarId !== 'all' ? artistFromSidebarId : ''}
+        onUpload={(file, uploadArtistId) => bulkUploadExpenses(file, uploadArtistId)}
       />
     </div>
   );
