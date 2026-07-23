@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import {
   ArrowUpDown,
   ChevronRight,
@@ -217,8 +218,30 @@ export default function LabelArtistDashboard() {
     trackStreamsDsp,
   } = useRoyalty({ year: selectedYear });
   const { topTracks, topAlbums } = useTopPerformance(5);
-  const { advances, marketingTrend, personalTrend, availableBalance } = useAdvance();
-  const { expenses, trend: expensesTrend, createExpense } = useExpenses({ year: selectedYear });
+  const debouncedAdvanceSearch = useDebouncedValue(advanceSearch);
+  const debouncedExpenseSearch = useDebouncedValue(expenseSearch);
+  const { advances, advancesMeta, marketingTrend, personalTrend, availableBalance } = useAdvance({
+    page: advancePage,
+    limit: DASH_PAGE_SIZE,
+    search: debouncedAdvanceSearch,
+    approvalStatus:
+      advanceStatus === 'approved' || advanceStatus === 'pending' || advanceStatus === 'rejected'
+        ? advanceStatus
+        : undefined,
+  });
+  const { expenses, expensesMeta, trend: expensesTrend, createExpense } = useExpenses({
+    year: selectedYear,
+    page: expensePage,
+    limit: DASH_PAGE_SIZE,
+    search: debouncedExpenseSearch,
+  });
+
+  useEffect(() => {
+    setAdvancePage(1);
+  }, [debouncedAdvanceSearch, advanceStatus, selectedYear]);
+  useEffect(() => {
+    setExpensePage(1);
+  }, [debouncedExpenseSearch, expenseCategory, selectedYear]);
 
   // /advance and /expenses lists have no year param — filter client-side by date.
   const yearAdvances = useMemo(
@@ -364,21 +387,18 @@ export default function LabelArtistDashboard() {
     [marketingTrend, personalTrend, selectedYear]
   );
 
+  // Search and approval status are applied server-side; the year and the
+  // "Paid" status value have no query param on /advance, so they filter the
+  // current server page only.
   const filteredAdvanceRows = useMemo(() => {
-    const keyword = advanceSearch.trim().toLowerCase();
     return advanceRows.filter((row) => {
       const matchStatus = advanceStatus === 'all' || row.status.toLowerCase() === advanceStatus;
-      const matchKeyword =
-        keyword === '' ||
-        row.id.toLowerCase().includes(keyword) ||
-        row.type.toLowerCase().includes(keyword) ||
-        row.purpose.toLowerCase().includes(keyword);
-      return matchStatus && matchKeyword;
+      return matchStatus;
     });
-  }, [advanceRows, advanceSearch, advanceStatus]);
+  }, [advanceRows, advanceStatus]);
 
-  const advanceTotalPages = Math.max(1, Math.ceil(filteredAdvanceRows.length / DASH_PAGE_SIZE));
-  const pagedAdvanceRows = filteredAdvanceRows.slice((advancePage - 1) * DASH_PAGE_SIZE, advancePage * DASH_PAGE_SIZE);
+  const advanceTotalPages = advancesMeta?.totalPages ?? 1;
+  const pagedAdvanceRows = filteredAdvanceRows;
 
   const expenseRows = useMemo<ExpenseRow[]>(
     () =>
@@ -420,21 +440,17 @@ export default function LabelArtistDashboard() {
     [yearExpenses]
   );
 
+  // Search is applied server-side; year and category have no query param on
+  // /expenses, so they filter the current server page only.
   const filteredExpenseRows = useMemo(() => {
-    const keyword = expenseSearch.trim().toLowerCase();
     return expenseRows.filter((row) => {
       const matchCategory = expenseCategory === 'all' || row.category === expenseCategory;
-      const matchKeyword =
-        keyword === '' ||
-        row.id.toLowerCase().includes(keyword) ||
-        row.category.toLowerCase().includes(keyword) ||
-        row.loggedBy.toLowerCase().includes(keyword);
-      return matchCategory && matchKeyword;
+      return matchCategory;
     });
-  }, [expenseRows, expenseCategory, expenseSearch]);
+  }, [expenseRows, expenseCategory]);
 
-  const expenseTotalPages = Math.max(1, Math.ceil(filteredExpenseRows.length / DASH_PAGE_SIZE));
-  const pagedExpenseRows = filteredExpenseRows.slice((expensePage - 1) * DASH_PAGE_SIZE, expensePage * DASH_PAGE_SIZE);
+  const expenseTotalPages = expensesMeta?.totalPages ?? 1;
+  const pagedExpenseRows = filteredExpenseRows;
 
   const expenseCategoryOptions = useMemo(() => {
     const categories = Array.from(new Set(expenseRows.map((row) => row.category)));

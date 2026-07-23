@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUpDown,
   CalendarDays,
@@ -20,6 +20,7 @@ import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 import AddExpensesModal, { NewExpensesPayload } from './AddExpensesModal';
 import { useExpenses } from '@/hooks/useExpenses';
 import { useAdvance } from '@/hooks/useAdvance';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useAuth } from '@/contexts/AuthContext';
 import { uploadFile } from '@/lib/utils/upload';
 import { BRAND } from '@/lib/brand';
@@ -102,7 +103,6 @@ function DetailPair({
 
 export default function LabelArtistExpenses() {
   const { user } = useAuth();
-  const { expenses, createExpense, approveExpense, rejectExpense } = useExpenses();
   const { availableBalance } = useAdvance();
   const contentRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -119,6 +119,16 @@ export default function LabelArtistExpenses() {
   const [declineReason, setDeclineReason] = useState('');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
+  const debouncedQ = useDebouncedValue(q);
+  const { expenses, expensesMeta, createExpense, approveExpense, rejectExpense } = useExpenses({
+    page,
+    limit: PAGE_SIZE,
+    search: debouncedQ,
+  });
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedQ, advanceTypeFilter, loggedByFilter, selectedYear]);
 
   const titleName =
     [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim() || '';
@@ -178,25 +188,22 @@ export default function LabelArtistExpenses() {
     { label: 'Marketing', value: 'marketting' },
   ];
 
+  // Search is applied server-side (`search` param); year, advance-type and
+  // logged-by have no query param on /expenses, so they filter the current
+  // server page only.
   const filteredRows = useMemo(() => {
-    const keyword = q.trim().toLowerCase();
     return rows.filter((row) => {
       const yearMatch = !selectedYear || row.year === selectedYear;
       const advanceTypeMatch = advanceTypeFilter === 'all' || row.advanceType.toLowerCase() === advanceTypeFilter;
       const loggedByMatch =
         loggedByFilter === 'all' ||
         row.loggedBy.toLowerCase().includes(loggedByFilter.toLowerCase());
-      const keywordMatch =
-        keyword === '' ||
-        row.id.toLowerCase().includes(keyword) ||
-        row.advanceType.toLowerCase().includes(keyword) ||
-        row.loggedBy.toLowerCase().includes(keyword);
-      return yearMatch && advanceTypeMatch && loggedByMatch && keywordMatch;
+      return yearMatch && advanceTypeMatch && loggedByMatch;
     });
-  }, [rows, q, advanceTypeFilter, loggedByFilter, selectedYear]);
+  }, [rows, advanceTypeFilter, loggedByFilter, selectedYear]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
-  const pagedRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = expensesMeta?.totalPages ?? 1;
+  const pagedRows = filteredRows;
 
   // Expenses have no server-side export endpoint yet, so export is PDF-only.
   const handleExportPdf = async () => {

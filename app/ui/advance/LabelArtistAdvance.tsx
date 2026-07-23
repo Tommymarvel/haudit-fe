@@ -25,6 +25,7 @@ import Modal from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { useAdvance } from '@/hooks/useAdvance';
 import { useExpenses } from '@/hooks/useExpenses';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useAuth } from '@/contexts/AuthContext';
 import { BRAND } from '@/lib/brand';
 import { toast } from 'react-toastify';
@@ -186,7 +187,6 @@ const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct
 
 export default function LabelArtistAdvance() {
   const { user } = useAuth();
-  const { advances, marketingTrend, personalTrend, availableBalance, createAdvance, updateAdvanceStatus, approveAdvance, rejectAdvance } = useAdvance();
   const { expenses } = useExpenses();
 
   const contentRef = useRef<HTMLDivElement>(null);
@@ -204,6 +204,18 @@ export default function LabelArtistAdvance() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
+  const debouncedSearch = useDebouncedValue(search);
+  const { advances, advancesMeta, marketingTrend, personalTrend, availableBalance, createAdvance, updateAdvanceStatus, approveAdvance, rejectAdvance } = useAdvance({
+    page,
+    limit: PAGE_SIZE,
+    search: debouncedSearch,
+    advanceType:
+      categoryFilter === 'personal'
+        ? 'personal'
+        : categoryFilter === 'marketing'
+          ? 'marketting'
+          : undefined,
+  });
   const [statusRow, setStatusRow] = useState<AdvanceRow | null>(null);
   const [statusUpdate, setStatusUpdate] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [statusDescription, setStatusDescription] = useState('');
@@ -221,7 +233,7 @@ export default function LabelArtistAdvance() {
     return () => document.removeEventListener('mousedown', closeMenu);
   }, []);
 
-  useEffect(() => { setPage(1); }, [selectedYear]);
+  useEffect(() => { setPage(1); }, [selectedYear, debouncedSearch, statusFilter, categoryFilter]);
 
   const displayName = [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim();
   const artistName = user?.first_name?.trim() || 'Diamond';
@@ -266,24 +278,19 @@ export default function LabelArtistAdvance() {
     [rows],
   );
 
+  // Search and advance type are applied server-side; year and the status
+  // dropdown have no matching query param on /advance, so they filter the
+  // current server page only.
   const filteredRows = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
     return rows.filter((row) => {
       const yearMatch = !selectedYear || row.year === selectedYear;
       const statusMatch = statusFilter === 'all' || row.status.toLowerCase() === statusFilter;
-      const categoryMatch =
-        categoryFilter === 'all' || row.type.toLowerCase() === categoryFilter.toLowerCase();
-      const keywordMatch =
-        keyword === '' ||
-        row.refId.toLowerCase().includes(keyword) ||
-        row.type.toLowerCase().includes(keyword) ||
-        row.purpose.toLowerCase().includes(keyword);
-      return yearMatch && statusMatch && categoryMatch && keywordMatch;
+      return yearMatch && statusMatch;
     });
-  }, [rows, search, statusFilter, categoryFilter, selectedYear]);
+  }, [rows, statusFilter, selectedYear]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
-  const pagedRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = advancesMeta?.totalPages ?? 1;
+  const pagedRows = filteredRows;
 
   const marketingSeries = useMemo(() => {
     const src = selectedYear

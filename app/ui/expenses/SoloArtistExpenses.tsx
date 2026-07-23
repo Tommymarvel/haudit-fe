@@ -8,6 +8,7 @@ import { exportToPdf } from '@/lib/utils/exportPdf';
 import AddExpensesModal, { NewExpensesPayload } from './AddExpensesModal';
 import BulkUploadExpensesModal from './BulkUploadExpensesModal';
 import { useExpenses } from '@/hooks/useExpenses';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { uploadFile } from '@/lib/utils/upload';
 import { Select } from '@/components/ui/Select';
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
@@ -54,7 +55,6 @@ function normalizeDetailStatus(value?: string): SoloExpenseRow['detailStatus'] {
 }
 
 const SoloArtistExpenses = () => {
-  const { expenses, trend, createExpense, bulkUploadExpenses } = useExpenses();
   const contentRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [q, setQ] = useState('');
@@ -67,6 +67,16 @@ const SoloArtistExpenses = () => {
   const [selectedExpense, setSelectedExpense] = useState<SoloExpenseRow | null>(null);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
+  const debouncedQ = useDebouncedValue(q);
+  const { expenses, expensesMeta, trend, createExpense, bulkUploadExpenses } = useExpenses({
+    page,
+    limit: PAGE_SIZE,
+    search: debouncedQ,
+  });
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedQ, advanceTypeFilter, selectedYear]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -98,22 +108,20 @@ const SoloArtistExpenses = () => {
     [expenses]
   );
 
+  // Search is applied server-side (`search` param); year and advance-type have
+  // no query param on /expenses, so they filter the current server page only.
   const filtered = useMemo(
     () =>
       rows.filter(
         (r) =>
           (!selectedYear || r.year === selectedYear) &&
-          (advanceTypeFilter === 'all' || r.advanceType.toLowerCase() === advanceTypeFilter) &&
-          (q === '' ||
-            r.id.toLowerCase().includes(q.toLowerCase()) ||
-            r.advanceType.toLowerCase().includes(q.toLowerCase()) ||
-            r.description.toLowerCase().includes(q.toLowerCase()))
+          (advanceTypeFilter === 'all' || r.advanceType.toLowerCase() === advanceTypeFilter)
       ),
-    [q, advanceTypeFilter, rows, selectedYear]
+    [advanceTypeFilter, rows, selectedYear]
   );
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = expensesMeta?.totalPages ?? 1;
+  const paged = filtered;
 
   const trendData = useMemo(() => {
     if (!trend || trend.length === 0) return [];

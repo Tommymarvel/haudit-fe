@@ -6,15 +6,10 @@ import { useSearchParams } from 'next/navigation';
 import { useMemo } from 'react';
 import { appendQueryParam } from '@/lib/utils/query';
 import { getApiErrorMessage } from '@/lib/utils/apiError';
+import { extractPaginated, PaginatedList } from '@/lib/utils/paginated';
 
 const fetcher = (url: string) =>
-  axiosInstance.get(url).then((res) => {
-    // Handle { message, data: [...] } or just [...]
-    const d = res.data;
-    if (d.data && Array.isArray(d.data)) return d.data;
-    if (Array.isArray(d)) return d;
-    return [];
-  });
+  axiosInstance.get(url).then((res) => extractPaginated<Expense>(res.data));
 
 const trendFetcher = (url: string) =>
   axiosInstance.get(url).then((res) => {
@@ -23,12 +18,26 @@ const trendFetcher = (url: string) =>
     return { trend: [] as ExpenseTrendItem[], netTotal: 0 };
   });
 
-export function useExpenses(options?: { year?: number | null }) {
+export function useExpenses(options?: {
+  year?: number | null;
+  page?: number;
+  limit?: number;
+  search?: string;
+}) {
   const searchParams = useSearchParams();
   const artistId = (searchParams.get('artistId') || '').trim();
   const year = typeof options?.year === 'number' ? options.year : null;
+  const page = options?.page;
+  const limit = options?.limit;
+  const search = (options?.search || '').trim();
 
-  const expensesEndpoint = useMemo(() => appendQueryParam('/expenses', 'artistId', artistId), [artistId]);
+  const expensesEndpoint = useMemo(() => {
+    let endpoint = appendQueryParam('/expenses', 'artistId', artistId);
+    endpoint = appendQueryParam(endpoint, 'page', page ? String(page) : null);
+    endpoint = appendQueryParam(endpoint, 'limit', limit ? String(limit) : null);
+    endpoint = appendQueryParam(endpoint, 'search', search);
+    return endpoint;
+  }, [artistId, page, limit, search]);
   // /expenses/trend accepts startDate/endDate (not year) — map the year to a
   // full-year range so the trend is server-scoped to the selected year.
   const trendEndpoint = useMemo(() => {
@@ -53,7 +62,7 @@ export function useExpenses(options?: { year?: number | null }) {
 
   const POLL_INTERVAL = 30_000;
 
-  const { data, error, isLoading } = useSWR<Expense[]>(expensesEndpoint, fetcher, { refreshInterval: POLL_INTERVAL });
+  const { data, error, isLoading } = useSWR<PaginatedList<Expense>>(expensesEndpoint, fetcher, { refreshInterval: POLL_INTERVAL });
   const { data: trendData } = useSWR<{ trend: ExpenseTrendItem[]; netTotal: number }>(trendEndpoint, trendFetcher, { refreshInterval: POLL_INTERVAL });
 
   const createExpense = async (payload: CreateExpensePayload) => {
@@ -144,7 +153,8 @@ export function useExpenses(options?: { year?: number | null }) {
   };
 
   return {
-    expenses: data,
+    expenses: data?.data,
+    expensesMeta: data?.meta ?? null,
     trend: trendData?.trend,
     netTotal: trendData?.netTotal ?? 0,
     isLoading,

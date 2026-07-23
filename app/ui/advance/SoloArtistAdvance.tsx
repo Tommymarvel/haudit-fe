@@ -6,7 +6,8 @@ import { ChartCard } from "@/components/dashboard/ChartCard";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { Plus, ChevronDown, Table2 } from "lucide-react";
 import { Menu } from "@/components/ui/Menu";
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { exportToPdf } from '@/lib/utils/exportPdf';
 import Image from "next/image";
 import AdvanceRowActions from "./AdvanceRowActions";
@@ -39,14 +40,29 @@ type Row = {
 };
 
 const SoloArtistAdvance = () => {
-  const { advances, overview, marketingTrend, personalTrend, typePercentage, createAdvance, createRepayment, getRepayments } =
-    useAdvance();
   const contentRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [tab, setTab] = useState<"analytics" | "source">("analytics");
   const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("All");
+  const PAGE_SIZE = 10;
+  const [page1, setPage1] = useState(1);
+  const [page2, setPage2] = useState(1);
+  const debouncedQ = useDebouncedValue(q);
+  const { advances, advancesMeta, overview, marketingTrend, personalTrend, typePercentage, createAdvance, createRepayment, getRepayments } =
+    useAdvance({
+      page: tab === "analytics" ? page1 : page2,
+      limit: PAGE_SIZE,
+      search: debouncedQ,
+      repaymentStatus:
+        status === "Repaid" ? "repaid" : status === "Outstanding" ? "outstanding" : undefined,
+    });
+
+  useEffect(() => {
+    setPage1(1);
+    setPage2(1);
+  }, [debouncedQ, status, selectedYear]);
   const [openDetails, setOpenDetails] = useState(false);
   const [detailsData, setDetailsData] = useState<AdvanceDetails | null>(null);
   const [openRepay, setOpenRepay] = useState(false);
@@ -136,24 +152,23 @@ const SoloArtistAdvance = () => {
     }
   };
 
+  // Search and repayment status are applied server-side; year has no query
+  // param on /advance, so it filters the current server page only. The status
+  // clause stays for "Pending", which the repaymentStatus enum doesn't cover.
   const filtered = useMemo(
     () =>
       rows.filter(
         (r) =>
           (!selectedYear || r.year === selectedYear) &&
-          (status === "All" || r.status === status) &&
-          (q === "" || r.source.toLowerCase().includes(q.toLowerCase()))
+          (status === "All" || r.status === status)
       ),
-    [q, status, rows, selectedYear]
+    [status, rows, selectedYear]
   );
 
-  const PAGE_SIZE = 10;
-  const [page1, setPage1] = useState(1);
-  const [page2, setPage2] = useState(1);
-  const totalPages1 = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const totalPages2 = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paged1 = filtered.slice((page1 - 1) * PAGE_SIZE, page1 * PAGE_SIZE);
-  const paged2 = filtered.slice((page2 - 1) * PAGE_SIZE, page2 * PAGE_SIZE);
+  const totalPages1 = advancesMeta?.totalPages ?? 1;
+  const totalPages2 = advancesMeta?.totalPages ?? 1;
+  const paged1 = filtered;
+  const paged2 = filtered;
 
   const openDetailsFor = async (r: Row) => {
     try {

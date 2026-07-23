@@ -4,6 +4,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { useExpenses } from '@/hooks/useExpenses';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useRecordLabelArtists } from '@/hooks/useRecordLabelArtists';
 import { getRecordLabelArtistName } from '@/lib/utils/recordLabelArtist';
 import { uploadFile } from '@/lib/utils/upload';
@@ -112,7 +113,12 @@ const RecordLabelExpenses = () => {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
 
-  const { expenses, createExpense, bulkUploadExpenses, updateExpenseStatus } = useExpenses();
+  const debouncedQ = useDebouncedValue(q);
+  const { expenses, expensesMeta, createExpense, bulkUploadExpenses, updateExpenseStatus } = useExpenses({
+    page,
+    limit: PAGE_SIZE,
+    search: debouncedQ,
+  });
   const { artists } = useRecordLabelArtists();
   const searchParams = useSearchParams();
 
@@ -173,25 +179,25 @@ const RecordLabelExpenses = () => {
 
   const [loggedByFilter, setLoggedByFilter] = useState('all');
 
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedQ, advanceTypeFilter, loggedByFilter, selectedYear, artistFromSidebarId]);
+
+  // Search and artistId are applied server-side; year, advance-type and
+  // logged-by have no query param on /expenses, so they filter the current
+  // server page only.
   const filteredExpenses = useMemo(() => {
-    const search = q.trim().toLowerCase();
     return rows.filter((item) => {
       const matchesYear = !selectedYear || item.year === selectedYear;
       const matchesArtist = artistFromSidebarId === 'all' || item.artistId === '' || item.artistId === artistFromSidebarId;
       const matchesAdvanceType = advanceTypeFilter === 'all' || item.advanceType.toLowerCase() === advanceTypeFilter;
       const matchesLoggedBy = loggedByFilter === 'all' || item.loggedBy === loggedByFilter;
-      const matchesSearch =
-        search === '' ||
-        item.id.toLowerCase().includes(search) ||
-        item.artistName.toLowerCase().includes(search) ||
-        item.advanceType.toLowerCase().includes(search) ||
-        item.loggedBy.toLowerCase().includes(search);
-      return matchesYear && matchesArtist && matchesAdvanceType && matchesLoggedBy && matchesSearch;
+      return matchesYear && matchesArtist && matchesAdvanceType && matchesLoggedBy;
     });
-  }, [artistFromSidebarId, advanceTypeFilter, loggedByFilter, q, rows, selectedYear]);
+  }, [artistFromSidebarId, advanceTypeFilter, loggedByFilter, rows, selectedYear]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredExpenses.length / PAGE_SIZE));
-  const pagedExpenses = filteredExpenses.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = expensesMeta?.totalPages ?? 1;
+  const pagedExpenses = filteredExpenses;
 
   // Expenses have no server-side export endpoint yet, so export is PDF-only.
   const handleExportPdf = async () => {

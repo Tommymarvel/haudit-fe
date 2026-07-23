@@ -30,6 +30,7 @@ import { useExpenses } from '@/hooks/useExpenses';
 import { useRecordLabelArtists } from '@/hooks/useRecordLabelArtists';
 import { useRoyalty } from '@/hooks/useRoyalty';
 import { Advance } from '@/lib/types/advance';
+import { getAvailableBucket } from '@/lib/utils/advance';
 import type { RecordLabelArtist } from '@/lib/types/record-label';
 import { getRecordLabelArtistName } from '@/lib/utils/recordLabelArtist';
 import { toast } from 'react-toastify';
@@ -673,7 +674,7 @@ function UpdateEligibleAdvanceModal({
 export default function RecordLabelArtists() {
   const { user } = useAuth();
   const { dashboardMetrics, albumPerformance, albumRevenue } = useRoyalty();
-  const { advances = [], overview } = useAdvance();
+  const { advances = [], overview, availableBalance } = useAdvance();
   const { expenses = [] } = useExpenses();
   const {
     artists: artistsResponse,
@@ -839,30 +840,16 @@ export default function RecordLabelArtists() {
     [artistsResponse, selectedArtistId],
   );
 
-  const eligiblePersonal = useMemo(
-    () => advances
-      .filter((a) => (a.status === 'approved') && (a.advance_type === 'personal'))
-      .reduce((s, a) => s + Number(a.amount || 0), 0),
-    [advances],
-  );
-  const eligibleMarketing = useMemo(
-    () => advances
-      .filter((a) => (a.status === 'approved') && (a.advance_type === 'marketting'))
-      .reduce((s, a) => s + Number(a.amount || 0), 0),
-    [advances],
-  );
-  const balancePersonal = useMemo(
-    () => advances
-      .filter((a) => (a.status === 'approved') && (a.advance_type === 'personal') && (a.repayment_status !== 'repaid'))
-      .reduce((s, a) => s + Number(a.amount || 0), 0),
-    [advances],
-  );
-  const balanceMarketing = useMemo(
-    () => advances
-      .filter((a) => (a.status === 'approved') && (a.advance_type === 'marketting') && (a.repayment_status !== 'repaid'))
-      .reduce((s, a) => s + Number(a.amount || 0), 0),
-    [advances],
-  );
+  // Advance figures come from /advance/dashboard/available, which nests
+  // per-type → per-currency buckets ({ available, approvedTotal, repaid,
+  // expensed, pendingHeld }). Summing the /advance list here would be wrong:
+  // that endpoint is server-paginated, so it only ever returns one page.
+  const personalBucket = getAvailableBucket(availableBalance, 'personal', 'USD');
+  const marketingBucket = getAvailableBucket(availableBalance, 'marketting', 'USD');
+  const eligiblePersonal = Number(personalBucket?.approvedTotal ?? 0);
+  const eligibleMarketing = Number(marketingBucket?.approvedTotal ?? 0);
+  const balancePersonal = Number(personalBucket?.available ?? 0);
+  const balanceMarketing = Number(marketingBucket?.available ?? 0);
 
   const totalExpenses = useMemo(
     () => (expenses ?? []).reduce((sum, e) => sum + Number(e.amount ?? 0), 0),

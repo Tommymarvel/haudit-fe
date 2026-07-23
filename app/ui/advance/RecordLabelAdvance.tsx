@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { ChartCard } from '@/components/dashboard/ChartCard';
 import { Card, CardBody } from '@/components/ui/Card';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -125,7 +126,6 @@ function MetricCard({ value, label, icon }: { value: string; label: string; icon
 }
 
 const RecordLabelAdvance = () => {
-  const { advances = [], marketingTrend, personalTrend, updateAdvanceStatus } = useAdvance();
   const { expenses } = useExpenses();
   const { artists } = useRecordLabelArtists();
   const searchParams = useSearchParams();
@@ -155,6 +155,18 @@ const RecordLabelAdvance = () => {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
   const [rowStatusOverrides, setRowStatusOverrides] = useState<Record<string, AdvanceStatus>>({});
+  const debouncedQ = useDebouncedValue(q);
+  const { advances = [], advancesMeta, marketingTrend, personalTrend, updateAdvanceStatus } = useAdvance({
+    page,
+    limit: PAGE_SIZE,
+    search: debouncedQ,
+    advanceType:
+      categoryFilter === 'Personal'
+        ? 'personal'
+        : categoryFilter === 'Marketing'
+          ? 'marketting'
+          : undefined,
+  });
 
   useEffect(() => {
     const closeMenu = (event: MouseEvent) => {
@@ -168,7 +180,7 @@ const RecordLabelAdvance = () => {
     return () => document.removeEventListener('mousedown', closeMenu);
   }, []);
 
-  useEffect(() => { setPage(1); }, [selectedYear]);
+  useEffect(() => { setPage(1); }, [selectedYear, debouncedQ, categoryFilter, loggedByFilter]);
 
   const openRowActionsMenu = (event: React.MouseEvent<HTMLButtonElement>, rowId: string) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -206,14 +218,14 @@ const RecordLabelAdvance = () => {
   const scopedRows = useMemo(() => rows, [rows]);
 
   const scopedSummary = useMemo(() => {
-    const totalRequests = scopedRows.length;
+    const totalRequests = advancesMeta?.total ?? scopedRows.length;
     const pendingRequests = scopedRows.filter((r) => r.status === 'Pending').length;
     const approvedRows = scopedRows.filter((r) => r.status === 'Approved');
     const totalAmount = approvedRows.reduce((sum, r) => sum + r.amount, 0);
     const personalTotal = approvedRows.filter((r) => r.type === 'Personal').reduce((s, r) => s + r.amount, 0);
     const marketingTotal = approvedRows.filter((r) => r.type === 'Marketing').reduce((s, r) => s + r.amount, 0);
     return { totalRequests, pendingRequests, totalAmount, personalTotal, marketingTotal };
-  }, [scopedRows]);
+  }, [scopedRows, advancesMeta]);
 
   // Trend endpoints are already artistId-scoped — always use their totalUSD values
   const personalTotalUSD = useMemo(
@@ -277,24 +289,19 @@ const RecordLabelAdvance = () => {
     return [{ label: 'Logged by', value: 'all' }, ...unique.map((a) => ({ label: a, value: a }))];
   }, [scopedRows]);
 
+  // Search and category (advanceType) are applied server-side; year and
+  // logged-by have no matching query param on /advance, so they filter the
+  // current server page only.
   const filtered = useMemo(() => {
-    const keyword = q.trim().toLowerCase();
     return scopedRows.filter((row) => {
       const yearOk = !selectedYear || row.year === selectedYear;
-      const categoryOk = categoryFilter === 'all' || row.type === categoryFilter;
       const loggedOk = loggedByFilter === 'all' || row.artist === loggedByFilter;
-      const keywordOk =
-        keyword === '' ||
-        row.id.toLowerCase().includes(keyword) ||
-        row.artist.toLowerCase().includes(keyword) ||
-        row.type.toLowerCase().includes(keyword) ||
-        row.purpose.toLowerCase().includes(keyword);
-      return yearOk && categoryOk && loggedOk && keywordOk;
+      return yearOk && loggedOk;
     });
-  }, [q, scopedRows, categoryFilter, loggedByFilter, selectedYear]);
+  }, [scopedRows, loggedByFilter, selectedYear]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pagedFiltered = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = advancesMeta?.totalPages ?? 1;
+  const pagedFiltered = filtered;
 
   const resetStatusModal = () => {
     setStatusUpdate('pending');

@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { useMemo } from 'react';
 import { appendQueryParam } from '@/lib/utils/query';
 import { getApiErrorMessage } from '@/lib/utils/apiError';
+import { extractPaginated, PaginatedList } from '@/lib/utils/paginated';
 
 const listFetcher = <T,>(url: string) =>
   axiosInstance.get(url).then((res) => {
@@ -24,11 +25,33 @@ const objectFetcher = <T,>(url: string) =>
     return payload as T;
   });
 
-export function useAdvance() {
+export function useAdvance(options?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  repaymentStatus?: 'repaid' | 'outstanding';
+  approvalStatus?: 'pending' | 'approved' | 'rejected';
+  advanceType?: 'personal' | 'marketting';
+}) {
   const searchParams = useSearchParams();
   const artistId = (searchParams.get('artistId') || '').trim();
+  const page = options?.page;
+  const limit = options?.limit;
+  const search = (options?.search || '').trim();
+  const repaymentStatus = options?.repaymentStatus;
+  const approvalStatus = options?.approvalStatus;
+  const advanceType = options?.advanceType;
 
-  const advancesEndpoint = useMemo(() => appendQueryParam('/advance', 'artistId', artistId), [artistId]);
+  const advancesEndpoint = useMemo(() => {
+    let endpoint = appendQueryParam('/advance', 'artistId', artistId);
+    endpoint = appendQueryParam(endpoint, 'page', page ? String(page) : null);
+    endpoint = appendQueryParam(endpoint, 'limit', limit ? String(limit) : null);
+    endpoint = appendQueryParam(endpoint, 'search', search);
+    endpoint = appendQueryParam(endpoint, 'repaymentStatus', repaymentStatus);
+    endpoint = appendQueryParam(endpoint, 'approvalStatus', approvalStatus);
+    endpoint = appendQueryParam(endpoint, 'advanceType', advanceType);
+    return endpoint;
+  }, [artistId, page, limit, search, repaymentStatus, approvalStatus, advanceType]);
   const overviewEndpoint = useMemo(
     () => appendQueryParam('/advance/overview', 'artistId', artistId),
     [artistId]
@@ -52,7 +75,10 @@ export function useAdvance() {
 
   const POLL_INTERVAL = 30_000;
 
-  const { data: advances, error, isLoading } = useSWR<Advance[]>(advancesEndpoint, listFetcher<Advance>, { refreshInterval: POLL_INTERVAL });
+  const advancesFetcher = (url: string) =>
+    axiosInstance.get(url).then((res) => extractPaginated<Advance>(res.data));
+
+  const { data: advancesPage, error, isLoading } = useSWR<PaginatedList<Advance>>(advancesEndpoint, advancesFetcher, { refreshInterval: POLL_INTERVAL });
   const { data: overview } = useSWR<AdvanceOverview>(overviewEndpoint, objectFetcher<AdvanceOverview>, { refreshInterval: POLL_INTERVAL });
   const { data: marketingTrend } = useSWR<AdvanceTrendItem[]>(
     marketingTrendEndpoint,
@@ -165,7 +191,8 @@ export function useAdvance() {
   };
 
   return {
-    advances,
+    advances: advancesPage?.data,
+    advancesMeta: advancesPage?.meta ?? null,
     isLoading,
     isError: error,
     overview,
