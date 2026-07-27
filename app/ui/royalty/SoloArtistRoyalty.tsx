@@ -15,6 +15,7 @@ import { ChartEmptyState } from "@/components/dashboard/ChartEmptyState";
 import UploadFileModal from "@/components/ui/UploadFileModal";
 import Modal from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Pagination } from "@/components/ui/Pagination";
 import { useRoyalty } from "@/hooks/useRoyalty";
 import { useUnrecognizedArtists } from "@/hooks/useUnrecognizedArtists";
 import { useAuth } from "@/contexts/AuthContext";
@@ -124,17 +125,18 @@ export default function SoloArtistRoyalty() {
   const selectedArtistId = (searchParams.get("artistId") || searchParams.get("id") || "").trim();
   const { artists: recordLabelArtistsApi } = useRecordLabelArtists();
   const canUploadRoyalty = user?.user_type !== "label_artist";
-  const { 
-    dashboardMetrics, 
-    uploads, 
-    isUploadsLoading, 
+  const [uploadsPage, setUploadsPage] = useState(1);
+  const {
+    dashboardMetrics,
+    uploads,
+    isUploadsLoading,
     uploadRoyaltyFile,
     deleteRoyaltyUpload,
     albumRevenue,
     trackRevenueDsp,
     trackStreamsDsp,
     territoryAnalysis,
-  } = useRoyalty();
+  } = useRoyalty({ uploadsPage });
   const { assignPendingArtists, refreshPendingArtists } = useUnrecognizedArtists();
   const canAccessSplitDocuments =
     user?.user_type === "record_label" || user?.user_type === "label_artist";
@@ -225,13 +227,11 @@ export default function SoloArtistRoyalty() {
   const effectiveTerritoryAnalysis = territoryAnalysisFiltered ?? territoryAnalysis;
   const isEffectiveTerritoryLoading =
     isTerritoryAnalysisFilteredLoading && !effectiveTerritoryAnalysis;
-  const filteredUploads = useMemo(
-    () =>
-      (uploads?.data ?? []).filter((file) => {
-        return new Date(file.uploadedAt).getFullYear() === selectedYear;
-      }),
-    [uploads, selectedYear],
-  );
+  // Pagination comes from the server response (page/limit/total/totalPages
+  // inlined next to data) and the files list shows the response page as-is.
+  // /royalties/uploads has no year param, so the year picker scopes the
+  // analytics tab only.
+  const uploadRows = uploads?.data ?? [];
 
   const territoryRows = useMemo<Territory[]>(
     () =>
@@ -773,7 +773,7 @@ const handleUpload = async (
               : "text-neutral-500"
           }`}
         >
-          Files({filteredUploads.length})
+          Files({uploads?.total ?? uploadRows.length})
         </button>
         {canAccessSplitDocuments ? (
           <button
@@ -797,7 +797,7 @@ const handleUpload = async (
             <div className="flex justify-center py-16">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#7B00D4]"></div>
             </div>
-          ) : filteredUploads.length === 0 ? (
+          ) : uploadRows.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="mb-3 text-neutral-400">
                 <svg
@@ -814,11 +814,11 @@ const handleUpload = async (
                 </svg>
               </div>
               <p className="text-sm text-neutral-500">
-                {`No files uploaded for ${selectedYear}`}
+                No files uploaded yet
               </p>
             </div>
           ) : (
-            filteredUploads.map((file) => (
+            uploadRows.map((file) => (
               <div
                 key={file.hash}
                 className="flex items-center justify-between bg-white  border border-[#EAEAEA] rounded-2xl px-4 py-4 hover:bg-neutral-50 transition-colors"
@@ -869,6 +869,11 @@ const handleUpload = async (
               </div>
             ))
           )}
+          <Pagination
+            page={uploadsPage}
+            totalPages={uploads?.totalPages ?? 1}
+            onChange={setUploadsPage}
+          />
         </div>
       )}
       {activeTab === "split_document" && canAccessSplitDocuments && (

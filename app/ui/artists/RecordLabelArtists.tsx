@@ -24,8 +24,10 @@ import Modal from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { TagInput } from '@/components/ui/TagInput';
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
+import { Pagination } from '@/components/ui/Pagination';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAdvance } from '@/hooks/useAdvance';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { FETCH_ALL_LIMIT } from '@/lib/utils/paginated';
 import { useExpenses } from '@/hooks/useExpenses';
 import { useRecordLabelArtists } from '@/hooks/useRecordLabelArtists';
@@ -679,6 +681,19 @@ export default function RecordLabelArtists() {
   // profile summaries aggregate every record, not just the first server page.
   const { advances = [], overview, availableBalance } = useAdvance({ limit: FETCH_ALL_LIMIT });
   const { expenses = [] } = useExpenses({ limit: FETCH_ALL_LIMIT });
+  const [expenseSearch, setExpenseSearch] = useState('');
+  const [expenseCategoryFilter, setExpenseCategoryFilter] = useState('all');
+  const [profileExpensePage, setProfileExpensePage] = useState(1);
+  const PROFILE_EXPENSES_PAGE_SIZE = 8;
+  const debouncedExpenseSearch = useDebouncedValue(expenseSearch);
+  // Profile expenses table: server pagination driven by meta; search and
+  // category are applied server-side (both have /expenses query params).
+  const { expenses: profileExpenses, expensesMeta: profileExpensesMeta } = useExpenses({
+    page: profileExpensePage,
+    limit: PROFILE_EXPENSES_PAGE_SIZE,
+    search: debouncedExpenseSearch,
+    category: expenseCategoryFilter === 'all' ? undefined : expenseCategoryFilter,
+  });
   const {
     artists: artistsResponse,
     isLoading: artistsLoading,
@@ -700,9 +715,7 @@ export default function RecordLabelArtists() {
   const [openMarketingAdvanceModal, setOpenMarketingAdvanceModal] = useState(false);
   const [openRecordExpense, setOpenRecordExpense] = useState(false);
   const [profileMoreOpen, setProfileMoreOpen] = useState(false);
-  const [expenseSearch, setExpenseSearch] = useState('');
   const [expenseLoggedBy, setExpenseLoggedBy] = useState('all');
-  const [expenseCategoryFilter, setExpenseCategoryFilter] = useState('all');
   const [menuOpenForId, setMenuOpenForId] = useState<string | null>(null);
   const [pendingArtistActionId, setPendingArtistActionId] = useState<string | null>(null);
   const [nameSortDirection, setNameSortDirection] = useState<'asc' | 'desc'>('asc');
@@ -815,6 +828,10 @@ export default function RecordLabelArtists() {
   }, [profileMoreOpen]);
 
   const selectedArtistId = (searchParams.get('artistId') || searchParams.get('id') || '').trim();
+
+  useEffect(() => {
+    setProfileExpensePage(1);
+  }, [debouncedExpenseSearch, expenseCategoryFilter, expenseLoggedBy, selectedArtistId]);
   const selectedViewParam = searchParams.get('view');
   const activeView: ArtistView = !selectedArtistId
     ? 'list'
@@ -876,24 +893,21 @@ export default function RecordLabelArtists() {
       .join(', ');
   }, [selectedArtistRecord]);
 
+  // Pagination comes from the server meta and the table shows the response
+  // page as-is; search and category are applied server-side. Logged-by has no
+  // matching query param on /expenses, so it filters within the current
+  // server page.
   const filteredProfileExpenses = useMemo(() => {
-    return (expenses ?? []).filter((expense) => {
+    return (profileExpenses ?? []).filter((expense) => {
       const expRecord = expense as unknown as Record<string, unknown>;
-      if (expenseSearch) {
-        const searchLower = expenseSearch.toLowerCase();
-        const ref = String(expense.ref_id || expense._id || '').toLowerCase();
-        const category = String(expense.category || '').toLowerCase();
-        if (!ref.includes(searchLower) && !category.includes(searchLower)) return false;
-      }
       if (expenseLoggedBy !== 'all') {
         const loggedBy = String(expRecord.logged_by || '').toLowerCase();
         if (expenseLoggedBy === 'admin' && loggedBy !== 'admin') return false;
         if (expenseLoggedBy === 'user' && loggedBy === 'admin') return false;
       }
-      if (expenseCategoryFilter !== 'all' && expense.category !== expenseCategoryFilter) return false;
       return true;
     });
-  }, [expenses, expenseSearch, expenseLoggedBy, expenseCategoryFilter]);
+  }, [profileExpenses, expenseLoggedBy]);
 
   const chartTrackRevenueData = useMemo(
     () =>
@@ -1590,7 +1604,7 @@ export default function RecordLabelArtists() {
                       </td>
                     </tr>
                   ) : (
-                    filteredProfileExpenses.slice(0, 8).map((expense) => {
+                    filteredProfileExpenses.map((expense) => {
                       const expRecord = expense as unknown as Record<string, unknown>;
                       const status = String(expRecord.status || '').trim();
                       const loggedBy = String(expRecord.logged_by || '').trim();
@@ -1633,6 +1647,11 @@ export default function RecordLabelArtists() {
                 </tbody>
               </table>
             </div>
+            <Pagination
+              page={profileExpensePage}
+              totalPages={profileExpensesMeta?.totalPages ?? 1}
+              onChange={setProfileExpensePage}
+            />
           </div>
         </div>
       )}

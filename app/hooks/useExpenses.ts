@@ -23,6 +23,7 @@ export function useExpenses(options?: {
   page?: number;
   limit?: number;
   search?: string;
+  category?: string;
 }) {
   const searchParams = useSearchParams();
   const artistId = (searchParams.get('artistId') || '').trim();
@@ -30,14 +31,16 @@ export function useExpenses(options?: {
   const page = options?.page;
   const limit = options?.limit;
   const search = (options?.search || '').trim();
+  const category = (options?.category || '').trim();
 
   const expensesEndpoint = useMemo(() => {
     let endpoint = appendQueryParam('/expenses', 'artistId', artistId);
     endpoint = appendQueryParam(endpoint, 'page', page ? String(page) : null);
     endpoint = appendQueryParam(endpoint, 'limit', limit ? String(limit) : null);
     endpoint = appendQueryParam(endpoint, 'search', search);
+    endpoint = appendQueryParam(endpoint, 'category', category);
     return endpoint;
-  }, [artistId, page, limit, search]);
+  }, [artistId, page, limit, search, category]);
   // /expenses/trend accepts startDate/endDate (not year) — map the year to a
   // full-year range so the trend is server-scoped to the selected year.
   const trendEndpoint = useMemo(() => {

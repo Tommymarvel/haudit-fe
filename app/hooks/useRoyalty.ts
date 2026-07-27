@@ -38,18 +38,19 @@ const listFetcher = <T,>(url: string) =>
     return [] as T[];
   });
 
-export function useRoyalty(options?: { year?: number | null }) {
+export function useRoyalty(options?: { year?: number | null; uploadsPage?: number }) {
   const searchParams = useSearchParams();
   const artistId = (searchParams.get('artistId') || '').trim();
   const year = typeof options?.year === 'number' ? options.year : null;
+  const uploadsPage = options?.uploadsPage ?? 1;
 
   const dashboardEndpoint = useMemo(
     () => appendQueryParam('/royalties/dashboard', 'artistId', artistId),
     [artistId]
   );
   const uploadsEndpoint = useMemo(
-    () => appendQueryParam('/royalties/uploads?limit=10&page=1', 'artistId', artistId),
-    [artistId]
+    () => appendQueryParam(`/royalties/uploads?limit=10&page=${uploadsPage}`, 'artistId', artistId),
+    [artistId, uploadsPage]
   );
   const albumPerformanceEndpoint = useMemo(
     () => appendQueryParam('/royalties/album-performance', 'artistId', artistId),

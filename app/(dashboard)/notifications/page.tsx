@@ -1,6 +1,7 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { Button } from "@/components/ui/Button";
 import { X, Calendar, Search } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -148,8 +149,9 @@ export default function NotificationsPage() {
   const [selectedPendingArtist, setSelectedPendingArtist] = useState<string | null>(null);
   const [ignoredPendingArtists, setIgnoredPendingArtists] = useState<string[]>([]);
 
+  const debouncedSearchQuery = useDebouncedValue(searchQuery);
   const { notifications, meta, unreadCount, markAsRead, markAllAsRead } =
-    useNotifications(currentPage, 10, startDate, endDate);
+    useNotifications(currentPage, 10, startDate, endDate, debouncedSearchQuery);
   const {
     pendingArtistEntries,
     isPendingArtistsLoading,
@@ -177,11 +179,13 @@ export default function NotificationsPage() {
     setShowDatePicker(false);
   };
 
-  const filteredNotifications = notifications.filter(
-    (n) =>
-      n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      n.description.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  // Search is applied server-side (`search` param), so the list shows the
+  // response page as-is; pagination comes from the server meta.
+  const filteredNotifications = notifications;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchQuery]);
 
   const handleDismiss = async (id: string) => {
     await markAsRead(id);

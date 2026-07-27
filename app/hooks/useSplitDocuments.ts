@@ -5,10 +5,13 @@ import useSWR from 'swr';
 import { toast } from 'react-toastify';
 import axiosInstance from '@/lib/axiosinstance';
 import { useAuth } from '@/contexts/AuthContext';
+import { PaginationMeta } from '@/lib/types/pagination';
+import { extractPaginated } from '@/lib/utils/paginated';
 
 const LABEL_DOCUMENTS_ENDPOINT = '/record-label/documents';
 const RECEIVED_DOCUMENTS_ENDPOINT = '/record-label/documents/received';
 const REPORT_UPLOAD_ENDPOINT = '/upload/report';
+const DOCUMENTS_PAGE_SIZE = 10;
 
 export type SplitDocument = {
   id: string;
@@ -43,16 +46,13 @@ function normalizeSplitDocumentRecord(payload: unknown): SplitDocument | null {
 
 function documentsFetcher(url: string) {
   return axiosInstance.get(url).then((response) => {
-    const payload = response.data;
-    const items: unknown[] = Array.isArray(payload)
-      ? payload
-      : Array.isArray(payload?.data)
-        ? payload.data
-        : [];
-
-    return items
-      .map(normalizeSplitDocumentRecord)
-      .filter((doc): doc is SplitDocument => doc !== null);
+    const { data, meta } = extractPaginated<unknown>(response.data);
+    return {
+      documents: data
+        .map(normalizeSplitDocumentRecord)
+        .filter((doc): doc is SplitDocument => doc !== null),
+      meta,
+    };
   });
 }
 
@@ -76,20 +76,25 @@ async function uploadReportFile(
   return { fileUrl, fileName: file.name, mimeType: file.type };
 }
 
-export function useSplitDocuments() {
+export function useSplitDocuments(page: number = 1) {
   const { user } = useAuth();
   const isRecordLabel = user?.user_type === 'record_label';
   const isLabelArtist = user?.user_type === 'label_artist';
-  const listEndpoint = isRecordLabel
+  // Both documents endpoints are server-paginated and default to limit=10
+  // even without params, so page/limit must be passed explicitly.
+  const baseEndpoint = isRecordLabel
     ? LABEL_DOCUMENTS_ENDPOINT
     : isLabelArtist
       ? RECEIVED_DOCUMENTS_ENDPOINT
       : null;
+  const listEndpoint = baseEndpoint
+    ? `${baseEndpoint}?page=${page}&limit=${DOCUMENTS_PAGE_SIZE}`
+    : null;
 
-  const { data, error, isLoading, mutate } = useSWR<SplitDocument[]>(
-    listEndpoint,
-    documentsFetcher,
-  );
+  const { data, error, isLoading, mutate } = useSWR<{
+    documents: SplitDocument[];
+    meta: PaginationMeta | null;
+  }>(listEndpoint, documentsFetcher);
 
   const createDocument = async (file: File, artistIds: string[] = []) => {
     if (!isRecordLabel) throw new Error('Only record labels can create split documents.');
@@ -146,7 +151,8 @@ export function useSplitDocuments() {
   };
 
   return {
-    documents: data ?? [],
+    documents: data?.documents ?? [],
+    documentsMeta: data?.meta ?? null,
     isLoading,
     error,
     isRecordLabel,

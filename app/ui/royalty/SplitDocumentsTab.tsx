@@ -5,6 +5,7 @@ import { ExternalLink, FileText, Plus, Search, Trash2, Users, X } from 'lucide-r
 import { toast } from 'react-toastify';
 import Modal from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { Pagination } from '@/components/ui/Pagination';
 import FileDropzone from '@/components/ui/FIleDropzone';
 import { SplitDocument, useSplitDocuments } from '@/hooks/useSplitDocuments';
 
@@ -179,8 +180,9 @@ export default function SplitDocumentsTab({
 }: {
   artistOptions: ArtistOption[];
 }) {
-  const { documents, isLoading, isRecordLabel, createDocument, assignArtists, deleteDocument } =
-    useSplitDocuments();
+  const [documentsPage, setDocumentsPage] = useState(1);
+  const { documents, documentsMeta, isLoading, isRecordLabel, createDocument, assignArtists, deleteDocument } =
+    useSplitDocuments(documentsPage);
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -197,6 +199,9 @@ export default function SplitDocumentsTab({
     [artistOptions],
   );
 
+  // Pagination comes from the server meta and the list shows the response
+  // page as-is. The documents endpoints have no search param, so the search
+  // box filters within the current server page.
   const filteredDocuments = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
     if (!normalizedQuery) return documents;
@@ -455,6 +460,12 @@ export default function SplitDocumentsTab({
             })}
           </div>
         )}
+
+        <Pagination
+          page={documentsPage}
+          totalPages={documentsMeta?.totalPages ?? 1}
+          onChange={setDocumentsPage}
+        />
       </div>
 
       <Modal

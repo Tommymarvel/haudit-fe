@@ -11,21 +11,24 @@ export function useNotifications(
   page: number = 1,
   limit: number = 10,
   startDate?: string,
-  endDate?: string
+  endDate?: string,
+  search?: string
 ) {
-  let url = `/notifications?page=${page}&limit=${limit}`;
-  if (startDate) url += `&startDate=${startDate}`;
-  if (endDate) url += `&endDate=${endDate}`;
+  const buildUrl = () => {
+    let url = `/notifications?page=${page}&limit=${limit}`;
+    if (startDate) url += `&startDate=${startDate}`;
+    if (endDate) url += `&endDate=${endDate}`;
+    if (search?.trim()) url += `&search=${encodeURIComponent(search.trim())}`;
+    return url;
+  };
+  const url = buildUrl();
 
   const { data, error, isLoading } = useSWR<NotificationsResponse>(url, fetcher);
 
   const markAsRead = async (notificationId: string) => {
     try {
       await axiosInstance.patch(`/notifications/${notificationId}/read`);
-      let mutateKey = `/notifications?page=${page}&limit=${limit}`;
-      if (startDate) mutateKey += `&startDate=${startDate}`;
-      if (endDate) mutateKey += `&endDate=${endDate}`;
-      mutate(mutateKey);
+      mutate(url);
     } catch (error) {
       const err = error as AxiosError<{ message: string }>;
       toast.error(err.response?.data?.message || 'Failed to mark notification as read');
@@ -36,10 +39,7 @@ export function useNotifications(
   const markAllAsRead = async () => {
     try {
       await axiosInstance.patch('/notifications/read-all');
-      let mutateKey = `/notifications?page=${page}&limit=${limit}`;
-      if (startDate) mutateKey += `&startDate=${startDate}`;
-      if (endDate) mutateKey += `&endDate=${endDate}`;
-      mutate(mutateKey);
+      mutate(url);
       toast.success('All notifications marked as read');
     } catch (error) {
       const err = error as AxiosError<{ message: string }>;
