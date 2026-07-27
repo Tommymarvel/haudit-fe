@@ -21,7 +21,6 @@ import { Select } from "@/components/ui/Select";
 import YearFilterCalendar from "@/components/ui/YearFilterCalendar";
 import { formatCurrencyAmount } from "@/lib/utils/currency";
 import { Pagination } from "@/components/ui/Pagination";
-import { FETCH_ALL_LIMIT, paginateClient } from "@/lib/utils/paginated";
 import { downloadAdvanceCsv } from "@/lib/utils/exportCsv";
 
 type Row = {
@@ -51,9 +50,10 @@ const SoloArtistAdvance = () => {
   const [page1, setPage1] = useState(1);
   const [page2, setPage2] = useState(1);
   const debouncedQ = useDebouncedValue(q);
-  const { advances, overview, marketingTrend, personalTrend, typePercentage, createAdvance, createRepayment, getRepayments } =
+  const { advances, advancesMeta, overview, marketingTrend, personalTrend, typePercentage, createAdvance, createRepayment, getRepayments } =
     useAdvance({
-      limit: FETCH_ALL_LIMIT,
+      page: tab === "analytics" ? page1 : page2,
+      limit: PAGE_SIZE,
       search: debouncedQ,
       repaymentStatus:
         status === "Repaid" ? "repaid" : status === "Outstanding" ? "outstanding" : undefined,
@@ -152,22 +152,20 @@ const SoloArtistAdvance = () => {
     }
   };
 
-  // Search and repayment status are applied server-side; year has no query
-  // param on /advance, so the full result set is fetched (FETCH_ALL_LIMIT),
-  // filtered here and paginated client-side. The status clause stays for
-  // "Pending", which the repaymentStatus enum doesn't cover.
+  // Pagination comes from the server meta and the table shows the response
+  // page as-is. Search and repayment status are applied server-side; the year
+  // picker has no query param on /advance, so it scopes analytics only. The
+  // status clause stays for "Pending", which the repaymentStatus enum doesn't
+  // cover, and filters within the current server page.
   const filtered = useMemo(
-    () =>
-      rows.filter(
-        (r) =>
-          (!selectedYear || r.year === selectedYear) &&
-          (status === "All" || r.status === status)
-      ),
-    [status, rows, selectedYear]
+    () => rows.filter((r) => status === "All" || r.status === status),
+    [status, rows]
   );
 
-  const { items: paged1, totalPages: totalPages1, currentPage: currentPage1 } = paginateClient(filtered, page1, PAGE_SIZE);
-  const { items: paged2, totalPages: totalPages2, currentPage: currentPage2 } = paginateClient(filtered, page2, PAGE_SIZE);
+  const totalPages1 = advancesMeta?.totalPages ?? 1;
+  const totalPages2 = advancesMeta?.totalPages ?? 1;
+  const paged1 = filtered;
+  const paged2 = filtered;
 
   const openDetailsFor = async (r: Row) => {
     try {
@@ -486,7 +484,7 @@ const SoloArtistAdvance = () => {
                   </table>
                 </div>
 
-              <Pagination page={currentPage1} totalPages={totalPages1} onChange={setPage1} />
+              <Pagination page={page1} totalPages={totalPages1} onChange={setPage1} />
             </CardBody>
             </Card>
             <div className="xl:col-span-1">
@@ -583,7 +581,7 @@ const SoloArtistAdvance = () => {
               </table>
             </div>
 
-          <Pagination page={currentPage2} totalPages={totalPages2} onChange={setPage2} />
+          <Pagination page={page2} totalPages={totalPages2} onChange={setPage2} />
         </CardBody>
         </Card>
       )}

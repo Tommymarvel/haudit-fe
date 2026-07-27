@@ -23,7 +23,7 @@ import { Select } from '@/components/ui/Select';
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 import Modal from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
-import { FETCH_ALL_LIMIT, paginateClient } from '@/lib/utils/paginated';
+import { FETCH_ALL_LIMIT } from '@/lib/utils/paginated';
 import { useAdvance } from '@/hooks/useAdvance';
 import { useExpenses } from '@/hooks/useExpenses';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -208,8 +208,9 @@ export default function LabelArtistAdvance() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
   const debouncedSearch = useDebouncedValue(search);
-  const { advances, marketingTrend, personalTrend, availableBalance, createAdvance, updateAdvanceStatus, approveAdvance, rejectAdvance } = useAdvance({
-    limit: FETCH_ALL_LIMIT,
+  const { advances, advancesMeta, marketingTrend, personalTrend, availableBalance, createAdvance, updateAdvanceStatus, approveAdvance, rejectAdvance } = useAdvance({
+    page,
+    limit: PAGE_SIZE,
     search: debouncedSearch,
     advanceType:
       categoryFilter === 'personal'
@@ -280,18 +281,17 @@ export default function LabelArtistAdvance() {
     [rows],
   );
 
-  // Search and advance type are applied server-side; year and the status
-  // dropdown have no matching query param on /advance, so the full result
-  // set is fetched (FETCH_ALL_LIMIT), filtered here and paginated client-side.
+  // Pagination comes from the server meta and the table shows the response
+  // page as-is. Search and advance type are applied server-side; the year
+  // picker has no query param on /advance, so it scopes analytics only. The
+  // status dropdown also lacks a query param and filters within the current
+  // server page.
   const filteredRows = useMemo(() => {
-    return rows.filter((row) => {
-      const yearMatch = !selectedYear || row.year === selectedYear;
-      const statusMatch = statusFilter === 'all' || row.status.toLowerCase() === statusFilter;
-      return yearMatch && statusMatch;
-    });
-  }, [rows, statusFilter, selectedYear]);
+    return rows.filter((row) => statusFilter === 'all' || row.status.toLowerCase() === statusFilter);
+  }, [rows, statusFilter]);
 
-  const { items: pagedRows, totalPages, currentPage } = paginateClient(filteredRows, page, PAGE_SIZE);
+  const totalPages = advancesMeta?.totalPages ?? 1;
+  const pagedRows = filteredRows;
 
   const marketingSeries = useMemo(() => {
     const src = selectedYear
@@ -782,7 +782,7 @@ export default function LabelArtistAdvance() {
                 </tbody>
               </table>
             </div>
-            <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} />
+            <Pagination page={page} totalPages={totalPages} onChange={setPage} />
           </div>
         </div>
       )}

@@ -28,7 +28,6 @@ import BulkUploadExpensesModal from './BulkUploadExpensesModal';
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 import Modal from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
-import { FETCH_ALL_LIMIT, paginateClient } from '@/lib/utils/paginated';
 import Image from 'next/image';
 import { toast } from 'react-toastify';
 
@@ -115,8 +114,9 @@ const RecordLabelExpenses = () => {
   const PAGE_SIZE = 10;
 
   const debouncedQ = useDebouncedValue(q);
-  const { expenses, createExpense, bulkUploadExpenses, updateExpenseStatus } = useExpenses({
-    limit: FETCH_ALL_LIMIT,
+  const { expenses, expensesMeta, createExpense, bulkUploadExpenses, updateExpenseStatus } = useExpenses({
+    page,
+    limit: PAGE_SIZE,
     search: debouncedQ,
   });
   const { artists } = useRecordLabelArtists();
@@ -183,20 +183,22 @@ const RecordLabelExpenses = () => {
     setPage(1);
   }, [debouncedQ, advanceTypeFilter, loggedByFilter, selectedYear, artistFromSidebarId]);
 
-  // Search and artistId are applied server-side; year, advance-type and
-  // logged-by have no query param on /expenses, so the full result set is
-  // fetched (FETCH_ALL_LIMIT), filtered here and paginated client-side.
+  // Pagination comes from the server meta and the table shows the response
+  // page as-is. Search and artistId are applied server-side; the year picker
+  // has no query param on /expenses, so it scopes analytics only — not the
+  // table. Advance-type and logged-by also lack a query param and filter
+  // within the current server page.
   const filteredExpenses = useMemo(() => {
     return rows.filter((item) => {
-      const matchesYear = !selectedYear || item.year === selectedYear;
       const matchesArtist = artistFromSidebarId === 'all' || item.artistId === '' || item.artistId === artistFromSidebarId;
       const matchesAdvanceType = advanceTypeFilter === 'all' || item.advanceType.toLowerCase() === advanceTypeFilter;
       const matchesLoggedBy = loggedByFilter === 'all' || item.loggedBy === loggedByFilter;
-      return matchesYear && matchesArtist && matchesAdvanceType && matchesLoggedBy;
+      return matchesArtist && matchesAdvanceType && matchesLoggedBy;
     });
-  }, [artistFromSidebarId, advanceTypeFilter, loggedByFilter, rows, selectedYear]);
+  }, [artistFromSidebarId, advanceTypeFilter, loggedByFilter, rows]);
 
-  const { items: pagedExpenses, totalPages, currentPage } = paginateClient(filteredExpenses, page, PAGE_SIZE);
+  const totalPages = expensesMeta?.totalPages ?? 1;
+  const pagedExpenses = filteredExpenses;
 
   // Expenses have no server-side export endpoint yet, so export is PDF-only.
   const handleExportPdf = async () => {
@@ -411,7 +413,7 @@ const RecordLabelExpenses = () => {
             </table>
           </div>
 
-          <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} />
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
         </CardBody>
       </Card>
 

@@ -24,7 +24,6 @@ import { Select } from '@/components/ui/Select';
 import LabelAdvanceRequestModal from '@/ui/advance/LabelAdvanceRequestModal';
 import AddExpensesModal, { NewExpensesPayload } from '@/ui/expenses/AddExpensesModal';
 import { Pagination } from '@/components/ui/Pagination';
-import { FETCH_ALL_LIMIT, paginateClient } from '@/lib/utils/paginated';
 import { uploadFile } from '@/lib/utils/upload';
 import { useAdvance } from '@/hooks/useAdvance';
 import { useExpenses } from '@/hooks/useExpenses';
@@ -221,17 +220,19 @@ export default function LabelArtistDashboard() {
   const { topTracks, topAlbums } = useTopPerformance(5);
   const debouncedAdvanceSearch = useDebouncedValue(advanceSearch);
   const debouncedExpenseSearch = useDebouncedValue(expenseSearch);
-  const { advances, marketingTrend, personalTrend, availableBalance } = useAdvance({
-    limit: FETCH_ALL_LIMIT,
+  const { advances, advancesMeta, marketingTrend, personalTrend, availableBalance } = useAdvance({
+    page: advancePage,
+    limit: DASH_PAGE_SIZE,
     search: debouncedAdvanceSearch,
     approvalStatus:
       advanceStatus === 'approved' || advanceStatus === 'pending' || advanceStatus === 'rejected'
         ? advanceStatus
         : undefined,
   });
-  const { expenses, trend: expensesTrend, createExpense } = useExpenses({
+  const { expenses, expensesMeta, trend: expensesTrend, createExpense } = useExpenses({
     year: selectedYear,
-    limit: FETCH_ALL_LIMIT,
+    page: expensePage,
+    limit: DASH_PAGE_SIZE,
     search: debouncedExpenseSearch,
   });
 
@@ -242,11 +243,9 @@ export default function LabelArtistDashboard() {
     setExpensePage(1);
   }, [debouncedExpenseSearch, expenseCategory, selectedYear]);
 
-  // /advance and /expenses lists have no year param — filter client-side by date.
-  const yearAdvances = useMemo(
-    () => (advances ?? []).filter((row) => isInYear(row.createdAt || row.created_at, selectedYear)),
-    [advances, selectedYear]
-  );
+  // /advance and /expenses lists have no year param, so the year picker
+  // scopes analytics only — the tables show the server response page as-is.
+  // yearExpenses feeds the year-scoped expense totals, not the table.
   const yearExpenses = useMemo(
     () => (expenses ?? []).filter((row) => isInYear(row.expense_date || row.createdAt, selectedYear)),
     [expenses, selectedYear]
@@ -359,7 +358,7 @@ export default function LabelArtistDashboard() {
 
   const advanceRows = useMemo<AdvanceRow[]>(
     () =>
-      yearAdvances.map((row, index) => ({
+      (advances ?? []).map((row, index) => ({
         id: row._id || `ADV-${index + 1}`,
         date: formatDate((row.createdAt || row.created_at || '').toString()),
         amount: formatCurrencyAmount(Number(row.amount ?? 0), row.currency || 'USD'),
@@ -367,7 +366,7 @@ export default function LabelArtistDashboard() {
         status: normalizeStatus(row.status || row.repayment_status),
         purpose: row.purpose || '-',
       })),
-    [yearAdvances]
+    [advances]
   );
 
   const advanceTrendSeries = useMemo(
@@ -386,9 +385,10 @@ export default function LabelArtistDashboard() {
     [marketingTrend, personalTrend, selectedYear]
   );
 
-  // Search and approval status are applied server-side; the year and the
-  // "Paid" status value have no query param on /advance, so the full result
-  // set is fetched (FETCH_ALL_LIMIT), filtered here and paginated client-side.
+  // Pagination comes from the server meta and the table shows the response
+  // page as-is. Search and approval status are applied server-side; the
+  // "Paid" status value has no query param on /advance and filters within
+  // the current server page.
   const filteredAdvanceRows = useMemo(() => {
     return advanceRows.filter((row) => {
       const matchStatus = advanceStatus === 'all' || row.status.toLowerCase() === advanceStatus;
@@ -396,15 +396,12 @@ export default function LabelArtistDashboard() {
     });
   }, [advanceRows, advanceStatus]);
 
-  const {
-    items: pagedAdvanceRows,
-    totalPages: advanceTotalPages,
-    currentPage: advanceCurrentPage,
-  } = paginateClient(filteredAdvanceRows, advancePage, DASH_PAGE_SIZE);
+  const advanceTotalPages = advancesMeta?.totalPages ?? 1;
+  const pagedAdvanceRows = filteredAdvanceRows;
 
   const expenseRows = useMemo<ExpenseRow[]>(
     () =>
-      yearExpenses.map((row, index) => {
+      (expenses ?? []).map((row, index) => {
         const rawStatus = (row as Expense & { status?: string }).status;
         const rawArtistName =
           (row as Expense & { artist_name?: string; artistName?: string }).artist_name ||
@@ -419,7 +416,7 @@ export default function LabelArtistDashboard() {
           loggedBy: rawArtistName || 'Admin',
         };
       }),
-    [yearExpenses]
+    [expenses]
   );
 
   const expenseTrendSeries = useMemo(
@@ -442,9 +439,9 @@ export default function LabelArtistDashboard() {
     [yearExpenses]
   );
 
-  // Search is applied server-side; year and category have no query param on
-  // /expenses, so the full result set is fetched (FETCH_ALL_LIMIT), filtered
-  // here and paginated client-side.
+  // Pagination comes from the server meta and the table shows the response
+  // page as-is. Search is applied server-side; category has no query param
+  // on /expenses and filters within the current server page.
   const filteredExpenseRows = useMemo(() => {
     return expenseRows.filter((row) => {
       const matchCategory = expenseCategory === 'all' || row.category === expenseCategory;
@@ -452,11 +449,8 @@ export default function LabelArtistDashboard() {
     });
   }, [expenseRows, expenseCategory]);
 
-  const {
-    items: pagedExpenseRows,
-    totalPages: expenseTotalPages,
-    currentPage: expenseCurrentPage,
-  } = paginateClient(filteredExpenseRows, expensePage, DASH_PAGE_SIZE);
+  const expenseTotalPages = expensesMeta?.totalPages ?? 1;
+  const pagedExpenseRows = filteredExpenseRows;
 
   const expenseCategoryOptions = useMemo(() => {
     const categories = Array.from(new Set(expenseRows.map((row) => row.category)));
@@ -751,7 +745,7 @@ export default function LabelArtistDashboard() {
                 </table>
               </div>
 
-              <Pagination page={advanceCurrentPage} totalPages={advanceTotalPages} onChange={setAdvancePage} />
+              <Pagination page={advancePage} totalPages={advanceTotalPages} onChange={setAdvancePage} />
             </div>
           </div>
         )}
@@ -856,7 +850,7 @@ export default function LabelArtistDashboard() {
                 </table>
               </div>
 
-              <Pagination page={expenseCurrentPage} totalPages={expenseTotalPages} onChange={setExpensePage} />
+              <Pagination page={expensePage} totalPages={expenseTotalPages} onChange={setExpensePage} />
             </div>
           </div>
         )}

@@ -31,7 +31,7 @@ import { useRecordLabelArtists } from '@/hooks/useRecordLabelArtists';
 import { getRecordLabelArtistName } from '@/lib/utils/recordLabelArtist';
 import { deriveSingleCurrency, formatCurrencyAmount } from '@/lib/utils/currency';
 import { Pagination } from '@/components/ui/Pagination';
-import { FETCH_ALL_LIMIT, paginateClient } from '@/lib/utils/paginated';
+import { FETCH_ALL_LIMIT } from '@/lib/utils/paginated';
 import { toast } from 'react-toastify';
 
 type AdvanceTab = 'analytics' | 'request';
@@ -160,7 +160,8 @@ const RecordLabelAdvance = () => {
   const [rowStatusOverrides, setRowStatusOverrides] = useState<Record<string, AdvanceStatus>>({});
   const debouncedQ = useDebouncedValue(q);
   const { advances = [], advancesMeta, marketingTrend, personalTrend, updateAdvanceStatus } = useAdvance({
-    limit: FETCH_ALL_LIMIT,
+    page,
+    limit: PAGE_SIZE,
     search: debouncedQ,
     advanceType:
       categoryFilter === 'Personal'
@@ -291,18 +292,17 @@ const RecordLabelAdvance = () => {
     return [{ label: 'Logged by', value: 'all' }, ...unique.map((a) => ({ label: a, value: a }))];
   }, [scopedRows]);
 
-  // Search and category (advanceType) are applied server-side; year and
-  // logged-by have no matching query param on /advance, so the full result
-  // set is fetched (FETCH_ALL_LIMIT), filtered here and paginated client-side.
+  // Pagination comes from the server meta and the table shows the response
+  // page as-is. Search and category (advanceType) are applied server-side;
+  // the year picker has no query param on /advance, so it scopes analytics
+  // only. Logged-by also lacks a query param and filters within the current
+  // server page.
   const filtered = useMemo(() => {
-    return scopedRows.filter((row) => {
-      const yearOk = !selectedYear || row.year === selectedYear;
-      const loggedOk = loggedByFilter === 'all' || row.artist === loggedByFilter;
-      return yearOk && loggedOk;
-    });
-  }, [scopedRows, loggedByFilter, selectedYear]);
+    return scopedRows.filter((row) => loggedByFilter === 'all' || row.artist === loggedByFilter);
+  }, [scopedRows, loggedByFilter]);
 
-  const { items: pagedFiltered, totalPages, currentPage } = paginateClient(filtered, page, PAGE_SIZE);
+  const totalPages = advancesMeta?.totalPages ?? 1;
+  const pagedFiltered = filtered;
 
   const resetStatusModal = () => {
     setStatusUpdate('pending');
@@ -619,7 +619,7 @@ const RecordLabelAdvance = () => {
               </table>
             </div>
 
-            <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} />
+            <Pagination page={page} totalPages={totalPages} onChange={setPage} />
           </CardBody>
         </Card>
       )}

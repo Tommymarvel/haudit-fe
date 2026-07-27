@@ -15,7 +15,6 @@ import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 import { formatCurrencyAmount } from '@/lib/utils/currency';
 import Modal from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
-import { FETCH_ALL_LIMIT, paginateClient } from '@/lib/utils/paginated';
 import { StatusPill } from '@/components/ui/StatusPill';
 
 const AdvanceTypeDisplay: Record<string, string> = {
@@ -69,8 +68,9 @@ const SoloArtistExpenses = () => {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
   const debouncedQ = useDebouncedValue(q);
-  const { expenses, trend, createExpense, bulkUploadExpenses } = useExpenses({
-    limit: FETCH_ALL_LIMIT,
+  const { expenses, expensesMeta, trend, createExpense, bulkUploadExpenses } = useExpenses({
+    page,
+    limit: PAGE_SIZE,
     search: debouncedQ,
   });
 
@@ -108,20 +108,21 @@ const SoloArtistExpenses = () => {
     [expenses]
   );
 
-  // Search is applied server-side (`search` param); year and advance-type have
-  // no query param on /expenses, so the full result set is fetched
-  // (FETCH_ALL_LIMIT), filtered here and paginated client-side.
+  // Pagination comes from the server meta and the table shows the response
+  // page as-is. Search is applied server-side (`search` param); the year
+  // picker has no query param on /expenses, so it scopes analytics only.
+  // Advance-type also lacks a query param and filters within the current
+  // server page.
   const filtered = useMemo(
     () =>
       rows.filter(
-        (r) =>
-          (!selectedYear || r.year === selectedYear) &&
-          (advanceTypeFilter === 'all' || r.advanceType.toLowerCase() === advanceTypeFilter)
+        (r) => advanceTypeFilter === 'all' || r.advanceType.toLowerCase() === advanceTypeFilter
       ),
-    [advanceTypeFilter, rows, selectedYear]
+    [advanceTypeFilter, rows]
   );
 
-  const { items: paged, totalPages, currentPage } = paginateClient(filtered, page, PAGE_SIZE);
+  const totalPages = expensesMeta?.totalPages ?? 1;
+  const paged = filtered;
 
   const trendData = useMemo(() => {
     if (!trend || trend.length === 0) return [];
@@ -318,7 +319,7 @@ const SoloArtistExpenses = () => {
             </table>
           </div>
 
-          <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} />
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
         </CardBody>
       </Card>
       <AddExpensesModal

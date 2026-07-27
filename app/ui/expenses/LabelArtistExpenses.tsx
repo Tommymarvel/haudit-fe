@@ -26,7 +26,6 @@ import { uploadFile } from '@/lib/utils/upload';
 import { BRAND } from '@/lib/brand';
 import Modal from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
-import { FETCH_ALL_LIMIT, paginateClient } from '@/lib/utils/paginated';
 import { formatCurrencyAmount } from '@/lib/utils/currency';
 import { getAvailableAmount } from '@/lib/utils/advance';
 
@@ -121,8 +120,9 @@ export default function LabelArtistExpenses() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
   const debouncedQ = useDebouncedValue(q);
-  const { expenses, createExpense, approveExpense, rejectExpense } = useExpenses({
-    limit: FETCH_ALL_LIMIT,
+  const { expenses, expensesMeta, createExpense, approveExpense, rejectExpense } = useExpenses({
+    page,
+    limit: PAGE_SIZE,
     search: debouncedQ,
   });
 
@@ -188,21 +188,23 @@ export default function LabelArtistExpenses() {
     { label: 'Marketing', value: 'marketting' },
   ];
 
-  // Search is applied server-side (`search` param); year, advance-type and
-  // logged-by have no query param on /expenses, so the full result set is
-  // fetched (FETCH_ALL_LIMIT), filtered here and paginated client-side.
+  // Pagination comes from the server meta and the table shows the response
+  // page as-is. Search is applied server-side (`search` param); the year
+  // picker has no query param on /expenses, so it scopes analytics only.
+  // Advance-type and logged-by also lack a query param and filter within the
+  // current server page.
   const filteredRows = useMemo(() => {
     return rows.filter((row) => {
-      const yearMatch = !selectedYear || row.year === selectedYear;
       const advanceTypeMatch = advanceTypeFilter === 'all' || row.advanceType.toLowerCase() === advanceTypeFilter;
       const loggedByMatch =
         loggedByFilter === 'all' ||
         row.loggedBy.toLowerCase().includes(loggedByFilter.toLowerCase());
-      return yearMatch && advanceTypeMatch && loggedByMatch;
+      return advanceTypeMatch && loggedByMatch;
     });
-  }, [rows, advanceTypeFilter, loggedByFilter, selectedYear]);
+  }, [rows, advanceTypeFilter, loggedByFilter]);
 
-  const { items: pagedRows, totalPages, currentPage } = paginateClient(filteredRows, page, PAGE_SIZE);
+  const totalPages = expensesMeta?.totalPages ?? 1;
+  const pagedRows = filteredRows;
 
   // Expenses have no server-side export endpoint yet, so export is PDF-only.
   const handleExportPdf = async () => {
@@ -351,7 +353,7 @@ export default function LabelArtistExpenses() {
             </table>
           </div>
 
-          <Pagination page={currentPage} totalPages={totalPages} onChange={(p) => setPage(p)} />
+          <Pagination page={page} totalPages={totalPages} onChange={(p) => setPage(p)} />
         </CardBody>
       </Card>
 
