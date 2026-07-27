@@ -23,6 +23,7 @@ import { Select } from '@/components/ui/Select';
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 import Modal from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
+import { FETCH_ALL_LIMIT, paginateClient } from '@/lib/utils/paginated';
 import { useAdvance } from '@/hooks/useAdvance';
 import { useExpenses } from '@/hooks/useExpenses';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -187,7 +188,9 @@ const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct
 
 export default function LabelArtistAdvance() {
   const { user } = useAuth();
-  const { expenses } = useExpenses();
+  // /expenses defaults to limit=10 — fetch all so the trend chart aggregates
+  // every expense, not just the first server page.
+  const { expenses } = useExpenses({ limit: FETCH_ALL_LIMIT });
 
   const contentRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -205,9 +208,8 @@ export default function LabelArtistAdvance() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
   const debouncedSearch = useDebouncedValue(search);
-  const { advances, advancesMeta, marketingTrend, personalTrend, availableBalance, createAdvance, updateAdvanceStatus, approveAdvance, rejectAdvance } = useAdvance({
-    page,
-    limit: PAGE_SIZE,
+  const { advances, marketingTrend, personalTrend, availableBalance, createAdvance, updateAdvanceStatus, approveAdvance, rejectAdvance } = useAdvance({
+    limit: FETCH_ALL_LIMIT,
     search: debouncedSearch,
     advanceType:
       categoryFilter === 'personal'
@@ -279,8 +281,8 @@ export default function LabelArtistAdvance() {
   );
 
   // Search and advance type are applied server-side; year and the status
-  // dropdown have no matching query param on /advance, so they filter the
-  // current server page only.
+  // dropdown have no matching query param on /advance, so the full result
+  // set is fetched (FETCH_ALL_LIMIT), filtered here and paginated client-side.
   const filteredRows = useMemo(() => {
     return rows.filter((row) => {
       const yearMatch = !selectedYear || row.year === selectedYear;
@@ -289,8 +291,7 @@ export default function LabelArtistAdvance() {
     });
   }, [rows, statusFilter, selectedYear]);
 
-  const totalPages = advancesMeta?.totalPages ?? 1;
-  const pagedRows = filteredRows;
+  const { items: pagedRows, totalPages, currentPage } = paginateClient(filteredRows, page, PAGE_SIZE);
 
   const marketingSeries = useMemo(() => {
     const src = selectedYear
@@ -781,7 +782,7 @@ export default function LabelArtistAdvance() {
                 </tbody>
               </table>
             </div>
-            <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+            <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} />
           </div>
         </div>
       )}

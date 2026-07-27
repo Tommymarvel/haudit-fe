@@ -6,6 +6,7 @@ import Topbar from "@/components/layout/Topbar";
 import { ChartCard, DonutSlice } from "@/components/dashboard/ChartCard";
 import { useRoyalty } from "@/hooks/useRoyalty";
 import { useAdvance } from "@/hooks/useAdvance";
+import { FETCH_ALL_LIMIT } from "@/lib/utils/paginated";
 import { useExpenses } from "@/hooks/useExpenses";
 import { useRecordLabel } from "@/hooks/useRecordLabel";
 import { useRecordLabelArtists } from "@/hooks/useRecordLabelArtists";
@@ -63,8 +64,10 @@ export default function RecordLabelDashboard() {
   const router = useRouter();
   const [selectedYear, setSelectedYear] = useState<number | null>(new Date().getFullYear());
   const { uploadRoyaltyFile, dashboardMetrics, albumPerformance, albumInteractions, trackStreamsDsp } = useRoyalty({ year: selectedYear });
+  // /advance defaults to limit=10 — fetch all so the top-advances ranking
+  // considers every advance, not just the first server page.
   const { advances, createAdvance, marketingTrend, personalTrend, typePercentage } =
-    useAdvance();
+    useAdvance({ limit: FETCH_ALL_LIMIT });
   const { createExpense, trend: expensesTrend } = useExpenses({ year: selectedYear });
   const { dashboard, topTracks, topAlbums, topExpenses } =
     useRecordLabel();

@@ -26,6 +26,7 @@ import { uploadFile } from '@/lib/utils/upload';
 import { BRAND } from '@/lib/brand';
 import Modal from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
+import { FETCH_ALL_LIMIT, paginateClient } from '@/lib/utils/paginated';
 import { formatCurrencyAmount } from '@/lib/utils/currency';
 import { getAvailableAmount } from '@/lib/utils/advance';
 
@@ -120,9 +121,8 @@ export default function LabelArtistExpenses() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
   const debouncedQ = useDebouncedValue(q);
-  const { expenses, expensesMeta, createExpense, approveExpense, rejectExpense } = useExpenses({
-    page,
-    limit: PAGE_SIZE,
+  const { expenses, createExpense, approveExpense, rejectExpense } = useExpenses({
+    limit: FETCH_ALL_LIMIT,
     search: debouncedQ,
   });
 
@@ -189,8 +189,8 @@ export default function LabelArtistExpenses() {
   ];
 
   // Search is applied server-side (`search` param); year, advance-type and
-  // logged-by have no query param on /expenses, so they filter the current
-  // server page only.
+  // logged-by have no query param on /expenses, so the full result set is
+  // fetched (FETCH_ALL_LIMIT), filtered here and paginated client-side.
   const filteredRows = useMemo(() => {
     return rows.filter((row) => {
       const yearMatch = !selectedYear || row.year === selectedYear;
@@ -202,8 +202,7 @@ export default function LabelArtistExpenses() {
     });
   }, [rows, advanceTypeFilter, loggedByFilter, selectedYear]);
 
-  const totalPages = expensesMeta?.totalPages ?? 1;
-  const pagedRows = filteredRows;
+  const { items: pagedRows, totalPages, currentPage } = paginateClient(filteredRows, page, PAGE_SIZE);
 
   // Expenses have no server-side export endpoint yet, so export is PDF-only.
   const handleExportPdf = async () => {
@@ -352,7 +351,7 @@ export default function LabelArtistExpenses() {
             </table>
           </div>
 
-          <Pagination page={page} totalPages={totalPages} onChange={(p) => setPage(p)} />
+          <Pagination page={currentPage} totalPages={totalPages} onChange={(p) => setPage(p)} />
         </CardBody>
       </Card>
 

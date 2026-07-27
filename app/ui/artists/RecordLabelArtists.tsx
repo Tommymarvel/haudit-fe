@@ -26,6 +26,7 @@ import { TagInput } from '@/components/ui/TagInput';
 import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAdvance } from '@/hooks/useAdvance';
+import { FETCH_ALL_LIMIT } from '@/lib/utils/paginated';
 import { useExpenses } from '@/hooks/useExpenses';
 import { useRecordLabelArtists } from '@/hooks/useRecordLabelArtists';
 import { useRoyalty } from '@/hooks/useRoyalty';
@@ -674,8 +675,10 @@ function UpdateEligibleAdvanceModal({
 export default function RecordLabelArtists() {
   const { user } = useAuth();
   const { dashboardMetrics, albumPerformance, albumRevenue } = useRoyalty();
-  const { advances = [], overview, availableBalance } = useAdvance();
-  const { expenses = [] } = useExpenses();
+  // /advance and /expenses default to limit=10 — fetch all so per-artist
+  // profile summaries aggregate every record, not just the first server page.
+  const { advances = [], overview, availableBalance } = useAdvance({ limit: FETCH_ALL_LIMIT });
+  const { expenses = [] } = useExpenses({ limit: FETCH_ALL_LIMIT });
   const {
     artists: artistsResponse,
     isLoading: artistsLoading,

@@ -24,6 +24,7 @@ import { Select } from '@/components/ui/Select';
 import LabelAdvanceRequestModal from '@/ui/advance/LabelAdvanceRequestModal';
 import AddExpensesModal, { NewExpensesPayload } from '@/ui/expenses/AddExpensesModal';
 import { Pagination } from '@/components/ui/Pagination';
+import { FETCH_ALL_LIMIT, paginateClient } from '@/lib/utils/paginated';
 import { uploadFile } from '@/lib/utils/upload';
 import { useAdvance } from '@/hooks/useAdvance';
 import { useExpenses } from '@/hooks/useExpenses';
@@ -220,19 +221,17 @@ export default function LabelArtistDashboard() {
   const { topTracks, topAlbums } = useTopPerformance(5);
   const debouncedAdvanceSearch = useDebouncedValue(advanceSearch);
   const debouncedExpenseSearch = useDebouncedValue(expenseSearch);
-  const { advances, advancesMeta, marketingTrend, personalTrend, availableBalance } = useAdvance({
-    page: advancePage,
-    limit: DASH_PAGE_SIZE,
+  const { advances, marketingTrend, personalTrend, availableBalance } = useAdvance({
+    limit: FETCH_ALL_LIMIT,
     search: debouncedAdvanceSearch,
     approvalStatus:
       advanceStatus === 'approved' || advanceStatus === 'pending' || advanceStatus === 'rejected'
         ? advanceStatus
         : undefined,
   });
-  const { expenses, expensesMeta, trend: expensesTrend, createExpense } = useExpenses({
+  const { expenses, trend: expensesTrend, createExpense } = useExpenses({
     year: selectedYear,
-    page: expensePage,
-    limit: DASH_PAGE_SIZE,
+    limit: FETCH_ALL_LIMIT,
     search: debouncedExpenseSearch,
   });
 
@@ -388,8 +387,8 @@ export default function LabelArtistDashboard() {
   );
 
   // Search and approval status are applied server-side; the year and the
-  // "Paid" status value have no query param on /advance, so they filter the
-  // current server page only.
+  // "Paid" status value have no query param on /advance, so the full result
+  // set is fetched (FETCH_ALL_LIMIT), filtered here and paginated client-side.
   const filteredAdvanceRows = useMemo(() => {
     return advanceRows.filter((row) => {
       const matchStatus = advanceStatus === 'all' || row.status.toLowerCase() === advanceStatus;
@@ -397,8 +396,11 @@ export default function LabelArtistDashboard() {
     });
   }, [advanceRows, advanceStatus]);
 
-  const advanceTotalPages = advancesMeta?.totalPages ?? 1;
-  const pagedAdvanceRows = filteredAdvanceRows;
+  const {
+    items: pagedAdvanceRows,
+    totalPages: advanceTotalPages,
+    currentPage: advanceCurrentPage,
+  } = paginateClient(filteredAdvanceRows, advancePage, DASH_PAGE_SIZE);
 
   const expenseRows = useMemo<ExpenseRow[]>(
     () =>
@@ -441,7 +443,8 @@ export default function LabelArtistDashboard() {
   );
 
   // Search is applied server-side; year and category have no query param on
-  // /expenses, so they filter the current server page only.
+  // /expenses, so the full result set is fetched (FETCH_ALL_LIMIT), filtered
+  // here and paginated client-side.
   const filteredExpenseRows = useMemo(() => {
     return expenseRows.filter((row) => {
       const matchCategory = expenseCategory === 'all' || row.category === expenseCategory;
@@ -449,8 +452,11 @@ export default function LabelArtistDashboard() {
     });
   }, [expenseRows, expenseCategory]);
 
-  const expenseTotalPages = expensesMeta?.totalPages ?? 1;
-  const pagedExpenseRows = filteredExpenseRows;
+  const {
+    items: pagedExpenseRows,
+    totalPages: expenseTotalPages,
+    currentPage: expenseCurrentPage,
+  } = paginateClient(filteredExpenseRows, expensePage, DASH_PAGE_SIZE);
 
   const expenseCategoryOptions = useMemo(() => {
     const categories = Array.from(new Set(expenseRows.map((row) => row.category)));
@@ -745,7 +751,7 @@ export default function LabelArtistDashboard() {
                 </table>
               </div>
 
-              <Pagination page={advancePage} totalPages={advanceTotalPages} onChange={setAdvancePage} />
+              <Pagination page={advanceCurrentPage} totalPages={advanceTotalPages} onChange={setAdvancePage} />
             </div>
           </div>
         )}
@@ -850,7 +856,7 @@ export default function LabelArtistDashboard() {
                 </table>
               </div>
 
-              <Pagination page={expensePage} totalPages={expenseTotalPages} onChange={setExpensePage} />
+              <Pagination page={expenseCurrentPage} totalPages={expenseTotalPages} onChange={setExpensePage} />
             </div>
           </div>
         )}

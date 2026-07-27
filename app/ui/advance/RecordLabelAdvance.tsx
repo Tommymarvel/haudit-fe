@@ -31,6 +31,7 @@ import { useRecordLabelArtists } from '@/hooks/useRecordLabelArtists';
 import { getRecordLabelArtistName } from '@/lib/utils/recordLabelArtist';
 import { deriveSingleCurrency, formatCurrencyAmount } from '@/lib/utils/currency';
 import { Pagination } from '@/components/ui/Pagination';
+import { FETCH_ALL_LIMIT, paginateClient } from '@/lib/utils/paginated';
 import { toast } from 'react-toastify';
 
 type AdvanceTab = 'analytics' | 'request';
@@ -126,7 +127,9 @@ function MetricCard({ value, label, icon }: { value: string; label: string; icon
 }
 
 const RecordLabelAdvance = () => {
-  const { expenses } = useExpenses();
+  // /expenses defaults to limit=10 — fetch all so the trend chart aggregates
+  // every expense, not just the first server page.
+  const { expenses } = useExpenses({ limit: FETCH_ALL_LIMIT });
   const { artists } = useRecordLabelArtists();
   const searchParams = useSearchParams();
   const selectedArtistId = (searchParams.get('artistId') || '').trim();
@@ -157,8 +160,7 @@ const RecordLabelAdvance = () => {
   const [rowStatusOverrides, setRowStatusOverrides] = useState<Record<string, AdvanceStatus>>({});
   const debouncedQ = useDebouncedValue(q);
   const { advances = [], advancesMeta, marketingTrend, personalTrend, updateAdvanceStatus } = useAdvance({
-    page,
-    limit: PAGE_SIZE,
+    limit: FETCH_ALL_LIMIT,
     search: debouncedQ,
     advanceType:
       categoryFilter === 'Personal'
@@ -290,8 +292,8 @@ const RecordLabelAdvance = () => {
   }, [scopedRows]);
 
   // Search and category (advanceType) are applied server-side; year and
-  // logged-by have no matching query param on /advance, so they filter the
-  // current server page only.
+  // logged-by have no matching query param on /advance, so the full result
+  // set is fetched (FETCH_ALL_LIMIT), filtered here and paginated client-side.
   const filtered = useMemo(() => {
     return scopedRows.filter((row) => {
       const yearOk = !selectedYear || row.year === selectedYear;
@@ -300,8 +302,7 @@ const RecordLabelAdvance = () => {
     });
   }, [scopedRows, loggedByFilter, selectedYear]);
 
-  const totalPages = advancesMeta?.totalPages ?? 1;
-  const pagedFiltered = filtered;
+  const { items: pagedFiltered, totalPages, currentPage } = paginateClient(filtered, page, PAGE_SIZE);
 
   const resetStatusModal = () => {
     setStatusUpdate('pending');
@@ -618,7 +619,7 @@ const RecordLabelAdvance = () => {
               </table>
             </div>
 
-            <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+            <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} />
           </CardBody>
         </Card>
       )}

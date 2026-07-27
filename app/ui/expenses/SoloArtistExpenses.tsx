@@ -15,6 +15,7 @@ import YearFilterCalendar from '@/components/ui/YearFilterCalendar';
 import { formatCurrencyAmount } from '@/lib/utils/currency';
 import Modal from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
+import { FETCH_ALL_LIMIT, paginateClient } from '@/lib/utils/paginated';
 import { StatusPill } from '@/components/ui/StatusPill';
 
 const AdvanceTypeDisplay: Record<string, string> = {
@@ -68,9 +69,8 @@ const SoloArtistExpenses = () => {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
   const debouncedQ = useDebouncedValue(q);
-  const { expenses, expensesMeta, trend, createExpense, bulkUploadExpenses } = useExpenses({
-    page,
-    limit: PAGE_SIZE,
+  const { expenses, trend, createExpense, bulkUploadExpenses } = useExpenses({
+    limit: FETCH_ALL_LIMIT,
     search: debouncedQ,
   });
 
@@ -109,7 +109,8 @@ const SoloArtistExpenses = () => {
   );
 
   // Search is applied server-side (`search` param); year and advance-type have
-  // no query param on /expenses, so they filter the current server page only.
+  // no query param on /expenses, so the full result set is fetched
+  // (FETCH_ALL_LIMIT), filtered here and paginated client-side.
   const filtered = useMemo(
     () =>
       rows.filter(
@@ -120,8 +121,7 @@ const SoloArtistExpenses = () => {
     [advanceTypeFilter, rows, selectedYear]
   );
 
-  const totalPages = expensesMeta?.totalPages ?? 1;
-  const paged = filtered;
+  const { items: paged, totalPages, currentPage } = paginateClient(filtered, page, PAGE_SIZE);
 
   const trendData = useMemo(() => {
     if (!trend || trend.length === 0) return [];
@@ -318,7 +318,7 @@ const SoloArtistExpenses = () => {
             </table>
           </div>
 
-          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+          <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} />
         </CardBody>
       </Card>
       <AddExpensesModal
