@@ -444,13 +444,13 @@ const handleUpload = async (
     activeTab === "files"
       ? "My Files"
       : activeTab === "split_document"
-        ? "Split Documents"
+        ? "Shared Documents"
         : "Royalty Analytics";
   const pageDescription =
     activeTab === "split_document"
       ? canManageSplitDocuments
         ? "Upload, assign, and manage report documents for artists on your roster."
-        : "Review split documents that your label has shared with you."
+        : "Review documents that your label has shared with you."
       : "Monitor your music performance and royalty earnings.";
   const revenuePerTrackCard = (
     <div className="relative">
@@ -784,7 +784,7 @@ const handleUpload = async (
                 : "text-neutral-500"
             }`}
           >
-            Split Document
+            Shared Document
           </button>
         ) : null}
       </div>

@@ -316,7 +316,7 @@ export default function SplitDocumentsTab({
                 onClick={() => setIsCreateModalOpen(true)}
               >
                 <Plus className="h-4 w-4" />
-                Add split document
+                Add shared document
               </Button>
             ) : null}
           </div>
@@ -332,13 +332,13 @@ export default function SplitDocumentsTab({
               <FileText className="h-7 w-7 text-neutral-500" />
             </div>
             <h3 className="mt-4 text-lg font-semibold text-neutral-900">
-              {documents.length === 0 ? 'No split documents yet' : 'No documents match your search'}
+              {documents.length === 0 ? 'No shared documents yet' : 'No documents match your search'}
             </h3>
             <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-neutral-500">
               {documents.length === 0
                 ? isRecordLabel
                   ? 'Start by uploading a report document, then assign it to the artists who should receive it.'
-                  : 'Your label has not shared any split documents with you yet.'
+                  : 'Your label has not shared any documents with you yet.'
                 : 'Try a different file name or artist search to find the document you need.'}
             </p>
             {isRecordLabel && documents.length === 0 ? (
@@ -476,7 +476,7 @@ export default function SplitDocumentsTab({
         closeVariant="island"
       >
         <div className="px-6 py-6">
-          <h2 className="text-xl font-semibold text-neutral-900">Upload split document</h2>
+          <h2 className="text-xl font-semibold text-neutral-900">Upload shared document</h2>
           <p className="mt-1 text-sm text-neutral-500">
             Add a PDF or DOCX report document and optionally assign it to artists right away.
           </p>
@@ -536,7 +536,7 @@ export default function SplitDocumentsTab({
         closeVariant="island"
       >
         <div className="px-6 py-6">
-          <h2 className="text-xl font-semibold text-neutral-900">Assign split document</h2>
+          <h2 className="text-xl font-semibold text-neutral-900">Assign shared document</h2>
           <p className="mt-1 text-sm text-neutral-500">
             Update which artists can access <span className="font-medium text-neutral-700">{documentToAssign?.fileName}</span>.
           </p>
@@ -579,7 +579,7 @@ export default function SplitDocumentsTab({
         closeVariant="island"
       >
         <div className="px-6 py-7">
-          <h2 className="text-xl font-semibold text-neutral-900">Delete split document?</h2>
+          <h2 className="text-xl font-semibold text-neutral-900">Delete shared document?</h2>
           <p className="mt-2 text-sm text-neutral-600">
             This will permanently remove <span className="font-medium text-neutral-800">{documentToDelete?.fileName}</span> from your label documents.
           </p>

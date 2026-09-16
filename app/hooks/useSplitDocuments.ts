@@ -97,7 +97,7 @@ export function useSplitDocuments(page: number = 1) {
   }>(listEndpoint, documentsFetcher);
 
   const createDocument = async (file: File, artistIds: string[] = []) => {
-    if (!isRecordLabel) throw new Error('Only record labels can create split documents.');
+    if (!isRecordLabel) throw new Error('Only record labels can create shared documents.');
 
     try {
       const { fileUrl, fileName, mimeType } = await uploadReportFile(file);
@@ -108,15 +108,15 @@ export function useSplitDocuments(page: number = 1) {
       await mutate();
       toast.success(
         artistIds.length > 0
-          ? 'Split document uploaded and assigned successfully'
-          : 'Split document uploaded successfully',
+          ? 'Shared document uploaded and assigned successfully'
+          : 'Shared document uploaded successfully',
       );
     } catch (error) {
       const axiosError = error as AxiosError<{ message?: string }>;
       toast.error(
         axiosError.response?.data?.message ||
           (error as Error).message ||
-          'Failed to upload split document',
+          'Failed to upload shared document',
       );
       throw error;
     }
@@ -137,15 +137,15 @@ export function useSplitDocuments(page: number = 1) {
   };
 
   const deleteDocument = async (documentId: string) => {
-    if (!isRecordLabel) throw new Error('Only record labels can delete split documents.');
+    if (!isRecordLabel) throw new Error('Only record labels can delete shared documents.');
 
     try {
       await axiosInstance.delete(`${LABEL_DOCUMENTS_ENDPOINT}/${documentId}`);
       await mutate();
-      toast.success('Split document deleted successfully');
+      toast.success('Shared document deleted successfully');
     } catch (error) {
       const axiosError = error as AxiosError<{ message?: string }>;
-      toast.error(axiosError.response?.data?.message || 'Failed to delete split document');
+      toast.error(axiosError.response?.data?.message || 'Failed to delete shared document');
       throw error;
     }
   };
